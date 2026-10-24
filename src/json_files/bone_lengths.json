@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "description": "Bone lengths measured from the redrawn side-view character art (assets/images/body_parts.png), for use with gait_angles.json.",
+    "units": "px",
+    "canvas": { "width": 800, "height": 800 },
+    "method": "Each length is the straight-line distance between two art pivots (the pivots block of rig_config.json, positions in the 800x800 art frame). The rig recomputes these from the pivots at load, so the two files stay in step as long as both are updated together.",
+    "symmetry": "Left and right bones are identical. One value is stored per bone.",
+    "notes": "Lengths come from the side-view art in its standing pose. Torso values are the hip-to-waist and waist-to-neck distances used by the rig (neckToChest includes the 12 px from shoulder to chest top)."
+  },
+  "bones": {
+    "thigh": { "length": 116.1, "from": "hip", "to": "knee", "angleKey": "thigh" },
+    "shin": { "length": 118.3, "from": "knee", "to": "ankle", "angleKey": "shin" },
+    "upperArm": { "length": 60.0, "from": "shoulder", "to": "elbow", "angleKey": "upperArm" },
+    "forearm": { "length": 51.3, "from": "elbow", "to": "wrist", "angleKey": "forearm" }
+  },
+  "derived": {
+    "legLength": 234.3,
+    "armLength": 111.3,
+    "shinToThighRatio": 1.02,
+    "forearmToUpperArmRatio": 0.85
+  },
+  "torso": {
+    "neckToChest": 69.1,
+    "chestToPelvis": 90.2,
+    "shoulderToNeck": 12.0
+  },
+  "referenceJoints": {
+    "note": "Side-view joint centres of the standing art, in px in the 800x800 frame (same numbers as rig_config.json pivots).",
+    "neck": { "x": 385.2, "y": 311 },
+    "rib": { "x": 389.7, "y": 380 },
+    "shoulder": { "x": 386, "y": 323 },
+    "elbow": { "x": 384, "y": 383 },
+    "wrist": { "x": 395.5, "y": 433 },
+    "hip": { "x": 395.5, "y": 470 },
+    "knee": { "x": 391, "y": 586 },
+    "ankle": { "x": 372.5, "y": 702.8 },
+    "headPivot": { "x": 396, "y": 300 }
+  }
+}

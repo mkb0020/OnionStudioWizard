@@ -1,0 +1,14 @@
+{
+  "name": "onion-studio-wizard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Onion Studio Wizard - personal game dev tool suite (Tauri 2, static frontend in src/)",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

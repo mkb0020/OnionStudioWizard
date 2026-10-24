@@ -1,0 +1,61 @@
+:root {
+  /* Darks & Neutrals */
+  --void-core: #000000;
+  --obsidian-synth: #0a0314;
+  --deep-space-velvet: #230141;
+  --abyssal-amethyst: #3a0868;
+
+  /* Deep & Royal Blues */
+  --midnight-protocol: #02197e;
+  --cyber-cobalt: #151e95;
+  --deep-orbit: #14259c;
+  --trench-matrix: #023838;
+
+  /* Electric & Neon Blues */
+  --signal-pulse: #0066ff;
+  --hyperdrive-blue: #1e88e5;
+  --plasma-thrust: #1e59f2;
+  --vector-wave: #166afb;
+  --laser-stream: #1a7ff7;
+  --solar-flare-blue: #2994fa;
+  --photon-jet: #1e87fc;
+
+  /* Cyans & Teals */
+  --biomesh-mint: #23f3da;
+  --glitch-cyan: #3af5fc;
+  --neon-holo: #00ffff;
+  --data-stream: #00fbfe;
+
+  /* Indigo & Muted Violets */
+  --steel-dusk: #70789b;
+  --shadow-warp: #575a99;
+  --twilight-grid: #5b48a9;
+  --nebula-haze: #5c47a8;
+  --chroma-shift: #4843f9;
+  --synthwave-sky: #6543f9;
+  --overdrive-violet: #672ff7;
+
+  /* Deep Purples & Violet Noir */
+  --singularity: #2b006b;
+  --nightrunner-purple: #350066;
+  --dark-resonance: #450080;
+  --ultra-violet: #5a07b8;
+
+  /* Vibrant Purples & Electric Amethyst */
+  --cyber-amethyst: #6408bf;
+  --pixel-purple: #830cde;
+  --electric-violet: #8a2be2;
+  --warp-core-purple: #891bf6;
+  --supernova-violet: #9231fc;
+  --hyper-amethyst: #8a3efa;
+  --neon-nectar: #8b4bf5;
+  --arcade-ray: #9c40fb;
+
+  /* Magentas, Pinks & Soft Purples */
+  --orchid-overdrive: #9519c7;
+  --holo-lavender: #b880fa;
+  --prism-orchid: #dc4ce8;
+  --pixel-magenta: #e812c6;
+  --cyber-fuchsia: #ff10f0;
+  --tokyo-neon-pink: #fb4cfb;
+}

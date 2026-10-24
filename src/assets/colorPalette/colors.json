@@ -1,0 +1,88 @@
+{
+  "color_palette": [
+    {
+      "group": "Darks & Neutrals",
+      "colors": [
+        { "hex": "#000000", "name": "Void Core" },
+        { "hex": "#0A0314", "name": "Obsidian Synth" },
+        { "hex": "#230141", "name": "Deep Space Velvet" },
+        { "hex": "#3A0868", "name": "Abyssal Amethyst" }
+      ]
+    },
+    {
+      "group": "Deep & Royal Blues",
+      "colors": [
+        { "hex": "#02197E", "name": "Midnight Protocol" },
+        { "hex": "#151E95", "name": "Cyber Cobalt" },
+        { "hex": "#14259C", "name": "Deep Orbit" },
+        { "hex": "#023838", "name": "Trench Matrix" }
+      ]
+    },
+    {
+      "group": "Electric & Neon Blues",
+      "colors": [
+        { "hex": "#0066FF", "name": "Signal Pulse" },
+        { "hex": "#1E88E5", "name": "Hyperdrive Blue" },
+        { "hex": "#1E59F2", "name": "Plasma Thrust" },
+        { "hex": "#166AFB", "name": "Vector Wave" },
+        { "hex": "#1A7FF7", "name": "Laser Stream" },
+        { "hex": "#2994FA", "name": "Solar Flare Blue" },
+        { "hex": "#1E87FC", "name": "Photon Jet" }
+      ]
+    },
+    {
+      "group": "Cyans & Teals",
+      "colors": [
+        { "hex": "#23F3DA", "name": "Biomesh Mint" },
+        { "hex": "#3AF5FC", "name": "Glitch Cyan" },
+        { "hex": "#00FFFF", "name": "Neon Holo" },
+        { "hex": "#00FBFE", "name": "Data Stream" }
+      ]
+    },
+    {
+      "group": "Indigo & Muted Violets",
+      "colors": [
+        { "hex": "#70789B", "name": "Steel Dusk" },
+        { "hex": "#575A99", "name": "Shadow Warp" },
+        { "hex": "#5B48A9", "name": "Twilight Grid" },
+        { "hex": "#5C47A8", "name": "Nebula Haze" },
+        { "hex": "#4843F9", "name": "Chroma Shift" },
+        { "hex": "#6543F9", "name": "Synthwave Sky" },
+        { "hex": "#672FF7", "name": "Overdrive Violet" }
+      ]
+    },
+    {
+      "group": "Deep Purples & Violet Noir",
+      "colors": [
+        { "hex": "#2B006B", "name": "Singularity" },
+        { "hex": "#350066", "name": "Nightrunner Purple" },
+        { "hex": "#450080", "name": "Dark Resonance" },
+        { "hex": "#5A07B8", "name": "Ultra Violet" }
+      ]
+    },
+    {
+      "group": "Vibrant Purples & Electric Amethyst",
+      "colors": [
+        { "hex": "#6408BF", "name": "Cyber Amethyst" },
+        { "hex": "#830CDE", "name": "Pixel Purple" },
+        { "hex": "#8A2BE2", "name": "Electric Violet" },
+        { "hex": "#891BF6", "name": "Warp Core Purple" },
+        { "hex": "#9231FC", "name": "Supernova Violet" },
+        { "hex": "#8A3EFA", "name": "Hyper Amethyst" },
+        { "hex": "#8B4BF5", "name": "Neon Nectar" },
+        { "hex": "#9C40FB", "name": "Arcade Ray" }
+      ]
+    },
+    {
+      "group": "Magentas, Pinks & Soft Purples",
+      "colors": [
+        { "hex": "#9519C7", "name": "Orchid Overdrive" },
+        { "hex": "#B880FA", "name": "Holo Lavender" },
+        { "hex": "#DC4CE8", "name": "Prism Orchid" },
+        { "hex": "#E812C6", "name": "Pixel Magenta" },
+        { "hex": "#FF10F0", "name": "Cyber Fuchsia" },
+        { "hex": "#FB4CFB", "name": "Tokyo Neon Pink" }
+      ]
+    }
+  ]
+}

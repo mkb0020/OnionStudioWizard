@@ -1,0 +1,16 @@
+[package]
+name = "onion-studio-wizard"
+version = "0.1.0"
+description = "Onion Studio Wizard - personal game dev tool suite"
+authors = ["MK"]
+edition = "2021"
+
+[lib]
+name = "onion_studio_wizard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }

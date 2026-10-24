@@ -1,0 +1,129 @@
+/* ONION STUDIO WIZARD - SHELL LAYOUT (SITS ON TOP OF PRETTYKIT'S WINDOW FRAME) */
+
+:root {
+  --font-display: 'Orbitron', 'Segoe UI', sans-serif;
+  --font-ui:      'Orbitron', 'Segoe UI', sans-serif;
+  --font-body:    'Share Tech Mono', Consolas, monospace;
+  --rail-w: 76px;
+  --stage-bg: #0c001f;
+}
+
+/* PRETTYKIT'S TITLE IS UPPERCASE-FRIENDLY; KEEP IT SMALL AND SPACED */
+#pretty-title {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--BohrsBabyBlue);
+}
+
+#pretty-content.osw-body {
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+}
+
+/* ---------- RAIL ---------- */
+
+#rail {
+  width: var(--rail-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 4px 7px 10px;
+  background: linear-gradient(180deg, rgba(23, 0, 50, 0.85), rgba(12, 0, 31, 0.92));
+  border-right: 1px solid rgba(0, 255, 255, 0.12);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+#rail::-webkit-scrollbar { display: none; }
+
+.rail-label {
+  margin: 14px 0 5px 4px;
+  font-family: var(--font-ui);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: rgba(196, 181, 253, 0.45);
+  user-select: none;
+}
+.rail-label:first-child { margin-top: 8px; }
+
+.rail-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 3px;
+  padding: 8px 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--BohrsBabyBlue);
+  font-family: var(--font-ui);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast),
+              border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.rail-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.rail-btn:hover {
+  color: #fff;
+  background: rgba(131, 12, 222, 0.18);
+  border-color: rgba(165, 90, 255, 0.35);
+}
+.rail-btn.is-active {
+  color: var(--AquaAura);
+  background: rgba(0, 255, 255, 0.08);
+  border-color: rgba(0, 255, 255, 0.45);
+  box-shadow: 0 0 14px rgba(0, 255, 255, 0.22), inset 0 0 10px rgba(0, 255, 255, 0.07);
+}
+.rail-btn.is-soon { opacity: 0.35; cursor: not-allowed; }
+.rail-btn.is-soon:hover { color: var(--BohrsBabyBlue); background: transparent; border-color: transparent; }
+.rail-btn:focus-visible { outline: 1px solid var(--AquaAura); outline-offset: 1px; }
+
+/* ---------- STAGE (ONE IFRAME PER OPENED TOOL) ---------- */
+
+#stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--stage-bg);
+}
+.tool-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--stage-bg);
+}
+.tool-frame[hidden] { display: none; }
+
+#stage-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: rgba(196, 181, 253, 0.35);
+  user-select: none;
+}
+#stage-empty[hidden] { display: none; }

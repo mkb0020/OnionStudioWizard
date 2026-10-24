@@ -1,0 +1,31 @@
+# Onion Studio Wizard
+
+Personal game-dev tool suite for the metroidvania. One Tauri 2 desktop app that hosts the standalone tools from the `kinematics` repo. See `BRIEFME.md` for goals, decisions and the to-do list.
+
+## Run it
+
+Needs Node, Rust, and the Tauri 2 prerequisites for Windows (WebView2 is already on Windows 11).
+
+```
+npm install
+npm run dev        # tauri dev
+npm run build      # tauri build (installer in src-tauri/target/release/bundle)
+```
+
+No bundler: `src/` is the frontend and Tauri serves it as-is. `src/index.html` also works in any static server (for example VS Code Live Server opened on `src/`), where the window buttons are no-ops.
+
+## Layout
+
+```
+src/
+  index.html          shell page (PrettyKit window + rail + stage)
+  js/shell.js         rail, lazy iframe per tool, window drag
+  js/tools.js         tool registry: add a tool = drop HTML in src/tools/ + set src here
+  js/prettyKit/       vendored PrettyKit window.js
+  css/                fonts.css (bundled fonts), prettyKit.css, shell.css
+  tools/              drawingTool.html, animatedRig.html (copied from kinematics)
+  assets/ json_files/ what those tools load
+src-tauri/            Rust side: window commands for PrettyKit's buttons
+```
+
+Each tool HTML has one `<base href="../">` line so `assets/...` and `json_files/...` resolve from `src/`. Other edits to the copied tools: the drawing tool's Google Fonts link now points at `css/fonts.css`, and its dead `OrbitronLocal` font rule was removed.

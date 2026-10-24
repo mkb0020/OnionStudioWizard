@@ -1,0 +1,160 @@
+{
+  "meta": {
+    "name": "mannequin",
+    "description": "Rig Lab slider defaults for one character.",
+    "exported": "2026-10-16T12:02:33.476Z"
+  },
+  "shared": {
+    "body": {
+      "chestDepth": 44,
+      "neckLen": 16,
+      "headR": 27,
+      "neckW": 37,
+      "neckTrim": 17,
+      "waistTrim": 24,
+      "pelvisTilt": 1,
+      "headFollow": 0.45,
+      "stomach": true,
+      "stomachWChest": 56,
+      "stomachWPelvis": 35,
+      "stomachColor": "#1c0142"
+    },
+    "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
+    "poseSpeed": { "spPassing": 1.2, "spTakeoff": 0.6, "spUp": 0, "spContact": 0.35, "spDown": 0.4 },
+    "feet": { "bootOn": true, "soleOff": 96.2, "footLen": 54, "heelFrac": 0.13 },
+    "art": { "art": true, "skel": false, "farTint": 0.52, "nearLegOver": true },
+    "view": {
+      "bgLight": true,
+      "bgGrid": true,
+      "gridSize": 50,
+      "gridAlpha": 0.5,
+      "guides": false,
+      "joints": true,
+      "floor": true,
+      "scroll": 1,
+      "zoom": 1.25,
+      "lineW": 6,
+      "tint": true
+    },
+    "bag": {
+      "bag": true,
+      "bagOverArm": false,
+      "bagScale": 0.26,
+      "bagSwing": 1,
+      "bagSurge": 0.18,
+      "bagLean": 0.55,
+      "bagHold": 1.9,
+      "bagLen": 2.5,
+      "bagZ": 1,
+      "charmZ": 0.64,
+      "strap": true,
+      "strapW": 8.5,
+      "strapSlack": 0.34,
+      "strapColor": "#37025a",
+      "strapEdge": "#170032"
+    }
+  },
+  "cycles": {
+    "run": {
+      "params": {
+        "spineAngle": 44,
+        "chestAngle": 64,
+        "neckAngle": 50,
+        "cycleSec": 0.89,
+        "airtime": 14,
+        "twist": 35,
+        "hipTwist": 7,
+        "headBob": 0.5,
+        "headJut": 1,
+        "ssAmt": 1.15
+      },
+      "stride": 1183,
+      "strideBoot": 1628,
+      "twistPhase": 0,
+      "liftPhase": 0
+    },
+    "walk": {
+      "params": {
+        "spineAngle": 84,
+        "chestAngle": 86,
+        "neckAngle": 6,
+        "cycleSec": 1.1,
+        "airtime": 0,
+        "twist": 8,
+        "hipTwist": 6,
+        "headBob": 1.5,
+        "headJut": 1,
+        "ssAmt": 1
+      },
+      "stride": 611,
+      "strideBoot": 640,
+      "twistPhase": 0.25,
+      "liftPhase": 0.125
+    }
+  },
+  "footPresets": {
+    "boot": { "soleOff": 96.2, "footLen": 85, "heelFrac": 0.276 },
+    "bare": { "soleOff": 39, "footLen": 90, "heelFrac": 0.22 }
+  },
+  "squashStretch": {
+    "run": {
+      "passing": { "fl": -3, "bl": 0, "fa": 0, "ba": 0, "t": -2 },
+      "takeoff": { "fl": 2, "bl": 4, "fa": 3, "ba": 0, "t": -2 },
+      "up": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": -2 },
+      "contact": { "fl": -7, "bl": 0, "fa": -5, "ba": -2, "t": -5 }
+    },
+    "walk": {
+      "contact": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "down": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "passing": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "up": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 }
+    }
+  },
+  "footAngles": {
+    "bare": {
+      "run": {
+        "passing": { "f": 80, "b": 0 },
+        "takeoff": { "f": 55, "b": 45 },
+        "up": { "f": 30, "b": 75 },
+        "contact": { "f": -15, "b": 85 }
+      },
+      "walk": {
+        "contact": { "f": -15, "b": 50 },
+        "down": { "f": 0, "b": 60 },
+        "passing": { "f": 25, "b": 0 },
+        "up": { "f": -5, "b": 40 }
+      }
+    },
+    "boot": {
+      "run": {
+        "passing": { "f": 97, "b": 0 },
+        "takeoff": { "f": 40, "b": 35 },
+        "up": { "f": 3, "b": 61 },
+        "contact": { "f": 1, "b": 75 }
+      },
+      "walk": {
+        "contact": { "f": 0, "b": 35 },
+        "down": { "f": 0, "b": 40 },
+        "passing": { "f": 20, "b": 0 },
+        "up": { "f": 0, "b": 30 }
+      }
+    }
+  },
+  "pivots": {
+    "hip": [402.5, 452],
+    "knee": [390.5, 585],
+    "ankle": [381, 704],
+    "shoulder": [381, 340],
+    "elbow": [388, 381],
+    "wrist": [401.5, 433],
+    "rib": [398, 372],
+    "neck": [381.5, 335],
+    "headPivot": [398.5, 292.5],
+    "neckFrom": [378, 328.5],
+    "neckTo": [383, 305],
+    "stomachFrom": [403, 424],
+    "stomachTo": [407, 358],
+    "bagHip": [387, 444.5],
+    "strapTop": [414, 309]
+  }
+}

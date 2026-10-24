@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onion Studio Wizard</title>
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/prettyKit.css">
+<link rel="stylesheet" href="css/shell.css">
+</head>
+<body>
+
+<!-- PRETTYKIT WINDOW FRAME (IDS ARE WHAT js/prettyKit/window.js LOOKS FOR) -->
+<div id="pretty-window">
+
+  <div id="pretty-titlebar">
+    <img id="pretty-icon" alt="">
+    <span id="pretty-title">Onion Studio Wizard</span>
+    <div id="pretty-controls">
+      <button class="pk-btn pk-btn--minimize" id="pk-minimize" type="button" aria-label="Minimize window" title="Minimize">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="pk-btn pk-btn--maximize" id="pk-maximize" type="button" aria-label="Maximize window" title="Maximize">
+        <svg id="pk-max-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="14" height="14" rx="1"/></svg>
+        <svg id="pk-restore-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" style="display:none"><rect x="4" y="8" width="12" height="12" rx="1"/><path d="M8 8V5h12v12h-4"/></svg>
+      </button>
+      <button class="pk-btn pk-btn--close" id="pk-close" type="button" aria-label="Close window" title="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="pretty-content" class="no-scroll osw-body">
+    <nav id="rail" aria-label="Tools"></nav>
+    <main id="stage">
+      <div id="stage-empty">SELECT A TOOL</div>
+    </main>
+  </div>
+
+  <div id="pretty-statusbar">
+    <div class="pk-status-left">
+      <span class="pk-status-dot"></span>
+      <span id="pk-status-text">READY</span>
+    </div>
+    <div class="pk-status-right">
+      <span id="pk-status-version">v0.1.0</span>
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="js/shell.js"></script>
+</body>
+</html>

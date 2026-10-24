@@ -1,0 +1,212 @@
+{
+  "meta": {
+    "description": "Side-view gait joint angles for run and walk cycles, for rig animation.",
+    "units": "degrees",
+    "sideView": "Camera sees the character's right side. Right limbs are near, left limbs are far.",
+    "convention": "Positive = forward (direction of travel), negative = behind. Each angle is measured from the vertical line straight down from the parent joint to the child joint.",
+    "ranges": "Every angle is [min, max]. Pick a value within the range (the midpoint is a good default), or tween between min and max for variation.",
+    "joints": {
+      "thigh": "Hip to knee, angle at the hip circle",
+      "shin": "Knee to ankle, angle at the knee circle. Equals thigh angle minus knee bend.",
+      "upperArm": "Shoulder to elbow, angle at the shoulder circle",
+      "forearm": "Elbow to wrist, angle at the elbow circle. Equals upper arm angle plus elbow bend."
+    },
+    "poseNaming": "Poses are named for the leg doing the action. Arms swing opposite the legs: the right arm goes with the left leg, and the left arm goes with the right leg.",
+    "caveats": "Stylized, readable values for animation, not mocap data. Shin and forearm should lag the thigh and upper arm by 1 to 2 frames for follow-through."
+  },
+  "cycles": {
+    "run": {
+      "poseOrder": [
+        "left_passing", "left_takeoff", "left_up", "left_contact",
+        "right_passing", "right_takeoff", "right_up", "right_contact"
+      ],
+      "speedScale": { "slowJog": 0.7, "default": 1.0, "sprint": 1.3 },
+      "notes": [
+        "Knee bend: about 100-115 deg on the swing leg at passing, 90-110 deg at up, 10-20 deg at contact, 20-35 deg on the push-off leg at takeoff.",
+        "Shin values past -90 mean the ankle is above the knee (heel flick). Clamp to about -90 for a casual jog.",
+        "Elbow bend: about 90-105 deg on the forward swing, 70-80 deg at the front, 60-75 deg on the back swing.",
+        "Trailing thigh rarely goes past about -25 deg.",
+        "Hand reaches roughly chest or chin height at the front of the swing and passes beside the hip at the back."
+      ],
+      "poses": {
+        "left_passing": {
+          "legs": {
+            "left":  { "thigh": [10, 20],   "shin": [-100, -90] },
+            "right": { "thigh": [-20, -10],    "shin": [-45, -35] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-80, -70],    "forearm": [25, 35] },
+            "right": { "upperArm": [-5, 5],  "forearm": [75, 85] }
+          }
+        },
+        "left_takeoff": {
+          "legs": {
+            "left":  { "thigh": [70, 80],   "shin": [-60, -50] },
+            "right": { "thigh": [-50, -55], "shin": [-55, -50] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-110, -100], "forearm": [-50, -40] },
+            "right": { "upperArm": [45, 55],   "forearm": [130, 140] }
+          }
+        },
+        "left_up": {
+          "legs": {
+            "left":  { "thigh": [65, 75],   "shin": [25, 35] },
+            "right": { "thigh": [-50, -45], "shin": [-105, -95] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-120, -110], "forearm": [-60, -50] },
+            "right": { "upperArm": [50, 60],   "forearm": [125, 135] }
+          }
+        },
+        "left_contact": {
+          "legs": {
+            "left":  { "thigh": [25, 35],  "shin": [-40, -50] },
+            "right": { "thigh": [-45, -35],   "shin": [-120, -110] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-60, -50],   "forearm": [10, 20] },
+            "right": { "upperArm": [0, 10],  "forearm": [75, 85] }
+          }
+        },
+        "right_passing": {
+          "legs": {
+            "left":  { "thigh": [-20, -10],    "shin": [-45, -35] },
+            "right": { "thigh": [10, 20],   "shin": [-100, -90] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-5, 5],  "forearm": [125, 135] },
+            "right": { "upperArm": [-60, -50],    "forearm": [45, 55] }
+          }
+        },
+        "right_takeoff": {
+          "legs": {
+            "left":  { "thigh": [-50, -55], "shin": [-55, -50] },
+            "right": { "thigh": [70, 80],   "shin": [-60, -50] }
+          },
+          "arms": {
+            "left":  { "upperArm": [45, 55],   "forearm": [130, 140] },
+            "right": { "upperArm": [-110, -100], "forearm": [-50, -40]  }
+          }
+        },
+        "right_up": {
+          "legs": {
+            "left":  { "thigh": [-50, -45], "shin": [-105, -95] },
+            "right": { "thigh": [65, 75],   "shin": [25, 35]  }
+          },
+          "arms": {
+            "left":  { "upperArm": [50, 60],   "forearm": [125, 135] },
+            "right": { "upperArm": [-120, -110], "forearm": [-60, -50] }
+          }
+        },
+        "right_contact": {
+          "legs": {
+            "left":  { "thigh": [-45, -35],   "shin": [-120, -110] },
+            "right": { "thigh": [25, 35],  "shin": [-40, -50]}
+          },
+          "arms": {
+            "left":  { "upperArm": [0, 10],  "forearm": [75, 85]},
+            "right": {  "upperArm": [-60, -50],   "forearm": [20, 30]  }
+          }
+        }
+      }
+    },
+    "walk": {
+      "poseOrder": [
+        "left_contact", "left_down", "right_passing", "right_up",
+        "right_contact", "right_down", "left_passing", "left_up"
+      ],
+      "speedScale": { "slowStroll": 0.7, "default": 1.0, "briskWalk": 1.2 },
+      "notes": [
+        "contact = heel strike, down = lowest point as weight lands, passing = swing leg moves past stance leg, up = highest point with swing leg reaching forward.",
+        "Knee bend: about 5 deg at contact, 15-20 deg on the front leg at down, 30-40 deg on the trailing leg at down, 55-65 deg on the swing leg at passing, 30-40 deg at up.",
+        "Stance leg straightens at passing and stays nearly straight through up. A walk never has the deep tuck of a run.",
+        "Pelvis is highest over the stance leg at passing or up and lowest at down.",
+        "Elbow stays bent a roughly constant 25-35 deg. Arm swing is much smaller than in a run.",
+        "Foot rolls heel to toe during down: heel leads at contact, toe trails at the back of the stride."
+      ],
+      "poses": {
+        "left_contact": {
+          "legs": {
+            "left":  { "thigh": [25, 30],   "shin": [20, 28] },
+            "right": { "thigh": [-20, -15], "shin": [-45, -30] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-22, -15], "forearm": [-5, 10] },
+            "right": { "upperArm": [15, 22],   "forearm": [40, 55] }
+          }
+        },
+        "left_down": {
+          "legs": {
+            "left":  { "thigh": [15, 20],   "shin": [0, 8] },
+            "right": { "thigh": [-25, -20], "shin": [-65, -50] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-20, -15], "forearm": [0, 10] },
+            "right": { "upperArm": [12, 18],   "forearm": [35, 50] }
+          }
+        },
+        "right_passing": {
+          "legs": {
+            "left":  { "thigh": [0, 5],   "shin": [-5, 5] },
+            "right": { "thigh": [5, 15],  "shin": [-55, -45] }
+          },
+          "arms": {
+            "left":  { "upperArm": [0, 5], "forearm": [25, 35] },
+            "right": { "upperArm": [0, 5], "forearm": [25, 35] }
+          }
+        },
+        "right_up": {
+          "legs": {
+            "left":  { "thigh": [-15, -10], "shin": [-20, -12] },
+            "right": { "thigh": [20, 25],   "shin": [-20, -10] }
+          },
+          "arms": {
+            "left":  { "upperArm": [8, 14],   "forearm": [30, 45] },
+            "right": { "upperArm": [-14, -8], "forearm": [5, 15] }
+          }
+        },
+        "right_contact": {
+          "legs": {
+            "left":  { "thigh": [-20, -15], "shin": [-45, -30] },
+            "right": { "thigh": [25, 30],   "shin": [20, 28] }
+          },
+          "arms": {
+            "left":  { "upperArm": [15, 22],   "forearm": [40, 55] },
+            "right": { "upperArm": [-22, -15], "forearm": [-5, 10] }
+          }
+        },
+        "right_down": {
+          "legs": {
+            "left":  { "thigh": [-25, -20], "shin": [-65, -50] },
+            "right": { "thigh": [15, 20],   "shin": [0, 8] }
+          },
+          "arms": {
+            "left":  { "upperArm": [12, 18],   "forearm": [35, 50] },
+            "right": { "upperArm": [-20, -15], "forearm": [0, 10] }
+          }
+        },
+        "left_passing": {
+          "legs": {
+            "left":  { "thigh": [5, 15],  "shin": [-55, -45] },
+            "right": { "thigh": [0, 5],   "shin": [-5, 5] }
+          },
+          "arms": {
+            "left":  { "upperArm": [0, 5], "forearm": [25, 35] },
+            "right": { "upperArm": [0, 5], "forearm": [25, 35] }
+          }
+        },
+        "left_up": {
+          "legs": {
+            "left":  { "thigh": [20, 25],   "shin": [-20, -12] },
+            "right": { "thigh": [-15, -10], "shin": [-20, -12] }
+          },
+          "arms": {
+            "left":  { "upperArm": [-14, -8], "forearm": [5, 15] },
+            "right": { "upperArm": [8, 14],   "forearm": [30, 45] }
+          }
+        }
+      }
+    }
+  }
+}
