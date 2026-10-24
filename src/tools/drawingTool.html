@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <base href="../">  <!-- OSW: resolves assets/, json_files/, css/ from src/ whether run in the app or opened from src/tools/ -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<script>if(window.parent!==window)document.documentElement.classList.add('osw-embedded');  /* OSW: running inside the Wizard shell */</script>
 <title>OSP - DRAW</title>
 <link rel="stylesheet" href="css/fonts.css">  <!-- OSW: bundled Orbitron + Share Tech Mono (was Google Fonts) -->
 <style>
@@ -257,6 +258,9 @@ input[type=number]:focus,#exName:focus{border-color:var(--cy);outline:none}
 #status{grid-area:stat;display:flex;align-items:center;gap:16px;padding:0 10px;background:var(--bg1);
   border-top:1px solid var(--acc);font-family:var(--mono);font-size:10px;color:var(--soft);white-space:nowrap;overflow:hidden}
 #status b{color:var(--cy);font-weight:400}
+/* OSW: inside the Wizard shell this footer is mirrored into the shell's status bar, so hide it and give its row back to the layout */
+html.osw-embedded #status{display:none}
+html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas:"head head head" "tool stage panel" "strip strip strip"}
 
 @media (max-width:900px){
   #app{--pw:190px;--tw:190px}

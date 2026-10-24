@@ -1,10 +1,11 @@
 // ONION STUDIO WIZARD - TOOL REGISTRY
 // ONE ENTRY PER RAIL BUTTON. src: null = NOT WIRED YET (BUTTON SHOWS DIMMED).
+// status: SELECTOR OF A FOOTER INSIDE THE TOOL THAT THE SHELL MIRRORS INTO ITS OWN STATUS BAR (OPTIONAL).
 // src IS RELATIVE TO src/ (THE FOLDER TAURI SERVES), SO ADDING A TOOL = DROP THE HTML IN src/tools/ AND SET src HERE.
 
 export const TOOLS = [
   { id: 'character', group: 'CHAR', label: 'Builder', title: 'Character Builder',  icon: 'user',  src: null },
-  { id: 'draw',      group: 'DRAW',      label: 'Draw',    title: 'Drawing Tool',       icon: 'pen',   src: 'tools/drawingTool.html' },
+  { id: 'draw',      group: 'DRAW',      label: 'Draw',    title: 'Drawing Tool',       icon: 'pen',   src: 'tools/drawingTool.html', status: '#status' },
   { id: 'rig',       group: 'RIG',       label: 'Rig Lab', title: 'Rig Lab',            icon: 'bones', src: 'tools/animatedRig.html' },
   { id: 'staticRig', group: 'RIG',       label: 'Static',  title: 'Static Rig',         icon: 'pose',  src: null },
   { id: 'vectors',   group: 'FX',        label: 'Spells',  title: 'Vector Spell Lab',   icon: 'spark', src: null },

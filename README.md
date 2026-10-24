@@ -18,8 +18,9 @@ No bundler: `src/` is the frontend and Tauri serves it as-is. `src/index.html` a
 
 ```
 src/
-  index.html          shell page (PrettyKit window + rail + stage)
-  js/shell.js         rail, lazy iframe per tool, window drag
+  index.html          shell page (PrettyKit window, title bar buttons, stage, status bar)
+  js/shell.js         title bar tool buttons (+ group dropdowns), lazy iframe per tool, window drag
+  js/statusMirror.js  mirrors a tool's footer into the shell status bar (draw tool uses it)
   js/tools.js         tool registry: add a tool = drop HTML in src/tools/ + set src here
   js/prettyKit/       vendored PrettyKit window.js
   css/                fonts.css (bundled fonts), prettyKit.css, shell.css
@@ -28,4 +29,4 @@ src/
 src-tauri/            Rust side: window commands for PrettyKit's buttons
 ```
 
-Each tool HTML has one `<base href="../">` line so `assets/...` and `json_files/...` resolve from `src/`. Other edits to the copied tools: the drawing tool's Google Fonts link now points at `css/fonts.css`, and its dead `OrbitronLocal` font rule was removed.
+Each tool HTML has one `<base href="../">` line so `assets/...` and `json_files/...` resolve from `src/`. Other edits to the copied tools: the drawing tool's Google Fonts link now points at `css/fonts.css`, and its dead `OrbitronLocal` font rule was removed. The drawing tool also detects when it is embedded (`html.osw-embedded`), hides its own footer and gives that row back to the canvas; the shell shows the same items in its status bar.

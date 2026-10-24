@@ -16,6 +16,7 @@
   <div id="pretty-titlebar">
     <img id="pretty-icon" alt="">
     <span id="pretty-title">Onion Studio Wizard</span>
+    <nav id="rail" aria-label="Tools"></nav>
     <div id="pretty-controls">
       <button class="pk-btn pk-btn--minimize" id="pk-minimize" type="button" aria-label="Minimize window" title="Minimize">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -31,7 +32,6 @@
   </div>
 
   <div id="pretty-content" class="no-scroll osw-body">
-    <nav id="rail" aria-label="Tools"></nav>
     <main id="stage">
       <div id="stage-empty">SELECT A TOOL</div>
     </main>
@@ -42,6 +42,7 @@
       <span class="pk-status-dot"></span>
       <span id="pk-status-text">READY</span>
     </div>
+    <div id="pk-status-tool" hidden></div>
     <div class="pk-status-right">
       <span id="pk-status-version">v0.1.0</span>
     </div>
