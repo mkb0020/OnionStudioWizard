@@ -39,23 +39,24 @@
    ====================================================================== */
 const R2D = Math.PI / 180, FPS = 24;
 /* ======================= CHARACTER ART =======================
-   SHEET_URL (assets/images/body_parts.png) is a sheet of ten 800x800 frames, each part drawn IN PLACE on the mannequin:
-   head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe.
+   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of twelve 800x800 frames (9600x800): 0 full mannequin (ghost), 1 bag, then each part drawn IN PLACE on the mannequin:
+   2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm (forearm), 7 near hand (handR), 8 far hand (handL), 9 thigh, 10 calf, 11 shoe. ART_FRAME maps each part name to its frame.
    The page loads that file on start (so redrawing the sheet updates the rig); it must be served over http.
    Pivots are positions inside the 800x800 frame, measured from the mannequin's gray joint circles; the rig maps each
    part's own pivot-to-pivot axis onto the matching skeleton bone (rotating and stretching it along the bone). */
-const SHEET_URL='assets/images/body_parts.png';   // the head frame is the hooded head; every other frame matches mannequin_side.png
+const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=9600;   // frame 0 of this sheet is the full mannequin
 const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
-const ART_BOX={"head": [335, 200, 130, 152], "chest": [358, 299, 94, 96], "pelvis": [355, 402, 89, 107], "upperArm": [360, 297, 52, 109], "forearm": [363, 361, 62, 98], "handR": [374, 413, 57, 69], "handL": [374, 422, 56, 59], "thigh": [353, 432, 85, 181], "calf": [340, 557, 80, 188], "shoe": [339, 693, 106, 107]};   // [x,y,w,h] crop of each frame (bbox + margin)
+const ART_FRAME={"head": 2, "chest": 3, "pelvis": 4, "upperArm": 5, "forearm": 6, "handR": 7, "handL": 8, "thigh": 9, "calf": 10, "shoe": 11};   // frame index of each part in the sheet
+const ART_BOX={"head": [358, 222, 78, 86], "chest": [363, 306, 85, 96], "pelvis": [361, 398, 71, 90], "upperArm": [362, 308, 36, 116], "forearm": [367, 388, 45, 98], "handR": [382, 449, 48, 52], "handL": [381, 449, 49, 53], "thigh": [361, 416, 68, 176], "calf": [364, 562, 60, 180], "shoe": [362, 708, 103, 93]};   // [x,y,w,h] crop of each frame (bbox + margin)
 const ART_PIV={
-  hip:[395.5,470], knee:[391,586], ankle:[372.5,702.8],            // hip = centre of the thigh's top cap / pelvis round; knee = where thigh bottom meets calf top; ankle = boot pivot (sole 96px below, heel 24px behind)
-  shoulder:[386,323], elbow:[384,383], wrist:[395.5,433],          // shoulder = centre of the arm cap; elbow / wrist = joint ends of the arm parts
-  rib:[389.7,380],                                                 // waist joint: on the hip->shoulder line, at the chest bottom
-  neck:[385.2,311], headPivot:[396,300],                           // neck = 12px above the shoulder along the chest; head turns about the skull base
-  neckFrom:[388,316], neckTo:[396,296],                            // neck line: inside the chest top / inside the hood
-  stomachFrom:[402,424], stomachTo:[401,374],                      // stomach fill: just inside the pelvis top / just inside the chest bottom
-  bagHip:[394,443],                                                // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
-  strapTop:[384,313]                                               // crossbody strap: the apex over the far shoulder (chest art)
+  hip:[395,450], knee:[402,574], ankle:[393,730],            // hip = centre of the thigh's top cap / pelvis round; knee = where thigh bottom meets calf top; ankle = boot pivot (sole 66px below, heel 27px behind; redrawn art, Oct 25 2026)
+  shoulder:[380,326], elbow:[380,404], wrist:[398,468],          // shoulder = centre of the arm cap; elbow / wrist = joint ends of the arm parts
+  rib:[388,398],                                                 // waist joint: on the hip->shoulder line, at the chest bottom
+  neck:[382,314], headPivot:[396,292],                           // neck = 12px above the shoulder along the chest; head turns about the skull base
+  neckFrom:[388,319], neckTo:[395,290],                            // neck line: inside the chest top / inside the hood
+  stomachFrom:[400,422], stomachTo:[404,376],                      // stomach fill: just inside the pelvis top / just inside the chest bottom
+  bagHip:[370,436],                                                // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
+  strapTop:[392,315]                                               // crossbody strap: the apex over the far shoulder (chest art)
 };
 /* Pivot edits made in the Pivots menu are remembered in this browser (localStorage). They are discarded automatically if the
    defaults change. The defaults come from json_files/rig_config.json ("pivots"); the block above holds the built-in defaults. */
@@ -97,9 +98,9 @@ const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, g
   stomach:true, stomachWChest:44, stomachWPelvis:50, stomachColor:'#210250',
   bag:true, bagOverArm:false, bagScale:.5, bagSwing:1, bagSurge:.1, bagLean:.6, bagHold:1.2, bagLen:1, bagZ:.25, charmZ:.12,
   strap:true, strapW:10, strapSlack:.08, strapColor:'#37025a', strapEdge:'#170032' };
-/* Measured from the shoe frame of mannequin_side.png: sole 96.2px below the ankle pivot, heel back corner 23.5px behind it,
-   toe-platform front corner 61.5px ahead (contact length 85, heel fraction .276). Bare mannequin foot: sole 39px below, 90px long, heel .22. */
-const FOOT_PRESET={ boot:{soleOff:96.2,footLen:85,heelFrac:.276}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
+/* Measured from the shoe frame of sideView.png (redrawn Oct 25 2026): sole 66px below the ankle pivot, heel back corner 27px behind it,
+   toe front corner 67px ahead (contact length 95, heel fraction .28). Bare mannequin foot: sole 39px below, 90px long, heel .22. */
+const FOOT_PRESET={ boot:{soleOff:66,footLen:95,heelFrac:.28}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
 const CYCLE_DEFAULTS = {
   run: { spineAngle:45, chestAngle:47, cycleSec:2,  airtime:15, twist:14, hipTwist:10, headBob:2,   headJut:3, neckAngle:44, ssAmt:1 },
   walk:{ spineAngle:84, chestAngle:86, cycleSec:1.1, airtime:0,  twist:8,  hipTwist:6,  headBob:1.5, headJut:1, neckAngle:6,  ssAmt:1 }
@@ -387,12 +388,12 @@ function solve(u){
 }
 
 /* ---------- crossbody bag + charms ---------- */
-/* assets/images/accessories.png = four 350x350 frames in ONE shared layout (stacked, they are bag.png): 0 bag, 1 crystal, 2 rune tag, 3 O-ring.
+/* assets/images/nova/mannequins/accessories.png = four 350x350 frames in ONE shared layout (stacked, they are bag.png): 0 bag, 1 crystal, 2 rune tag, 3 O-ring.
    Points are pixels inside a frame. pv = where a piece hangs (it rotates about it), com = its centre of mass, box = [x,y,w,h] crop.
    The bag hangs from its strap tabs at the near hip (ART_PIV.bagHip); the O-ring hangs on the bag's big ring, the crystal on the O-ring,
    the tag on the bag's side ring. Each piece is a damped rigid pendulum driven by how its pivot accelerates (hip bounce + a footfall surge).
    The swing is baked over a few warm-up cycles into a table per run phase, so it loops seamlessly, scrubs backwards and follows speed changes. */
-const ACC_URL='assets/images/accessories.png', ACC_FR=350, GRAV=4400;   // GRAV px/s^2: about 9.8 m/s^2 for a character ~780 px tall
+const ACC_URL='assets/images/nova/mannequins/accessories.png', ACC_FR=350, GRAV=4400;   // GRAV px/s^2: about 9.8 m/s^2 for a character ~780 px tall
 const ACC={
   bag:    {f:0,box:[88,13,196,191], pv:[185,62], com:[186,115]},
   ring:   {f:3,box:[144,153,38,46], pv:[163,162],com:[164,176]},
@@ -488,7 +489,7 @@ function drawLeg(l,col,far){
 /* ---------- character art ---------- */
 function buildParts(img,label){
   ART_NAMES.forEach((n,i)=>{
-    const [bx,by,bw,bh]=ART_BOX[n]; PARTS[n]={i,bx,by,bw,bh};
+    const [bx,by,bw,bh]=ART_BOX[n]; PARTS[n]={i:ART_FRAME[n],bx,by,bw,bh};
   });
   PARTS._img=img; artLabel=label; partsReady=true; rebuildTints();
 }
@@ -505,7 +506,7 @@ function loadArt(){
   return new Promise(res=>{
     const fail=m=>{ artLabel='not found'; showLoadError(new Error(m)); res(); };
     const im=new Image();
-    im.onload=()=>{ if(im.naturalWidth===8000&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 8000x800 (ten 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
+    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 9600x800 (twelve 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
     im.onerror=()=>fail('could not load '+SHEET_URL);
     im.src=SHEET_URL;
   });
@@ -581,7 +582,7 @@ function buildPivotPanel(pn){
   nt.textContent='Pivots are positions in the 800×800 art frame (y down). The pivot is the point on a drawing that lands on the joint, so raising x by 5 slides the art 5px left. Bone lengths come from these points, so moving a joint also changes bone length. Edits apply live and are remembered in this browser; paste the copied block over ART_PIV in the file to make them permanent. In the editor: drag a crosshair, arrow keys nudge 0.5px (Shift 2px, Alt 0.1px), wheel zooms, drag the background to pan.';
   pn.appendChild(nt);
 }
-function loadGhost(){const im=new Image();im.onload=()=>{if(im.naturalWidth===800)E.ghostImg=im;};im.src='assets/images/mannequin.png';}
+function loadGhost(){const im=new Image();im.onload=()=>{if(im.naturalWidth===SHEET_W){const c=document.createElement('canvas');c.width=c.height=800;c.getContext('2d').drawImage(im,0,0,800,800,0,0,800,800);E.ghostImg=c;}};im.src=SHEET_URL;}
 function drawPivotEditor(r){
   const barH=40, availH=H-barH, s=(availH-30)/780*E.z, tx=W/2-E.cx*s, ty=barH+availH/2-E.cy*s;
   E.map={s,tx,ty,barH,availH};
