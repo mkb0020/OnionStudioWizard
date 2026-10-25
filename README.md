@@ -10,6 +10,8 @@ Needs Node, Rust, and the Tauri 2 prerequisites for Windows (WebView2 is already
 npm install
 npm run dev        # tauri dev
 npm run build      # tauri build (installer in src-tauri/target/release/bundle)
+npm test           # JS tests for the library (node --test)
+cargo test         # Rust tests; run inside src-tauri/
 ```
 
 No bundler: `src/` is the frontend and Tauri serves it as-is. `src/index.html` also works in any static server (for example VS Code Live Server opened on `src/`), where the window buttons are no-ops.
@@ -26,7 +28,12 @@ src/
   css/                fonts.css (bundled fonts), prettyKit.css, shell.css
   tools/              drawingTool.html, animatedRig.html (copied from kinematics)
   assets/ json_files/ what those tools load
-src-tauri/            Rust side: window commands for PrettyKit's buttons
+  js/library/        storage adapters (disk via Tauri / memory) + manifest logic
+  js/bridge.js        shell side of the postMessage bridge; js/oswClient.js is the tool side
+  js/libraryPanel.js  Library drawer (folder setting, PNG import, browse/rename/delete)
+src-tauri/            Rust side: window commands for PrettyKit's buttons + the library file commands (library.rs)
+library/              created on first run: manifest.json + parts/, accessories/, characters/ (git-tracked art)
+tests/                node tests for the library
 ```
 
 Each tool HTML has one `<base href="../">` line so `assets/...` and `json_files/...` resolve from `src/`. Other edits to the copied tools: the drawing tool's Google Fonts link now points at `css/fonts.css`, and its dead `OrbitronLocal` font rule was removed. The drawing tool also detects when it is embedded (`html.osw-embedded`), hides its own footer and gives that row back to the canvas; the shell shows the same items in its status bar.

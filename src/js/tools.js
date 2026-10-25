@@ -24,4 +24,5 @@ export const ICONS = {
   cape:  '<path d="M7 4h10l2 15c-2 1.5-4.5 1.5-7 0-2.5 1.5-5 1.5-7 0z"/><path d="M9 4c0 2 1.3 3 3 3s3-1 3-3"/>',
   grid:  '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/>',
   play:  '<path d="M7 4l13 8-13 8z"/>',
+  library: '<path d="M12 3l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/>',
 };

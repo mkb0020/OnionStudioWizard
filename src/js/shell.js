@@ -6,6 +6,10 @@
 import pk from './prettyKit/window.js';
 import { TOOLS, ICONS } from './tools.js';
 import { createStatusMirror } from './statusMirror.js';
+import { createStorage } from './library/storage.js';
+import { createLibrary } from './library/library.js';
+import { createBridge } from './bridge.js';
+import { createLibraryPanel } from './libraryPanel.js';
 
 const VERSION = 'v0.1.0';
 const LAST_KEY = 'osw.lastTool';
@@ -22,6 +26,7 @@ const groups   = [];          // { name, tools[], current (tool id), el, main, c
 let activeId   = null;
 let statusTimer = null;
 let menu = null;              // { group, el } WHILE A DROPDOWN IS OPEN
+let libButton = null;         // THE LIBRARY BUTTON'S WRAPPER (.tb-group), SET IN buildRail
 
 const toolById  = (id) => TOOLS.find((t) => t.id === id);
 const groupOf   = (id) => groups.find((g) => g.tools.some((t) => t.id === id));
@@ -84,6 +89,16 @@ function buildRail() {
     rail.appendChild(el);
     refreshGroup(g);
   });
+
+  // LIBRARY: NOT A TOOL (NO IFRAME), SO IT SITS AFTER THE GROUPS AND OPENS THE DRAWER (js/libraryPanel.js)
+  const sep = document.createElement('span'); sep.className = 'pk-titlebar-sep'; rail.appendChild(sep);
+  libButton = document.createElement('div');
+  libButton.className = 'tb-group';
+  const lb = document.createElement('button');
+  lb.type = 'button'; lb.className = 'tb-btn'; lb.title = 'Library'; lb.setAttribute('aria-label', 'Library');
+  lb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.library + '</svg>';
+  libButton.appendChild(lb);
+  rail.appendChild(libButton);
 }
 
 function refreshGroup(g) {
@@ -193,10 +208,21 @@ function activate(id) {
 // ---------- START ----------
 
 buildRail();
+
+// ---------- LIBRARY ----------
+// ONE LIBRARY FOR THE WHOLE APP: REAL FILES IN THE DESKTOP APP, BROWSER MEMORY WHEN RUN IN A PLAIN BROWSER
+const storage = createStorage();
+const library = createLibrary(storage);
+createBridge({ library, frames });
+const libraryPanel = createLibraryPanel({
+  library, button: libButton, mount: document.getElementById('pretty-content'), notify: (t, ms) => setStatus(t, ms),
+});
+library.info().then((i) => { if (i.error) setStatus('LIBRARY - ' + i.error.replace(/^[A-Z_]+:\s*/, ''), 8000); }).catch(() => {});
+
 let first = null;
 try { first = localStorage.getItem(LAST_KEY); } catch (e) { /* IGNORE */ }
 if (!TOOLS.some((t) => t.id === first && t.src)) first = (TOOLS.find((t) => t.src) || {}).id;
 if (first) activate(first);
 
 // HANDLE FOR LATER STEPS (LIBRARY / SEND-TO BRIDGE) AND FOR DEBUGGING IN THE DEVTOOLS CONSOLE
-window.OSW = { activate, tools: TOOLS, frames, get active() { return activeId; } };
+window.OSW = { activate, tools: TOOLS, frames, library, storage, libraryPanel, get active() { return activeId; } };
