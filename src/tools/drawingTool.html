@@ -281,7 +281,39 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
 .libcard .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .libcard .ty{font-family:var(--mono);font-size:9px;color:var(--mute)}
 #pmEmpty{grid-column:1/-1;padding:10px 4px}
-#exMenu{max-height:calc(100vh - 50px);overflow-y:auto}
+#exMenu,#layerMenu{max-height:calc(100vh - 50px);overflow-y:auto}
+
+/* OSW TABLET: pen-friendly number fields. Drag a label sideways to scrub its number; the angle gets a dial. */
+.popmenu .scrub{cursor:ew-resize;touch-action:none;color:var(--cy);padding:9px 0;margin:-9px 0;
+  text-decoration:underline dashed #00ffff66;text-underline-offset:3px}
+.popmenu .scrub:hover,.popmenu .scrub.on{color:#fff;text-decoration-color:var(--cy);text-shadow:0 0 8px #00ffff}
+#scrubHud{--row:26px;--band:32px;position:fixed;z-index:200;width:132px;pointer-events:none;font-family:var(--mono)}
+#scrubHud[hidden]{display:none}
+#scrubHud .sh-val{text-align:center;padding:5px 4px;margin-bottom:4px;border:1px solid var(--cy);border-radius:var(--r);
+  background:#170032f2;box-shadow:0 0 16px #00ffff55;font-size:10px;letter-spacing:.12em;color:var(--mute)}
+#scrubHud .sh-val b{display:block;font-size:20px;font-weight:400;letter-spacing:0;color:var(--cy);text-shadow:0 0 10px #00ffff88}
+#scrubHud .sh-lad{position:relative;border:1px solid var(--acc2);border-radius:var(--r);background:#170032f2;overflow:hidden}
+#scrubHud .sh-z{display:flex;justify-content:space-between;align-items:center;padding:0 8px 0 14px;font-size:10px;letter-spacing:.08em;color:var(--mute)}
+#scrubHud .sh-z[data-z=coarse],#scrubHud .sh-z[data-z=fine]{height:var(--row)}
+#scrubHud .sh-z[data-z=normal]{height:calc(var(--band) * 2)}
+#scrubHud .sh-z+.sh-z{border-top:1px solid #830cde55}
+#scrubHud .sh-z i{font-style:normal}
+#scrubHud .sh-z.on{color:var(--cy);background:#00ffff1a}
+#scrubHud .sh-dot{position:absolute;left:4px;width:6px;height:6px;margin-top:-3px;border-radius:50%;background:var(--pk);box-shadow:0 0 8px var(--pk)}
+.dialrow{gap:8px;margin:2px 0 8px}
+#rotDial{flex:none;width:108px;height:108px;display:block;touch-action:none;cursor:grab}
+#rotDial.drag{cursor:grabbing}
+#rotDial .d-ring{fill:#240140;stroke:#830cde;stroke-width:1.5}
+#rotDial .d-tick{stroke:#9090C0;stroke-width:1;opacity:.55}
+#rotDial .d-tick.maj{stroke:#00ffff;stroke-width:1.6;opacity:.9}
+#rotDial .d-arc{fill:none;stroke:#dc4ce8;stroke-width:5;stroke-linecap:round;opacity:.85;filter:drop-shadow(0 0 3px #dc4ce8)}
+#rotDial .d-needle{stroke:#ff69b4;stroke-width:2.5;stroke-linecap:round}
+#rotDial .d-knob{fill:#ff69b4;stroke:#fff;stroke-width:1.2;filter:drop-shadow(0 0 4px #ff69b4)}
+#rotDial .d-hub{fill:#170032;stroke:#830cde;stroke-width:1.2}
+#rotDial .d-lbl{font-family:var(--mono);font-size:7px;fill:#9090C0;text-anchor:middle;dominant-baseline:middle}
+#rotDial .d-val{font-family:var(--mono);font-size:10px;fill:#00ffff;text-anchor:middle;dominant-baseline:middle}
+.dialctl{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.dialctl .tgl,.dialctl .btn{width:100%;flex:none;padding:10px 0}
 </style>
 </head>
 <body>
@@ -533,7 +565,14 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <input type="number" id="rotDeg" value="15" min="-180" max="180" step="1"><span class="unit">&deg;</span>
         <button class="btn sm" id="rotApply">APPLY</button>
       </div>
- 
+      <div class="onion-row dialrow">
+        <svg id="rotDial" viewBox="-60 -60 120 120" role="img" aria-label="Angle dial: drag to set the angle"></svg>
+        <div class="dialctl">
+          <button class="tgl on" id="rotSnap" title="Snap the dial to 15&deg; steps">SNAP 15&deg;</button>
+          <button class="btn sm" id="rotZero" title="Set the angle back to 0">RESET</button>
+        </div>
+      </div>
+
       <div class="onion-row">
         <span class="lbl" style="width:40px">SCALE</span>
         <input type="number" id="scalePct" value="50" min="10" max="400" step="5"><span class="unit">%</span>
@@ -2864,6 +2903,138 @@ const Engine = (() => {
   });
   for (const [inp, btn] of [['#rotDeg', '#rotApply'], ['#scalePct', '#scaleApply']])
     $(inp).addEventListener('keydown', e => { if (e.key === 'Enter') $(btn).click(); });
+
+  /* ---------- tablet-friendly number fields: scrub labels + angle dial ---------- */
+  // SCRUB: press a field's label with the pen and slide sideways. Every SCRUB_PX of travel is one tick.
+  // Pen height on the screen sets the tick size: above where you pressed = COARSE, within SCRUB_BAND = NORMAL (the field's own step), below = FINE (1 unit).
+  const SCRUB_PX = 8, SCRUB_BAND = 32, SCRUB_ROW = 26;
+  const SCRUB_FIELDS = {
+    exSize:   { coarse: 64, step: 16, fine: 1 },
+    libSize:  { coarse: 64, step: 16, fine: 1 },
+    exCols:   { coarse: 4,  step: 1,  fine: 1 },
+    scalePct: { coarse: 25, step: 5,  fine: 1 }
+  };
+  const hud = document.createElement('div');
+  hud.id = 'scrubHud'; hud.hidden = true;
+  hud.style.setProperty('--row', SCRUB_ROW + 'px'); hud.style.setProperty('--band', SCRUB_BAND + 'px');
+  hud.innerHTML = '<div class="sh-val"><span></span><b></b></div><div class="sh-lad">' +
+    '<div class="sh-z" data-z="coarse"><span>&#9650; COARSE</span><i></i></div>' +
+    '<div class="sh-z" data-z="normal"><span>&#9679; NORMAL</span><i></i></div>' +
+    '<div class="sh-z" data-z="fine"><span>&#9660; FINE</span><i></i></div><div class="sh-dot"></div></div>';
+  document.body.appendChild(hud);
+  const hudName = hud.querySelector('.sh-val span'), hudVal = hud.querySelector('.sh-val b'), hudDot = hud.querySelector('.sh-dot');
+  const hudZone = z => hud.querySelector('[data-z=' + z + ']');
+  const scrubUnit = (cfg, zone) => zone === 'coarse' ? cfg.coarse : zone === 'fine' ? cfg.fine : cfg.step;
+
+  for (const [id, cfg] of Object.entries(SCRUB_FIELDS)) {
+    const inp = $('#' + id), lbl = inp.closest('.onion-row').querySelector('.lbl, .lbl4');
+    const uEl = inp.nextElementSibling, unit = uEl && uEl.classList.contains('unit') ? uEl.textContent : '';
+    lbl.classList.add('scrub');
+    lbl.title = 'Drag left/right to change. Pen above where you pressed = big steps, below = fine steps.';
+    let s = null;
+    const hudShow = y => {
+      hudName.textContent = lbl.textContent.trim();
+      for (const z of ['coarse', 'normal', 'fine']) hudZone(z).querySelector('i').textContent = '±' + scrubUnit(cfg, z);
+      hud.hidden = false;
+      const m = lbl.closest('.popmenu').getBoundingClientRect(), hh = hud.offsetHeight, hw = hud.offsetWidth;
+      const nr = hudZone('normal').getBoundingClientRect(), off = nr.top + nr.height / 2 - hud.getBoundingClientRect().top;
+      let left = m.right + 10;
+      if (left + hw > window.innerWidth - 4) left = Math.max(4, m.left - hw - 10);
+      hud.style.left = left + 'px';
+      hud.style.top = clamp(y - off, 4, Math.max(4, window.innerHeight - hh - 4)) + 'px';
+    };
+    const hudUpdate = (zone, dy) => {
+      hudVal.textContent = inp.value + (unit ? ' ' + unit : '');
+      for (const z of ['coarse', 'normal', 'fine']) hudZone(z).classList.toggle('on', z === zone);
+      hudDot.style.top = (SCRUB_ROW + SCRUB_BAND + clamp(dy, -(SCRUB_BAND + SCRUB_ROW), SCRUB_BAND + SCRUB_ROW)) + 'px';
+    };
+    lbl.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || s) return;
+      e.preventDefault();
+      const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur();
+      lbl.setPointerCapture(e.pointerId);
+      s = { id: e.pointerId, y: e.clientY, lastX: e.clientX, acc: 0 };
+      lbl.classList.add('on');
+      hudShow(e.clientY); hudUpdate('normal', 0);
+    });
+    lbl.addEventListener('pointermove', e => {
+      if (!s || e.pointerId !== s.id) return;
+      const dy = e.clientY - s.y, zone = dy < -SCRUB_BAND ? 'coarse' : dy > SCRUB_BAND ? 'fine' : 'normal';
+      s.acc += e.clientX - s.lastX; s.lastX = e.clientX;
+      const ticks = Math.trunc(s.acc / SCRUB_PX);
+      if (ticks) {
+        s.acc -= ticks * SCRUB_PX;
+        const u = scrubUnit(cfg, zone), cur = parseFloat(inp.value) || 0;
+        let v = cur + ticks * u;
+        if (u > 1) v = Math.round(v / u) * u;                  // big steps land on tidy numbers (64, 128, 192...)
+        const c = clamp(Math.round(v), +inp.min, +inp.max);
+        if (c !== v) s.acc = 0;                                // hit an end: reversing direction responds right away
+        if (c !== cur) { inp.value = c; inp.dispatchEvent(new Event('input', { bubbles: true })); }
+      }
+      hudUpdate(zone, dy);
+    });
+    const endScrub = e => {
+      if (!s || e.pointerId !== s.id) return;
+      s = null; lbl.classList.remove('on'); hud.hidden = true;
+    };
+    lbl.addEventListener('pointerup', endScrub);
+    lbl.addEventListener('pointercancel', endScrub);
+    lbl.addEventListener('lostpointercapture', endScrub);
+    lbl.addEventListener('contextmenu', e => e.preventDefault());   // pen press-and-hold would otherwise pop a right-click menu
+  }
+
+  // DIAL: 0 at the top, clockwise is positive (same as APPLY and the rotate-right button). Press or drag anywhere on it
+  // to point at an angle. It writes into the ANGLE box, so typing there and the dial always agree. APPLY still does the rotating.
+  {
+    const dial = $('#rotDial'), rot = $('#rotDeg'), R = 52, RA = 39, HUB = 18;
+    const pt = (deg, r) => { const a = deg * Math.PI / 180; return [(Math.sin(a) * r).toFixed(2), (-Math.cos(a) * r).toFixed(2)]; };
+    let svg = '<circle class="d-ring" r="' + R + '"/>';
+    for (let i = 0; i < 24; i++) {                              // a tick every 15 degrees; longer, cyan ones at 0/90/180/-90
+      const maj = i % 6 === 0, p1 = pt(i * 15, R - 1), p2 = pt(i * 15, R - (maj ? 9 : i % 3 === 0 ? 7 : 4));
+      svg += '<line class="d-tick' + (maj ? ' maj' : '') + '" x1="' + p1[0] + '" y1="' + p1[1] + '" x2="' + p2[0] + '" y2="' + p2[1] + '"/>';
+    }
+    for (const [deg, txt] of [[0, '0'], [90, '90'], [180, '180'], [-90, '-90']]) {
+      const p = pt(deg, 29); svg += '<text class="d-lbl" x="' + p[0] + '" y="' + p[1] + '">' + txt + '</text>';
+    }
+    svg += '<path class="d-arc" d=""/><g class="d-hand"><line class="d-needle" y1="-' + HUB + '" y2="-' + RA + '"/><circle class="d-knob" cy="-' + RA + '" r="5"/></g>' +
+      '<circle class="d-hub" r="' + HUB + '"/><text class="d-val" y="1"></text>';
+    dial.innerHTML = svg;
+    const arc = dial.querySelector('.d-arc'), hand = dial.querySelector('.d-hand'), txt = dial.querySelector('.d-val');
+    let snap = true, dragId = null;
+    function dialDraw() {
+      let v = parseFloat(rot.value); if (!isFinite(v)) v = 0;
+      const a = ((v + 180) % 360 + 360) % 360 - 180;            // fold typed values like 270 onto the dial (-90)
+      hand.setAttribute('transform', 'rotate(' + a + ')');
+      if (Math.abs(a) < 0.5) arc.setAttribute('d', '');
+      else { const e = pt(a, RA); arc.setAttribute('d', 'M0 -' + RA + ' A' + RA + ' ' + RA + ' 0 0 ' + (a > 0 ? 1 : 0) + ' ' + e[0] + ' ' + e[1]); }
+      txt.textContent = Math.round(v) + '°';
+    }
+    function dialSet(a) {
+      a = clamp(snap ? Math.round(a / 15) * 15 : Math.round(a), -180, 180);
+      if (parseFloat(rot.value) !== a) { rot.value = a; rot.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+    function dialPoint(e) {
+      const r = dial.getBoundingClientRect(), dx = e.clientX - (r.left + r.width / 2), dy = e.clientY - (r.top + r.height / 2);
+      if (Math.hypot(dx, dy) < 6) return;                        // dead spot in the middle so the needle never flips wildly
+      dialSet(Math.atan2(dx, -dy) * 180 / Math.PI);
+    }
+    dial.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || dragId !== null) return;
+      e.preventDefault();
+      const a = document.activeElement; if (a && a !== document.body && a.blur) a.blur();
+      dial.setPointerCapture(e.pointerId); dragId = e.pointerId; dial.classList.add('drag'); dialPoint(e);
+    });
+    dial.addEventListener('pointermove', e => { if (e.pointerId === dragId) dialPoint(e); });
+    const dialEnd = e => { if (e.pointerId !== dragId) return; dragId = null; dial.classList.remove('drag'); };
+    dial.addEventListener('pointerup', dialEnd);
+    dial.addEventListener('pointercancel', dialEnd);
+    dial.addEventListener('lostpointercapture', dialEnd);
+    dial.addEventListener('contextmenu', e => e.preventDefault());
+    $('#rotSnap').addEventListener('click', e => { snap = !snap; e.currentTarget.classList.toggle('on', snap); });
+    $('#rotZero').addEventListener('click', () => dialSet(0));
+    rot.addEventListener('input', dialDraw); rot.addEventListener('change', dialDraw);
+    dialDraw();
+  }
   // One place that shows where transforms and Move will land: menu switch, header button, Move tool, status bar.
   function syncApplyTo() {
     $('#xfAll').classList.toggle('on', xfAll);
