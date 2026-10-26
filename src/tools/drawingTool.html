@@ -330,6 +330,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="rect"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="1"/></svg></button>
       <button class="tb" data-tool="circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
       <button class="tb" data-tool="fill"><svg viewBox="0 0 24 24"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg></button>
+      <button class="tb" data-tool="pick" title="Color picker (Y)"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
       <button class="tb" data-tool="blur"><svg viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
       <button class="tb" data-tool="move"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
@@ -2120,8 +2121,11 @@ const Engine = (() => {
   function toCanvas(e) { const s = stagePt(e); return { x: (s.x - state.panX) / state.zoom, y: (s.y - state.panY) / state.zoom }; }
 
   /* ---------- tool state ---------- */
+  let prevTool = 'brush';                    // tool before the current one: the hand toggle (H) and color picker (Y) return to it
+  const PICK_RETURNS = true;                 // after a pick, go back to the previous tool (false = stay on the picker)
   function setTool(t) {
     if (state.tool === 'line' && t !== 'line') finishChain();
+    if (t !== state.tool) prevTool = state.tool;
     state.tool = t;
     $$('[data-tool]').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
     if (t !== 'move') flushNudge();
@@ -2145,12 +2149,28 @@ const Engine = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'pick' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
   }
   stage.addEventListener('pointerleave', () => { cursorEl.style.display = 'none'; });
+
+  // Color picker: samples the visible result of this frame (all visible layers, clipping and opacity included).
+  // Empty (fully transparent) pixels are ignored.
+  let pickCv = null;
+  function pickColor(p) {
+    const x = Math.floor(p.x), y = Math.floor(p.y);
+    if (x < 0 || y < 0 || x >= FRAME || y >= FRAME) return;
+    if (!pickCv) { pickCv = document.createElement('canvas'); pickCv.width = pickCv.height = FRAME; }
+    const c = pickCv.getContext('2d', { willReadFrequently: true });
+    Engine.composite(c, project.frame);
+    const d = c.getImageData(x, y, 1, 1).data;
+    if (d[3] === 0) { flash('Nothing to pick there'); return; }
+    const hex = '#' + [d[0], d[1], d[2]].map(v => v.toString(16).padStart(2, '0')).join('');
+    setColor(hex); flash('Picked ' + hex.toUpperCase());
+    if (PICK_RETURNS && state.tool === 'pick') setTool(prevTool);
+  }
 
   /* ---------- gestures, pan ---------- */
   let touchAssist = true;
@@ -2420,6 +2440,7 @@ const Engine = (() => {
     }
     if (e.button !== 0) return;
     const p = toCanvas(e);
+    if (state.tool === 'pick') { pickColor(p); return; }
     if (['brush', 'eraser', 'line', 'rect', 'circle', 'fill', 'blur', 'move'].includes(state.tool)) {
       const why = editBlock(state.tool === 'move' ? 'move' : 'draw');
       if (why) { flash(why); return; }
@@ -2789,6 +2810,16 @@ const Engine = (() => {
     if (opStart !== null && opStart !== nv) project.commitLayerProp(i, 'opacity', opStart, nv, 'Layer opacity');
     opStart = null;
   });
+  // Keyboard nudge (Shift+] / Shift+[, e.g. from tablet ExpressKeys): one undo step per press.
+  function nudgeOpacity(deltaPct) {
+    if (opStart !== null) return;                               // slider drag in progress
+    const i = project.activeLayer, pct = Math.round(project.layer.opacity * 100);
+    const np = clamp(pct + deltaPct, 0, 100);
+    if (np === pct) { flash('Layer opacity ' + pct + '%'); return; }
+    project.setLayerProp(i, 'opacity', np / 100, 'Layer opacity');
+    syncLayerSel(); requestRender(); requestOnion(); scheduleThumb();
+    flash('Layer opacity ' + np + '%');
+  }
 
   /* ---------- fill ---------- */
   function updateFillSources() {
@@ -3545,6 +3576,9 @@ const Engine = (() => {
     const lk = k.toLowerCase();
     if (e.shiftKey && (lk === 'h' || lk === 'v')) { e.preventDefault(); applyXf(lk === 'h' ? 'flipH' : 'flipV'); return; }
     if (k === ' ') { e.preventDefault(); state.space = true; stage.classList.add('pan'); cursorEl.style.display = 'none'; return; }
+    if (e.shiftKey && (e.code === 'BracketRight' || e.code === 'BracketLeft')) {    // Shift+] / Shift+[ : layer opacity +/- 5%
+      e.preventDefault(); nudgeOpacity(e.code === 'BracketRight' ? 5 : -5); return;
+    }
     switch (k.toLowerCase()) {
       case 'b': if (state.tool === 'brush') setBrush(state.brushId === 'pen' ? 'brush' : 'pen'); else setTool('brush'); break;
       case 'm': setCrisp(!state.crisp); break;
@@ -3569,7 +3603,8 @@ const Engine = (() => {
       case '.': gotoFrame(project.currentFrame + 1); break;
       case 'v': setTool('move'); break;
       case 'tab': e.preventDefault(); toggleAllPanes(); break;
-      case 'h': setTool('hand'); break;
+      case 'h': setTool(state.tool === 'hand' ? prevTool : 'hand'); break;      // toggles the hand tool, returning to the previous tool
+      case 'y': setTool(state.tool === 'pick' ? prevTool : 'pick'); break;      // color picker
       case '[': setSize(Math.min(state.size - 1, state.size / 1.15)); break;
       case ']': setSize(Math.max(state.size + 1, state.size * 1.15)); break;
       case '+': case '=': zoomCenter(1.3); break;
