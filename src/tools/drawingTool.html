@@ -266,16 +266,33 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
 @media (max-width:900px){
   #app{--pw:190px;--tw:190px}
 }
+
+/* OSW LIBRARY: save-to-library section of the Export menu + PARTS menu */
+.libhr{height:1px;background:#830cde55;margin:8px 0}
+.libtxt{flex:1;min-width:0;font-family:var(--mono);font-size:12px;background:var(--bg1);color:var(--txt);border:1px solid var(--acc);border-radius:var(--r);padding:5px 6px;-webkit-user-select:text;user-select:text}
+.libtxt:focus{border-color:var(--cy);outline:none}
+.popmenu .lbl4{flex:none;width:40px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--mute)}
+#libInfo.warn,#pmNote.warn{color:var(--pk)}
+#pmGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:300px;overflow-y:auto;margin:6px 0}
+.libcard{display:flex;flex-direction:column;gap:3px;align-items:stretch;padding:4px;border:1px solid #830cde66;border-radius:var(--r);background:#37025a33;color:var(--soft);cursor:pointer;font-family:var(--ui);font-size:10px;text-align:left;min-width:0}
+.libcard:hover{border-color:var(--cy);color:#fff;box-shadow:0 0 10px #00ffff44}
+.libcard .th{height:78px;display:flex;align-items:center;justify-content:center;border-radius:var(--r);background:repeating-conic-gradient(#2a1347 0 25%,#1d0a38 0 50%) 0 0/8px 8px;overflow:hidden}
+.libcard img{max-width:100%;max-height:100%;object-fit:contain}
+.libcard .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.libcard .ty{font-family:var(--mono);font-size:9px;color:var(--mute)}
+#pmEmpty{grid-column:1/-1;padding:10px 4px}
+#exMenu{max-height:calc(100vh - 50px);overflow-y:auto}
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <h1><button class="titlebtn" id="helpBtn">OSP<span>&#9662;</span></button></h1>
+    <h1>OSP</h1>
 
     <button class="hbtn" id="fileMenuBtn">FILE &#9662;</button>
     <button class="hbtn" id="exportMenuBtn">EXPORT &#9662;</button>
     <button class="hbtn" id="layerMenuBtn">LAYER &#9662;</button>
+    <button class="hbtn" id="partsMenuBtn">PARTS &#9662;</button>
     <button class="hbtn active" id="touchAssist">TOUCH ASSIST</button>
     <span class="hsep"></span>
     <button class="tb hb" id="undoBtn" disabled><svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg></button>
@@ -290,9 +307,6 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
     <span class="hsep"></span>
     
     <label class="hsize"><span>SIZE</span><input type="range" id="size" min="1" max="10" value="2"><output id="sizeOut">2</output></label>
-    <span class="hsep"></span>
-    <select id="brushSel" class="hsel" aria-label="Brush type"><option value="pen">Fine tip</option><option value="brush">Thick brush</option></select>
-    <select id="modeSel" class="hsel" aria-label="Draw mode"><option value="smooth">Smooth</option><option value="crisp">Crisp</option></select>
     <span class="hsep"></span>
 
     
@@ -323,6 +337,11 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       </div>
     </div>
 
+    <div class="sec" id="brushSec">
+      <h2>Brush</h2>
+      <div class="onion-row"><select id="brushSel" aria-label="Brush type" style="flex:1;min-width:0"><option value="pen">Fine tip</option><option value="brush">Thick brush</option></select></div>
+      <div class="onion-row"><select id="modeSel" aria-label="Draw mode" style="flex:1;min-width:0"><option value="smooth">Smooth</option><option value="crisp">Crisp</option></select></div>
+    </div>
 
     <span class="sep"></span>
 
@@ -460,6 +479,44 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       </div>
       <button class="btn" id="exportBtn" style="width:100%">EXPORT</button>
       <p class="note" id="exInfo" style="margin-top:6px"></p>
+      <div class="libhr"></div>
+      <h2>Save to library <span class="sub" id="libWhere"></span></h2>
+      <p class="note" id="libOff" hidden>Open this tool inside Onion Studio Wizard to use the library.</p>
+      <div id="libBody">
+        <div class="onion-row"><span class="lbl4">TYPE</span>
+          <select id="libType" style="flex:1;min-width:0"><option value="part">Part</option><option value="accessory">Accessory</option><option value="view">Character view</option></select></div>
+        <div class="onion-row"><span class="lbl4">FROM</span>
+          <select id="libSrc" style="flex:1;min-width:0"><option value="layer">Active layer</option><option value="frame">All visible layers</option></select></div>
+        <div class="onion-row" id="libNameRow"><span class="lbl4">NAME</span><input type="text" id="libName" class="libtxt" maxlength="40" placeholder="nova side head"></div>
+        <div class="onion-row" id="libSlotRow"><span class="lbl4">SLOT</span>
+          <select id="libSlot" style="flex:1;min-width:0" title="Which rig part this is (used when parts are sent to Rig Lab)"><option value="">(none)</option><option value="head">head</option><option value="chest">chest</option><option value="pelvis">pelvis</option><option value="upperArm">upperArm</option><option value="forearm">forearm</option><option value="handR">handR</option><option value="handL">handL</option><option value="thigh">thigh</option><option value="calf">calf</option><option value="shoe">shoe</option></select></div>
+        <div class="onion-row"><span class="lbl4">CHAR</span><input type="text" id="libChar" class="libtxt" maxlength="40" value="nova"></div>
+        <div class="onion-row" id="libViewRow"><span class="lbl4">VIEW</span>
+          <select id="libView" style="flex:1;min-width:0"><option value="left">left</option><option value="left-front">left-front</option><option value="front">front</option><option value="right-front">right-front</option><option value="right">right</option><option value="right-back">right-back</option><option value="back">back</option><option value="left-back">left-back</option></select></div>
+        <div class="onion-row"><span class="lbl4">SIZE</span>
+          <input type="number" id="libSize" value="800" min="16" max="1000" step="16"><span class="unit">px</span>
+          <button class="tgl on" id="libCrop" style="width:auto;flex:1" title="Trim empty space around the art (position is remembered)">CROP</button></div>
+        <button class="btn" id="libSaveBtn" style="width:100%">SAVE TO LIBRARY</button>
+        <p class="note" id="libInfo" style="margin-top:6px"></p>
+      </div>
+  </div>
+
+  <div id="partsMenu" class="popmenu wide" hidden>
+      <h2>Library <span class="sub">click an item to add it as a new layer</span></h2>
+      <p class="note" id="pmOff" hidden>Open this tool inside Onion Studio Wizard to use the library.</p>
+      <div id="pmBody">
+        <div class="onion-row">
+          <select id="pmType" style="flex:none"><option value="">All</option><option value="part">Parts</option><option value="accessory">Accessories</option><option value="view">Views</option></select>
+          <input type="text" id="pmFind" class="libtxt" placeholder="filter by name or tag" maxlength="40">
+        </div>
+        <div id="pmGrid"></div>
+        <p class="note" id="pmNote"></p>
+        <div class="libhr"></div>
+        <h2>Side-view sheet <span class="sub">assets/images/nova/mannequins/sideView.png</span></h2>
+        <div class="onion-row"><span class="lbl4">CHAR</span><input type="text" id="pmChar" class="libtxt" maxlength="40" value="nova">
+          <button class="btn sm" id="pmSheetBtn" title="Slice the 12-frame sheet into library parts, the bag accessory and the full right-facing view">SLICE INTO LIBRARY</button></div>
+        <p class="note">Saves each part cropped, with its position on the 800&times;800 canvas, so it lands where it was drawn. Running it again overwrites the same items.</p>
+      </div>
   </div>
 
   <div id="layerMenu" class="popmenu" hidden>
@@ -504,10 +561,6 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       </div>
   </div>
 
-  <div id="helpMenu" class="popmenu wide" hidden>
-    <h2>Shortcuts</h2>
-    <div class="keys"><div><span>B</span> brush / switch type</div><div><span>M</span> smooth / crisp draw mode</div><div><span>A</span> auto-tidy on / off</div><div><span>E</span> eraser</div><div><span>L</span> line</div><div><span>R</span> rect</div><div><span>C</span> circle</div><div><span>G</span> fill</div><div><span>U</span> blur</div><div><span>V</span> move layer</div><div><span>H</span> pan</div><div><span>T</span> outline / filled</div><div><span>[ ]</span> brush size</div><div><span>+ -</span> zoom</div><div><span>0</span> fit canvas</div><div><span>O</span> onion skin</div><div><span>K</span> clip layer to layer below</div><div><span>I</span> proportion ruler on / off</div><div><span>N</span> new frame</div><div><span>D</span> duplicate frame</div><div><span>Del</span> delete frame</div><div><span>P</span> play / pause</div><div><span>, .</span> prev / next</div><div><span>&lt; &gt;</span> frame hold -/+</div><div><span>Enter</span> finish line</div><div><span>Esc</span> cancel</div><div><span>Shift</span> 45&deg; / square</div><div><span>Alt</span> from center</div><div><span>Arrows</span> nudge (Move)</div><div><span>Shift+Arrows</span> nudge 10px</div><div><span>Shift+H</span> flip horizontal</div><div><span>Shift+V</span> flip vertical</div><div><span>Ctrl+Z</span> undo</div><div><span>Ctrl+Shift+Z</span> redo</div><div><span>Tab</span> hide / show bars</div><div><span>?</span> this list</div><div><span>Wheel</span> zoom</div><div><span>Space+drag</span> pan</div><div><span>2 fingers</span> pan / pinch</div></div>
-  </div>
 
   <aside id="panel">
     <div class="sec">
@@ -3515,7 +3568,6 @@ const Engine = (() => {
       case ',': gotoFrame(project.currentFrame - 1); break;
       case '.': gotoFrame(project.currentFrame + 1); break;
       case 'v': setTool('move'); break;
-      case '?': openMenu('help', MENUS.help.el.hidden); break;
       case 'tab': e.preventDefault(); toggleAllPanes(); break;
       case 'h': setTool('hand'); break;
       case '[': setSize(Math.min(state.size - 1, state.size / 1.15)); break;
@@ -3553,11 +3605,234 @@ const Engine = (() => {
   }
   try { (JSON.parse(localStorage.getItem('dtHidden') || '[]')).forEach(n => { if (PANE_CLASS[n]) setPane(n, false, true); }); } catch (err) { /* optional */ }
 
+  /* =====================================================================
+     OSW LIBRARY: SAVE TO LIBRARY (Export menu) + PARTS MENU
+
+     Conventions (see BRIEFME.md):
+       - The drawing canvas is 1000x1000; rig art lives on an 800x800 canvas. Library art is saved at SIZE (default 800)
+         so it is already the right scale and never needs redrawing.
+       - Parts and accessories are cropped to their content. meta.canvas = [W,H] of the canvas they were drawn on and
+         meta.origin = [x,y] of the crop inside it, so a part can be put back exactly where it was drawn and pivots
+         (measured in the 800x800 frame) stay valid. Adding one to a drawing scales that by project.width / canvas[0].
+       - meta.slot = the Rig Lab part name (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe).
+       - Views are saved uncropped. The id is <character>.<view>; saving again overwrites that view.
+     ===================================================================== */
+  const libOK = () => !!(window.OSWClient && window.OSWClient.hosted);
+  const libSlug = s => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40).replace(/_+$/g, '');
+  const mkCv = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+  const libPref = { get(k, d) { try { return localStorage.getItem('dtLib' + k) || d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('dtLib' + k, v); } catch (e) { /* storage may be blocked */ } } };
+
+  // Square-ish canvas -> width S, halving first so big reductions stay smooth (same approach as Engine.exportFrame).
+  function scaleCanvasTo(src, S) {
+    const tw = Math.round(S), th = Math.round(S * src.height / src.width);
+    if (src.width === tw && src.height === th) { const c = mkCv(tw, th); c.getContext('2d').drawImage(src, 0, 0); return c; }
+    let cur = src;
+    while (cur.width / 2 >= tw) {
+      const n = mkCv(Math.round(cur.width / 2), Math.round(cur.height / 2)), c = n.getContext('2d');
+      c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high'; c.drawImage(cur, 0, 0, n.width, n.height); cur = n;
+    }
+    const out = mkCv(tw, th), oc = out.getContext('2d');
+    oc.imageSmoothingEnabled = true; oc.imageSmoothingQuality = 'high'; oc.drawImage(cur, 0, 0, tw, th);
+    return out;
+  }
+  // Bounding box of visible pixels (alpha > 8, so stray near-transparent specks are ignored), or null if empty.
+  function contentBox(cv) {
+    const w = cv.width, h = cv.height, d = cv.getContext('2d').getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+  }
+  function cropWithPad(cv, pad) {
+    const b = contentBox(cv); if (!b) return null;
+    const x = Math.max(0, b.x - pad), y = Math.max(0, b.y - pad), x2 = Math.min(cv.width, b.x + b.w + pad), y2 = Math.min(cv.height, b.y + b.h + pad);
+    const out = mkCv(x2 - x, y2 - y); out.getContext('2d').drawImage(cv, x, y, x2 - x, y2 - y, 0, 0, x2 - x, y2 - y);
+    return { canvas: out, origin: [x, y] };
+  }
+  const libErr = e => String((e && e.message) || e).replace(/^[A-Z_]+: /, '');
+
+  /* ----- Export menu: SAVE TO LIBRARY ----- */
+  const lib = { items: [], ready: false };
+  async function libRefresh() {
+    if (!libOK()) return;
+    try { lib.items = await OSWClient.library.list(); lib.ready = true; } catch (e) { lib.items = []; lib.ready = false; }
+  }
+  function libTarget() {
+    const type = $('#libType').value, ch = libSlug($('#libChar').value);
+    if (type === 'view') return { type, character: ch, view: $('#libView').value, id: ch ? ch + '.' + $('#libView').value : '' };
+    const nm = $('#libName').value.trim();
+    return { type, name: nm, id: libSlug(nm) };
+  }
+  function updateLibInfo() {
+    const ok = libOK();
+    $('#libBody').hidden = !ok; $('#libOff').hidden = ok;
+    if (!ok) return;
+    const type = $('#libType').value, isView = type === 'view', info = $('#libInfo');
+    $('#libNameRow').hidden = isView; $('#libSlotRow').hidden = type !== 'part'; $('#libViewRow').hidden = !isView; $('#libCrop').hidden = isView;
+    const t = libTarget(); let msg = '', warn = false;
+    if (!t.id) { msg = isView ? 'Type a character name.' : 'Type a name.'; warn = true; }
+    else {
+      const ex = lib.items.find(it => it.id === t.id);
+      if (ex && ex.type !== type) { msg = `"${t.id}" is already a ${ex.type}: pick another name.`; warn = true; }
+      else msg = `id: ${t.id} · ${ex ? 'overwrites the saved item' : 'new item'}` + (isView ? ' · uncropped' : '');
+    }
+    info.textContent = msg; info.classList.toggle('warn', warn);
+  }
+  async function libMenuOpened() { updateLibInfo(); await libRefresh(); updateLibInfo(); }
+  ['#libType', '#libView', '#libSlot', '#libSrc'].forEach(id => $(id).addEventListener('change', e => { updateLibInfo(); e.target.blur(); }));
+  ['#libName', '#libChar', '#libSize'].forEach(id => $(id).addEventListener('input', updateLibInfo));
+  $('#libChar').value = libPref.get('Char', 'nova');
+  $('#libChar').addEventListener('change', () => libPref.set('Char', libSlug($('#libChar').value) || 'nova'));
+  $('#libCrop').addEventListener('click', e => { e.currentTarget.classList.toggle('on'); });
+
+  $('#libSaveBtn').addEventListener('click', async () => {
+    if (!libOK()) return;
+    finishChain(); stopPlayback(); flushNudge();
+    const t = libTarget(), S = clamp(Math.round(+$('#libSize').value) || 800, 16, 1000), btn = $('#libSaveBtn');
+    if (!t.id) { updateLibInfo(); return; }
+    const ex = lib.items.find(it => it.id === t.id);
+    if (ex && ex.type !== t.type) { updateLibInfo(); return; }
+    btn.disabled = true;
+    try {
+      const fromLayer = $('#libSrc').value === 'layer';
+      let cv = fromLayer ? scaleCanvasTo(project.layer.canvas, S) : Engine.exportFrame(project, project.currentFrame, S);
+      const meta = { canvas: [cv.width, cv.height], source: 'draw', from: fromLayer ? 'layer:' + project.layer.name : 'frame' };
+      if (t.type !== 'view' && $('#libCrop').classList.contains('on')) {
+        const c = cropWithPad(cv, 2);
+        if (!c) { flash('Nothing to save: that is empty'); return; }
+        cv = c.canvas; meta.origin = c.origin;
+      } else if (t.type !== 'view') meta.origin = [0, 0];
+      else if (!contentBox(cv)) { flash('Nothing to save: that is empty'); return; }
+      const ch = libSlug($('#libChar').value);
+      let item;
+      if (t.type === 'view') {
+        meta.view = t.view; meta.character = t.character;
+        item = await OSWClient.library.save({ type: 'view', name: t.view, character: t.character, view: t.view, blob: await toBlob(cv), meta });
+      } else {
+        const slot = t.type === 'part' ? $('#libSlot').value : '';
+        if (slot) meta.slot = slot;
+        if (ch) meta.character = ch;
+        item = await OSWClient.library.save({ type: t.type, name: t.name, id: t.id, blob: await toBlob(cv), tags: ch ? [ch] : [], meta });
+      }
+      libPref.set('Char', ch || 'nova');
+      flash(`Saved "${item.id}" to the library (${item.w}×${item.h})`);
+      await libRefresh(); updateLibInfo();
+    } catch (err) { flash('Library save failed: ' + libErr(err)); }
+    finally { btn.disabled = false; }
+  });
+
+  /* ----- PARTS menu ----- */
+  const thumbCache = new Map();           // id|updated -> object URL of the PNG
+  let pmToken = 0;
+  function thumbFor(it) {
+    const k = it.id + '|' + it.updated;
+    if (!thumbCache.has(k)) {
+      for (const key of [...thumbCache.keys()]) if (key.split('|')[0] === it.id) { URL.revokeObjectURL(thumbCache.get(key)); thumbCache.delete(key); }
+      thumbCache.set(k, OSWClient.library.readImage(it.id).then(b => URL.createObjectURL(b)));
+    }
+    return thumbCache.get(k);
+  }
+  async function renderParts() {
+    const ok = libOK();
+    $('#pmBody').hidden = !ok; $('#pmOff').hidden = ok;
+    if (!ok) return;
+    const my = ++pmToken, grid = $('#pmGrid'), note = $('#pmNote');
+    await libRefresh();
+    if (my !== pmToken) return;
+    const type = $('#pmType').value, q = $('#pmFind').value.trim().toLowerCase();
+    const items = lib.items.filter(it => (!type || it.type === type) && (!q || (it.name + ' ' + it.id + ' ' + (it.tags || []).join(' ')).toLowerCase().includes(q)));
+    grid.innerHTML = '';
+    if (!items.length) {
+      const p = document.createElement('p'); p.id = 'pmEmpty'; p.className = 'note';
+      p.textContent = lib.items.length ? 'Nothing matches.' : 'The library is empty. Save art from the Export menu, or slice the side-view sheet below.';
+      grid.appendChild(p);
+    }
+    for (const it of items) {
+      const b = document.createElement('button'); b.className = 'libcard'; b.type = 'button'; b.title = it.id + (it.meta && it.meta.slot ? ' · slot ' + it.meta.slot : '');
+      const th = document.createElement('div'); th.className = 'th';
+      const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = it.name || it.id;
+      const ty = document.createElement('div'); ty.className = 'ty'; ty.textContent = it.type + ' · ' + it.w + '×' + it.h;
+      b.append(th, nm, ty); b.addEventListener('click', () => addLibItem(it)); grid.appendChild(b);
+      thumbFor(it).then(url => { if (my !== pmToken) return; const im = document.createElement('img'); im.src = url; im.alt = ''; th.appendChild(im); }).catch(() => { th.textContent = '?'; });
+    }
+    note.textContent = items.length ? `${items.length} of ${lib.items.length} item${lib.items.length === 1 ? '' : 's'}` : '';
+  }
+  const partsMenuOpened = () => { renderParts(); };
+  $('#pmType').addEventListener('change', e => { renderParts(); e.target.blur(); });
+  $('#pmFind').addEventListener('input', renderParts);
+
+  async function addLibItem(it) {
+    if (!libOK() || !frameGuard()) return;
+    let blob, img;
+    try { blob = await OSWClient.library.readImage(it.id); } catch (err) { flash('Could not load "' + it.id + '": ' + libErr(err)); return; }
+    try { img = await decodeImage(blob); } catch (err) { flash('Could not read the image for "' + it.id + '"'); return; }
+    if (!frameGuard()) { img.close(); return; }
+    const m = it.meta || {}, cv = m.canvas, org = m.origin, inPlace = Array.isArray(cv) && cv[0] > 0 && Array.isArray(org);
+    let landed;
+    project.addLayer({ name: String(it.name || it.id).slice(0, 24), label: 'Add library item', draw: c => {
+      if (inPlace) {
+        const k = project.width / cv[0];
+        c.save(); c.imageSmoothingEnabled = k !== 1; c.imageSmoothingQuality = 'high';
+        c.drawImage(img.src, Math.round(org[0] * k), Math.round(org[1] * k), Math.round(img.w * k), Math.round(img.h * k)); c.restore();
+      } else landed = Engine.drawFitted(c, img.src, img.w, img.h, project.width, project.height);
+    } });
+    img.close();
+    if (inPlace) flash(`Added "${it.name || it.id}" in its drawn position`);
+    else { setTool('move'); flash(`Added "${it.name || it.id}"` + (landed && landed.scaled ? ', scaled to fit' : '') + ': drag it into place'); }
+  }
+
+  /* ----- slice the side-view sheet into the library ----- */
+  const SHEET_URL = 'assets/images/nova/mannequins/sideView.png';
+  // Frame order of sideView.png (see BRIEFME.md). `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
+  const SHEET_FRAMES = [
+    { i: 0, type: 'view', view: 'right' },            // the full mannequin; it faces right (toe toward +x), like the rig
+    { i: 1, type: 'accessory', label: 'bag', slot: 'bag' },
+    { i: 2, type: 'part', label: 'head', slot: 'head' },
+    { i: 3, type: 'part', label: 'chest', slot: 'chest' },
+    { i: 4, type: 'part', label: 'pelvis', slot: 'pelvis' },
+    { i: 5, type: 'part', label: 'upper arm', slot: 'upperArm' },
+    { i: 6, type: 'part', label: 'lower arm', slot: 'forearm' },
+    { i: 7, type: 'part', label: 'near hand', slot: 'handR' },
+    { i: 8, type: 'part', label: 'far hand', slot: 'handL' },
+    { i: 9, type: 'part', label: 'thigh', slot: 'thigh' },
+    { i: 10, type: 'part', label: 'calf', slot: 'calf' },
+    { i: 11, type: 'part', label: 'shoe', slot: 'shoe' }
+  ];
+  const loadImg = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + url)); im.src = url; });
+  $('#pmSheetBtn').addEventListener('click', async () => {
+    if (!libOK() || busy) return;
+    const ch = libSlug($('#pmChar').value) || 'nova', note = $('#pmNote');
+    $('#pmChar').value = ch; libPref.set('Char', ch);
+    setBusy(true, 'Loading sheet…');
+    let saved = 0;
+    try {
+      const sheet = await loadImg(SHEET_URL);
+      if (sheet.naturalWidth !== 9600 || sheet.naturalHeight !== 800) throw new Error(SHEET_URL + ' must be 9600×800 (twelve 800×800 frames), got ' + sheet.naturalWidth + '×' + sheet.naturalHeight);
+      for (const f of SHEET_FRAMES) {
+        setBusyMsg(`Slicing… ${++saved} / ${SHEET_FRAMES.length}`);
+        let cv = mkCv(800, 800); cv.getContext('2d').drawImage(sheet, f.i * 800, 0, 800, 800, 0, 0, 800, 800);
+        const meta = { character: ch, source: 'sideView.png', frame: f.i, canvas: [800, 800] };
+        if (f.type === 'view') {
+          meta.view = f.view; meta.note = 'full mannequin, facing right';
+          await OSWClient.library.save({ type: 'view', name: f.view, character: ch, view: f.view, blob: await toBlob(cv), meta });
+        } else {
+          const c = cropWithPad(cv, 2); if (!c) continue;
+          meta.origin = c.origin; meta.slot = f.slot; meta.view = 'side';
+          const name = `${ch} side ${f.label}`;
+          await OSWClient.library.save({ type: f.type, name, id: libSlug(name), blob: await toBlob(c.canvas), tags: [ch, 'side'], meta });
+        }
+      }
+      flash(`Sliced ${saved} items into the library for "${ch}"`);
+    } catch (err) { flash('Slice failed: ' + libErr(err)); note.textContent = 'Slice failed: ' + libErr(err); note.classList.add('warn'); }
+    finally { setBusy(false); updateStatus(); await libRefresh(); if (!MENUS.parts.el.hidden) renderParts(); }
+  });
+  if (window.OSWClient) OSWClient.on('library.changed', async () => { await libRefresh(); if (!MENUS.parts.el.hidden) renderParts(); if (!MENUS.ex.el.hidden) updateLibInfo(); });
+  updateLibInfo();
+
   /* ---------- header menus (export, layer, shortcuts) ---------- */
   const MENUS = {
     ex: { el: $('#exMenu'), btn: $('#exportMenuBtn') },
     layer: { el: $('#layerMenu'), btn: $('#layerMenuBtn') },
-    help: { el: $('#helpMenu'), btn: $('#helpBtn') },
+    parts: { el: $('#partsMenu'), btn: $('#partsMenuBtn') },
     file: { el: $('#fileMenu'), btn: $('#fileMenuBtn') }
   };
   function openMenu(name, open) {
@@ -3568,7 +3843,8 @@ const Engine = (() => {
     if (!open) return;
     const m = MENUS[name], r = m.btn.getBoundingClientRect();
     m.el.style.left = Math.max(4, Math.min(r.left, window.innerWidth - m.el.offsetWidth - 4)) + 'px';
-    if (name === 'ex') updateExportInfo();
+    if (name === 'ex') { updateExportInfo(); libMenuOpened(); }
+    if (name === 'parts') partsMenuOpened();
   }
   const openExMenu = open => openMenu('ex', open);
   const closeMenus = () => { cancelAdjust(); openMenu(null, false); };

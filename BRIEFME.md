@@ -17,12 +17,13 @@
   - Discussed and planned migration / combination with Claude
   - Step 1: Tauri 2 shell with PrettyKit chrome, icon tool buttons in the title bar, draw tool + Rig Lab loaded, draw tool footer shown in the status bar
   - Step 2: library plumbing (Rust file commands, manifest.json, bridge between shell and tools, Library panel)
+  - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` into the library
 
  ## Todo Items
 
   - [x] Scaffold the Tauri 2 shell in OnionStudioWizard (static frontend, no bundler), with the rail, the PrettyKit chrome, and the draw tool and Rig Lab loaded as-is.
  - [x] Library plumbing: the project folder setting, manifest.json, and save/list/load messages between the shell and tools. (JS side + Rust unit-tested; Tauri commands still need a first `npm run dev` check on the Dell)
- - [ ] Drawing tool: export to library plus the parts menu.
+ - [x] Drawing tool: export to library plus the parts menu. (tested in a headless browser against the in-memory library; needs a first look in the real app)
  - [ ] Character Builder with the turnaround.
  - [ ] Part import into Rig Lab, with pivot sidecars.
  - [ ] Remaining tools, then PLAY’s rewrite.
@@ -99,6 +100,14 @@
 - **Tests:** `npm test` runs the 19 JS tests (`tests/library.test.mjs`); `cargo test` inside `src-tauri/` runs the 12 Rust tests. The Rust file logic and JS were tested here; the Tauri command glue in `lib.rs` could not be compiled in Claude's environment (no webkit/Windows target), so the first `npm run dev` is the real check. Paste any compile error back to Claude.
 - **Config change worth knowing:** `tauri.conf.json` sets `"dragDropEnabled": false` on the window. On Windows the default (true) swallows HTML5 file drag-and-drop from Explorer, which would have broken the drawing tool's drop-to-import and the Library panel's drop zone.
 - **Leftover from the user's own commit:** `@vitejs/plugin-react` is in `package.json` devDependencies. Nothing uses it (no bundler, no React here); safe to remove with `npm uninstall @vitejs/plugin-react`.
+
+### Step 3 as built (drawing tool <-> library)
+- **Save to library** (bottom of the EXPORT menu): TYPE (part / accessory / character view), FROM (active layer or all visible layers), NAME, SLOT (the Rig Lab part name, saved as `meta.slot`), CHAR (character, remembered), SIZE (default 800), CROP. The draw canvas is 1000x1000 but the rig art frame is 800x800, so library art is saved at SIZE=800 and never needs rescaling later. Same name = same id = overwrite. Views save uncropped as `<character>.<view>` and always overwrite that view.
+- **Meta convention for parts/accessories:** `meta.canvas = [W,H]` (canvas the art was drawn on), `meta.origin = [x,y]` (where the cropped PNG sits inside it), plus `slot`, `character`, and for sheet imports `view: 'side'`, `source`, `frame`. Pivots measured in the 800x800 frame stay valid because origin is stored. Pivot sidecars (step 5) will go in `meta` too.
+- **PARTS menu** (header, next to LAYER): thumbnail grid with a type filter and a name/tag filter; clicking an item adds it as a new layer. Items with `canvas`+`origin` land exactly where they were drawn (scaled by project width / canvas width, 1.25x for 800 -> 1000); anything else is fitted and the Move tool is selected.
+- **SLICE INTO LIBRARY** (bottom of the PARTS menu): cuts `assets/images/nova/mannequins/sideView.png` (12 frames) into `<char>_side_head`, `_chest`, `_pelvis`, `_upper_arm`, `_lower_arm`, `_near_hand`, `_far_hand`, `_thigh`, `_calf`, `_shoe`, the accessory `<char>_side_bag`, and the view `<char>.right` (the mannequin faces right). Slots use the rig's names (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe; the bag's slot is `bag`). Running it again overwrites those items.
+- Both menus show a note instead when the tool is opened on its own (no library outside the Wizard). Code lives in `drawingTool.html` in the block headed "OSW LIBRARY".
+- **Also fixed:** `shell.js` pointed the window icon at the old `assets/images/icon.png`; it is now `assets/images/misc/icon.png`.
 
 ### Things to watch
 - **Art sheet (updated Oct 25 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, a 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 bag, 2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm, 7 near hand, 8 far hand, 9 thigh, 10 calf, 11 shoe. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops. Accessories load from `assets/images/nova/mannequins/accessories.png`. CLAUDE.md's description of a ten-frame `mannequin_side.png` with a base64 fallback is stale.

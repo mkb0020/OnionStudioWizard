@@ -36,7 +36,7 @@ const iconSvg   = (t) => '<svg viewBox="0 0 24 24" aria-hidden="true">' + (ICONS
 
 pk.createPrettyWindow({
   title: 'Onion Studio Wizard',
-  icon: 'assets/images/icon.png',
+  icon: 'assets/images/misc/icon.png',
   version: VERSION,
   statusText: 'READY',
 });
