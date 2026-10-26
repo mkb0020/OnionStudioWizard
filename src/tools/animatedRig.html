@@ -25,6 +25,8 @@
   <span class="sep"></span>
   <button class="btn" id="reset">Reset</button>
   <span class="sep"></span>
+  <select id="artSrc" title="Where the character art comes from: the drawn sheet, or parts in the Wizard library" hidden></select><span id="libStat" class="note" style="margin:0" hidden></span>  <!-- OSW: library art source -->
+  <span class="sep"></span>
   <button class="btn" id="cfgExport" title="Download the current slider values, grids and pivots as rig_config.json">⬇ Export</button>
   <button class="btn" id="cfgImport" title="Load a rig_config.json (no server needed)">⬆ Import</button>
   <input type="file" id="cfgFile" accept=".json,application/json" hidden>
@@ -487,6 +489,7 @@ function drawLeg(l,col,far){
 }
 
 /* ---------- character art ---------- */
+function partSrc(p){return p.img?[p.img,0,0]:[PARTS._img,p.i*800+p.bx,p.by];}   // [image, sx, sy] of a part: its own library PNG, or its frame in the sheet (crop size is always p.bw x p.bh, drawn at p.bx,p.by)
 function buildParts(img,label){
   ART_NAMES.forEach((n,i)=>{
     const [bx,by,bw,bh]=ART_BOX[n]; PARTS[n]={i:ART_FRAME[n],bx,by,bw,bh};
@@ -497,7 +500,7 @@ function rebuildTints(){   // far-side copies: darkened toward the background vi
   if(!PARTS._img) return;
   ['upperArm','forearm','thigh','calf','shoe'].forEach(n=>{
     const p=PARTS[n], c=document.createElement('canvas'); c.width=p.bw; c.height=p.bh;
-    const x=c.getContext('2d'); x.drawImage(PARTS._img,p.i*800+p.bx,p.by,p.bw,p.bh,0,0,p.bw,p.bh);
+    const x=c.getContext('2d'), [im,sx,sy]=partSrc(p); x.drawImage(im,sx,sy,p.bw,p.bh,0,0,p.bw,p.bh);
     x.globalCompositeOperation='source-atop'; x.fillStyle='rgba(23,0,50,'+P.farTint+')'; x.fillRect(0,0,p.bw,p.bh);
     p.tint=c;
   });
@@ -522,6 +525,81 @@ function recomputeArt(){   // after any pivot change: new bone lengths + neck di
   if(bones&&bones.bones&&bones.bones.thigh){setArtLengths();rebuild();}
 }
 
+/* ---------- OSW LIBRARY ART ----------
+   Inside the Wizard the ART SOURCE menu can switch the ten body parts from the sheet to library parts (type part, meta.view 'side',
+   meta.slot = a name in ART_NAMES, grouped by meta.character). A library PNG is a tight crop drawn on an 800x800 canvas, so it is
+   drawn at meta.origin and every pivot stays valid. A slot the library lacks keeps its sheet art.
+   PIVOT SIDECARS: pivots live in the part's manifest entry as meta.pivots = { pivotName: [x,y] } (800x800 art px, same space as ART_PIV).
+   Each pivot is owned by ONE part, so two parts never disagree: a part owns the joint at its far end plus the attachment points drawn on it.
+   Hands and shoe own none (they hang from the wrist / ankle). Edits in the pivot editor save to the sidecars 0.8 s after the last change. */
+const PIV_OWNER={pelvis:['hip','bagHip','stomachFrom'],chest:['rib','shoulder','neck','neckFrom','strapTop','stomachTo'],head:['headPivot','neckTo'],upperArm:['elbow'],forearm:['wrist'],thigh:['knee'],calf:['ankle']};
+const LIB={on:false,slug:null,chars:{},saveT:0,evT:0,writing:0,dirty:false,stat:'',pref:'rigArtSrc_v1'};
+const libOK=()=>!!(window.OSWClient&&OSWClient.hosted);
+const libSig=slug=>JSON.stringify(Object.values(LIB.chars[slug]||{}).map(i=>i.id+'@'+i.updated).sort());
+function libStat(t){LIB.stat=t||'';const e=document.getElementById('libStat');if(e){e.textContent=LIB.stat;e.hidden=!LIB.stat;}}
+async function libRefresh(){   // side-view parts of every character, newest copy per slot: LIB.chars[slug][slot]=item
+  const chars={};
+  for(const it of await OSWClient.library.list({type:'part'})){const m=it.meta||{}; if(m.view!=='side'||!m.character||!ART_NAMES.includes(m.slot)) continue; (chars[m.character]=chars[m.character]||{})[m.slot]=it;}
+  LIB.chars=chars; libMenu();
+}
+function libMenu(){
+  const sel=document.getElementById('artSrc'); if(!sel) return; sel.hidden=false;
+  const want=LIB.on?LIB.slug:'', opts=[['','Art: sheet (sideView.png)'],...Object.keys(LIB.chars).sort().map(s=>[s,'Art: library · '+s+' ('+Object.keys(LIB.chars[s]).length+'/'+ART_NAMES.length+')'])];
+  sel.innerHTML=''; opts.forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;sel.appendChild(o);}); sel.value=want;
+}
+function libSheet(){   // back to the sheet art and the pivots this browser remembers
+  buildParts(PARTS._img,SHEET_URL); for(const k in PIV_DEFAULT) ART_PIV[k]=PIV_DEFAULT[k].slice(); pivRestore();
+  LIB.on=false; LIB.slug=null; LIB.dirty=false; clearTimeout(LIB.saveT); recomputeArt(); pivSyncUI(); libMenu(); libStat('');
+}
+async function libLoad(slug){
+  const parts=LIB.chars[slug]; if(!parts) throw new Error('NOT_FOUND: no side-view parts for '+slug);
+  const next={}, notes=[];
+  for(const s of ART_NAMES){const it=parts[s]; if(!it) continue; const m=it.meta||{};
+    if(m.canvas&&(m.canvas[0]!==800||m.canvas[1]!==800)){notes.push(s+' drawn on '+m.canvas.join('x')+', save it at 800');continue;}
+    const o=Array.isArray(m.origin)?m.origin:[0,0], url=URL.createObjectURL(await OSWClient.library.readImage(it.id)), im=new Image();
+    try{await new Promise((ok,no)=>{im.onload=ok;im.onerror=()=>no(new Error('BAD_DATA: could not decode '+it.id));im.src=url;});}finally{URL.revokeObjectURL(url);}
+    next[s]={i:ART_FRAME[s],img:im,id:it.id,bx:o[0],by:o[1],bw:im.naturalWidth,bh:im.naturalHeight};
+  }
+  const got=Object.keys(next); if(!got.length) throw new Error('NO_PARTS: nothing usable for '+slug+(notes.length?' ('+notes.join('; ')+')':''));
+  ART_NAMES.forEach(s=>{const b=ART_BOX[s]; PARTS[s]=next[s]||{i:ART_FRAME[s],bx:b[0],by:b[1],bw:b[2],bh:b[3]};});
+  for(const k in PIV_DEFAULT) ART_PIV[k]=PIV_DEFAULT[k].slice();   // file defaults first, then whatever the sidecars override
+  let nSide=0;
+  for(const s in PIV_OWNER){const pv=parts[s]&&parts[s].meta&&parts[s].meta.pivots; if(!pv) continue;
+    for(const k of PIV_OWNER[s]){const p=pv[k]; if(Array.isArray(p)&&p.length===2&&p.every(Number.isFinite)){ART_PIV[k]=p.slice();nSide++;}}}
+  const sheetFill=ART_NAMES.filter(s=>!next[s]);
+  LIB.on=true; LIB.slug=slug; partsReady=true; rebuildTints(); recomputeArt(); pivSyncUI(); libMenu();
+  artLabel='library · '+slug+' ('+got.length+'/'+ART_NAMES.length+' parts'+(sheetFill.length?', sheet for '+sheetFill.join(', '):'')+')';
+  const total=Object.values(PIV_OWNER).reduce((a,l)=>a+l.length,0);
+  libStat(nSide+'/'+total+' pivots from sidecars'+(notes.length?' · skipped: '+notes.join('; '):''));
+}
+async function libSet(slug){   // '' = sheet
+  try{ if(!slug) libSheet(); else await libLoad(slug); try{localStorage.setItem(LIB.pref,slug);}catch(e){} }
+  catch(e){ console.error(e); libStat('import failed: '+(e.message||e)); libMenu(); }
+}
+async function libSavePivots(){   // write every changed pivot into its owner part's meta.pivots (meta is replaced wholesale by update, so merge)
+  if(!LIB.on) return; const parts=LIB.chars[LIB.slug]||{}; let n=0, orphan=[]; LIB.writing++; LIB.dirty=false;
+  try{
+    for(const s in PIV_OWNER){const it=parts[s]; if(!it){orphan.push(...PIV_OWNER[s]);continue;}
+      const want={}; PIV_OWNER[s].forEach(k=>want[k]=[pivF(ART_PIV[k][0]),pivF(ART_PIV[k][1])]);
+      if(JSON.stringify((it.meta||{}).pivots)===JSON.stringify(want)) continue;
+      parts[s]=await OSWClient.library.update(it.id,{meta:Object.assign({},it.meta,{pivots:want})}); n++;}
+    libStat((n?'pivots saved to '+n+' part'+(n>1?'s':''):'pivots already saved')+(orphan.length?' · '+orphan.length+' not saved (part missing in library: '+orphan.join(', ')+')':''));
+  }catch(e){console.error(e);libStat('pivot save failed: '+(e.message||e));}
+  finally{setTimeout(()=>LIB.writing--,900);}   // keeps our own library.changed echoes from reloading the art
+}
+function libSaveSoon(){ if(!LIB.on) return; clearTimeout(LIB.saveT); LIB.dirty=true; libStat('pivots: unsaved...'); LIB.saveT=setTimeout(libSavePivots,800); }
+async function libInit(){
+  if(!libOK()) return;
+  const sel=document.getElementById('artSrc'); sel.onchange=()=>{sel.blur();libSet(sel.value);};
+  OSWClient.on('library.changed',()=>{   // another tool saved or re-sliced parts: refresh the menu, and reload only if THIS character's parts changed
+    clearTimeout(LIB.evT); LIB.evT=setTimeout(async()=>{ if(LIB.writing||LIB.dirty) return;
+      try{const was=LIB.on?libSig(LIB.slug):'', slug=LIB.slug; await libRefresh();
+        if(LIB.on&&!LIB.chars[slug]) libSheet(); else if(LIB.on&&libSig(slug)!==was) await libLoad(slug);}catch(e){console.error(e);} },500); });
+  try{ await libRefresh(); }catch(e){ libStat('library unavailable: '+(e.message||e)); return; }
+  let pref=''; try{pref=localStorage.getItem(LIB.pref)||'';}catch(e){}
+  if(pref&&LIB.chars[pref]) await libSet(pref);
+}
+
 /* ---------- pivot editor ---------- */
 const PIV_INFO=[
  ['hip','Hip','thigh top · pelvis pivot'],['knee','Knee','thigh bottom · calf top'],['ankle','Ankle','calf bottom · shoe pivot'],
@@ -533,7 +611,8 @@ const PIV_INFO=[
 const PIV_COL={hip:'#cc0000',knee:'#cc0000',ankle:'#cc0000',shoulder:'#c71585',elbow:'#c71585',wrist:'#c71585',rib:'#830cde',neck:'#ff6200',headPivot:'#ff6200',neckFrom:'#2f9e2a',neckTo:'#2f9e2a',stomachFrom:'#fecd39',stomachTo:'#fecd39',bagHip:'#0092b3',strapTop:'#764ba2'};
 const PIV_LINES=[['hip','knee'],['knee','ankle'],['shoulder','elbow'],['elbow','wrist'],['hip','rib'],['rib','shoulder'],['neck','headPivot'],['neckFrom','neckTo'],['stomachFrom','stomachTo']];
 const E={z:1,cx:400,cy:420,sel:null,hover:null,drag:null,pan:null,ghost:true,grid:true,ghostImg:null,map:{s:1,tx:0,ty:0},inputs:{},rows:{},txt:null,editBtn:null};
-function pivSave(){try{localStorage.setItem(PIV_KEY,JSON.stringify({base:PIV_DEFAULT,cur:ART_PIV}));}catch(e){}}
+function pivSave(){if(LIB.on){libSaveSoon();return;}   // library art: pivots go to the part sidecars, not this browser's localStorage
+  try{localStorage.setItem(PIV_KEY,JSON.stringify({base:PIV_DEFAULT,cur:ART_PIV}));}catch(e){}}
 const pivF=v=>+(+v).toFixed(2);
 function pivExport(){return 'const ART_PIV={\n'+PIV_INFO.map(([k])=>'  '+k+':['+pivF(ART_PIV[k][0])+','+pivF(ART_PIV[k][1])+']').join(',\n')+'\n};';}
 function pivSyncUI(){
@@ -575,11 +654,13 @@ function buildPivotPanel(pn){
     if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done,fallback); else fallback();
     e.target.blur();};
   const rs=document.createElement('button');rs.className='btn';rs.textContent='Reset to file values';
-  rs.onclick=e=>{for(const k in PIV_DEFAULT) ART_PIV[k]=PIV_DEFAULT[k].slice();recomputeArt();pivSyncUI();try{localStorage.removeItem(PIV_KEY);}catch(x){}e.target.blur();};
-  b2.append(cp,rs);pn.appendChild(b2);
+  rs.onclick=e=>{for(const k in PIV_DEFAULT) ART_PIV[k]=PIV_DEFAULT[k].slice();recomputeArt();pivSyncUI();if(LIB.on)libSaveSoon();else try{localStorage.removeItem(PIV_KEY);}catch(x){}e.target.blur();};
+  const sv=document.createElement('button');sv.className='btn';sv.textContent='Save pivots to library';sv.title='Write the pivots into the library parts now (edits also save by themselves)';
+  sv.onclick=e=>{if(!LIB.on){libStat('pick a library character in the ART menu first');}else{clearTimeout(LIB.saveT);libSavePivots();}e.target.blur();};
+  b2.append(cp,rs);if(libOK())b2.append(sv);pn.appendChild(b2);
   const tx=document.createElement('textarea');tx.className='pvtxt';tx.readOnly=true;tx.spellcheck=false;pn.appendChild(tx);E.txt=tx;
   const nt=document.createElement('div');nt.className='note';
-  nt.textContent='Pivots are positions in the 800×800 art frame (y down). The pivot is the point on a drawing that lands on the joint, so raising x by 5 slides the art 5px left. Bone lengths come from these points, so moving a joint also changes bone length. Edits apply live and are remembered in this browser; paste the copied block over ART_PIV in the file to make them permanent. In the editor: drag a crosshair, arrow keys nudge 0.5px (Shift 2px, Alt 0.1px), wheel zooms, drag the background to pan.';
+  nt.textContent='Pivots are positions in the 800×800 art frame (y down). The pivot is the point on a drawing that lands on the joint, so raising x by 5 slides the art 5px left. Bone lengths come from these points, so moving a joint also changes bone length. Edits apply live and are remembered in this browser; paste the copied block over ART_PIV in the file to make them permanent. With library art selected they are saved into the library entries of the parts instead (meta.pivots). In the editor: drag a crosshair, arrow keys nudge 0.5px (Shift 2px, Alt 0.1px), wheel zooms, drag the background to pan.';
   pn.appendChild(nt);
 }
 function loadGhost(){const im=new Image();im.onload=()=>{if(im.naturalWidth===SHEET_W){const c=document.createElement('canvas');c.width=c.height=800;c.getContext('2d').drawImage(im,0,0,800,800,0,0,800,800);E.ghostImg=c;}};im.src=SHEET_URL;}
@@ -590,7 +671,7 @@ function drawPivotEditor(r){
   ctx.setTransform(s*DPR,0,0,s*DPR,tx*DPR,ty*DPR);
   ctx.fillStyle='#C4C3D0';ctx.fillRect(0,0,800,800);
   if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','upperArm','forearm','handL','handR']){
-    const p=PARTS[n]; ctx.drawImage(PARTS._img,p.i*800+p.bx,p.by,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
+    const p=PARTS[n], [im,sx,sy]=partSrc(p); ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
   if(E.ghost&&E.ghostImg){ctx.globalAlpha=.5;ctx.drawImage(E.ghostImg,0,0,800,800);ctx.globalAlpha=1;}
   if(E.grid){
     ctx.lineWidth=1/s;
@@ -655,7 +736,7 @@ function placePart(name,pivot,atRig,rot,s,axis,far){
   if(axis&&Math.abs(s-1)>1e-4){const k=s-1;ctx.transform(1+k*axis[0]*axis[0],k*axis[0]*axis[1],k*axis[0]*axis[1],1+k*axis[1]*axis[1],0,0);}
   ctx.translate(-pivot[0],-pivot[1]);ctx.imageSmoothingEnabled=true;
   if(far&&p.tint) ctx.drawImage(p.tint,p.bx,p.by);
-  else ctx.drawImage(PARTS._img,p.i*800+p.bx,p.by,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);
+  else{const [im,sx,sy]=partSrc(p);ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
   ctx.restore();
 }
 const mapPt=(pivot,atRig,rot,p)=>{const dx=p[0]-pivot[0],dy=p[1]-pivot[1],c=Math.cos(rot),n=Math.sin(rot);return [atRig[0]+dx*c-dy*n, atRig[1]+dx*n+dy*c];};
@@ -1159,6 +1240,7 @@ function buildFramesPanel(pn){
   await loadArt();
   await loadAcc();
   loadGhost();
+  libInit();   // OSW: fills the ART menu and re-selects the last library character (no-op outside the Wizard)
   resetGrids();resetFootGrids();
   buildDock('left',MENUS);
   resize();

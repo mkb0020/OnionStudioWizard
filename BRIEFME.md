@@ -19,6 +19,7 @@
   - Step 2: library plumbing (Rust file commands, manifest.json, bridge between shell and tools, Library panel)
   - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` into the library
+  - Step 5: Rig Lab ART menu imports a character's parts from the library; pivots are saved as sidecars in each part's `meta.pivots`
 
  ## Todo Items
 
@@ -26,7 +27,7 @@
  - [x] Library plumbing: the project folder setting, manifest.json, and save/list/load messages between the shell and tools. (JS side + Rust unit-tested; Tauri commands still need a first `npm run dev` check on the Dell)
  - [x] Drawing tool: export to library plus the parts menu. (tested in a headless browser against the in-memory library; needs a first look in the real app)
  - [x] Character Builder with the turnaround. (tested in a headless browser; needs a first look in the real app)
- - [ ] Part import into Rig Lab, with pivot sidecars.
+ - [x] Part import into Rig Lab, with pivot sidecars. (tested in a headless browser against the real library files in memory; needs a first look in the real app)
  - [ ] Remaining tools, then PLAY’s rewrite.
 
 
@@ -264,6 +265,14 @@
 - **Saving:** `library/characters/<character>/character.json`, autosaved 0.6 s after any edit (chip in the plaque shows SAVED / UNSAVED / NOT SAVED). Shape: `{ format: 'osw-character', version: 1, id, info{name,title,class,race,alignment,level,role,origin,notes}, physics[{label,value,unit}], items[{name,kind,note,equipped}], spells[{name,vfx:'sprite'|'vector',frames,key}], todo[{text,kind,done}], view{mirror,skipEmpty,speed}, updated }`. Outside the Wizard it falls back to localStorage.
 - **Library API additions:** `library.listCharacters()`, `readCharacter(slug)`, `saveCharacter(slug, obj)` (JSON object, max 1 MB, not in the manifest); `OSWClient.library.character.list/get/save`; bridge messages `library.character.*`; 1 new JS test (20 pass).
 - **Physics numbers are starter placeholders** (move speed 240, jump force 620, gravity 1600, ...). Match them to PLAY's constants when PLAY is rewritten; rows can be renamed, added and removed.
+
+### Step 5 as built (library parts -> Rig Lab, pivot sidecars)
+- **ART menu** (Rig Lab top bar, only inside the Wizard): `Art: sheet (sideView.png)` or `Art: library · <character> (n/10)`. Characters are found from library parts with `meta.view === 'side'`, `meta.character` and a `meta.slot` that is one of the ten rig part names (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe). The choice is remembered (`rigArtSrc_v1` in localStorage, UI pref only). Outside the Wizard nothing changes: sheet art, menu hidden.
+- **Drawing:** a library PNG is a tight crop on the 800x800 canvas, drawn at `meta.origin`, so every pivot stays valid. A slot missing from the library keeps its sheet art (shown in the HUD label). A part saved with a canvas other than 800x800 is skipped with a note. Pixel check: Nova from the library renders identically to the sheet.
+- **Pivot sidecar format:** `meta.pivots = { pivotName: [x, y] }` in 800x800 art px (same space as `ART_PIV`), in the part's manifest entry. Each pivot has ONE owner part so parts never disagree (`PIV_OWNER` in `animatedRig.html`): pelvis = hip, bagHip, stomachFrom; chest = rib, shoulder, neck, neckFrom, strapTop, stomachTo; head = headPivot, neckTo; upperArm = elbow; forearm = wrist; thigh = knee; calf = ankle. Hands and shoe own none. Rule: a part owns the joint at its far end plus attachment points drawn on it.
+- **Load order:** file defaults (`rig_config.json`), then sidecars override. **Saving:** with library art selected, pivot edits save to the sidecars 0.8 s after the last change (status chip next to the ART menu; "Save pivots to library" button in Pivots forces it); localStorage pivots are used for sheet art only. `update` replaces `meta` wholesale, so the save merges with the existing meta (slot, origin, ...). "Reset to file values" in library mode writes the defaults into the sidecars.
+- **Live refresh:** if another tool saves or re-slices this character's parts, Rig Lab reloads them (own saves are ignored). Re-running SLICE INTO LIBRARY keeps pivots only if the sidecars survive: `save` with an existing id keeps old meta only when no new meta is passed, and the slicer passes new meta, so **re-slicing wipes the sidecars**. Save pivots again afterwards (or fix the slicer to carry `meta.pivots` over).
+- **Not done yet:** the bag (`nova_side_bag`) still loads from `accessories.png`, the pivot-editor ghost is still frame 0 of the sheet, the stale-prone Rig Lab fallbacks are untouched, and importing a `rig_config.json` while library art is on is not written to the sidecars.
 
 ### Things to watch
 - **Art sheet (updated Oct 25 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, a 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 bag, 2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm, 7 near hand, 8 far hand, 9 thigh, 10 calf, 11 shoe. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops. Accessories load from `assets/images/nova/mannequins/accessories.png`. CLAUDE.md's description of a ten-frame `mannequin_side.png` with a base64 fallback is stale.
