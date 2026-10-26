@@ -17,6 +17,7 @@
   - Discussed and planned migration / combination with Claude
   - Step 1: Tauri 2 shell with PrettyKit chrome, icon tool buttons in the title bar, draw tool + Rig Lab loaded, draw tool footer shown in the status bar
   - Step 2: library plumbing (Rust file commands, manifest.json, bridge between shell and tools, Library panel)
+  - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` into the library
 
  ## Todo Items
@@ -24,7 +25,7 @@
   - [x] Scaffold the Tauri 2 shell in OnionStudioWizard (static frontend, no bundler), with the rail, the PrettyKit chrome, and the draw tool and Rig Lab loaded as-is.
  - [x] Library plumbing: the project folder setting, manifest.json, and save/list/load messages between the shell and tools. (JS side + Rust unit-tested; Tauri commands still need a first `npm run dev` check on the Dell)
  - [x] Drawing tool: export to library plus the parts menu. (tested in a headless browser against the in-memory library; needs a first look in the real app)
- - [ ] Character Builder with the turnaround.
+ - [x] Character Builder with the turnaround. (tested in a headless browser; needs a first look in the real app)
  - [ ] Part import into Rig Lab, with pivot sidecars.
  - [ ] Remaining tools, then PLAY’s rewrite.
 
@@ -108,6 +109,15 @@
 - **SLICE INTO LIBRARY** (bottom of the PARTS menu): cuts `assets/images/nova/mannequins/sideView.png` (12 frames) into `<char>_side_head`, `_chest`, `_pelvis`, `_upper_arm`, `_lower_arm`, `_near_hand`, `_far_hand`, `_thigh`, `_calf`, `_shoe`, the accessory `<char>_side_bag`, and the view `<char>.right` (the mannequin faces right). Slots use the rig's names (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe; the bag's slot is `bag`). Running it again overwrites those items.
 - Both menus show a note instead when the tool is opened on its own (no library outside the Wizard). Code lives in `drawingTool.html` in the block headed "OSW LIBRARY".
 - **Also fixed:** `shell.js` pointed the window icon at the old `assets/images/icon.png`; it is now `assets/images/misc/icon.png`.
+
+### Step 4 as built (Character Builder)
+- **File:** `src/tools/characterBuilder.html`, registered in `tools.js` (CHAR group, user icon). It loads in an iframe like the other tools and talks to the library through `OSWClient` (this deviates from the earlier "native module" idea; same plumbing, keeps it runnable on its own).
+- **Layout:** landscape sheet. Left: name plaque (character picker, name, title), Origin (class, race, alignment, level, role, hometown, personality notes), Physics. Centre: the turnaround in an arched portal with a rune ring, turn buttons, auto-spin, speed, Mirror and Skip-empty toggles, and 8 view pips. Right: Spells table and Weapons & items. The "To draw" checklist (pose / move / cycle, filters, progress bar) is a drawer that slides in over everything from a tab on the right edge; its open/closed state is remembered. The page never scrolls: the panels are sized to fit (checked at 1900x950 and 1440x800).
+- **Style:** Orbitron headers, Share Tech Mono body, dark violet with neon edges. Edge gradient and accents come from Nova's art: cloak blue `#0303ff`, scarf `#4b69f3`, cloak fade `#9933c3`, ear pink `#db4be7`, eyes `#03ffff`, thigh lavender `#a599f3`/`#c3c3f3`, bodysuit `#390363`, leggings `#2d1b57`, boots `#454b8d`/`#212751`.
+- **Turnaround:** views come from the library (`type: view`, this character). Order is left, left-front, front, right-front, right, right-back, back, left-back. With Mirror on, an undrawn left/right side is filled by flipping its opposite (front and back are never mirrored). Drag the figure, use the arrow keys, or Space to spin. Auto-spin skips undrawn views when Skip empty is on. Views are saved from the draw tool: Export > Save to library > Character view.
+- **Saving:** `library/characters/<character>/character.json`, autosaved 0.6 s after any edit (chip in the plaque shows SAVED / UNSAVED / NOT SAVED). Shape: `{ format: 'osw-character', version: 1, id, info{name,title,class,race,alignment,level,role,origin,notes}, physics[{label,value,unit}], items[{name,kind,note,equipped}], spells[{name,vfx:'sprite'|'vector',frames,key}], todo[{text,kind,done}], view{mirror,skipEmpty,speed}, updated }`. Outside the Wizard it falls back to localStorage.
+- **Library API additions:** `library.listCharacters()`, `readCharacter(slug)`, `saveCharacter(slug, obj)` (JSON object, max 1 MB, not in the manifest); `OSWClient.library.character.list/get/save`; bridge messages `library.character.*`; 1 new JS test (20 pass).
+- **Physics numbers are starter placeholders** (move speed 240, jump force 620, gravity 1600, ...). Match them to PLAY's constants when PLAY is rewritten; rows can be renamed, added and removed.
 
 ### Things to watch
 - **Art sheet (updated Oct 25 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, a 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 bag, 2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm, 7 near hand, 8 far hand, 9 thigh, 10 calf, 11 shoe. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops. Accessories load from `assets/images/nova/mannequins/accessories.png`. CLAUDE.md's description of a ten-frame `mannequin_side.png` with a base64 fallback is stale.

@@ -249,6 +249,38 @@ export function createLibrary(storage) {
       });
     },
 
+    // CHARACTER SHEETS: characters/<character>/character.json IS A FREE-FORM JSON OBJECT OWNED BY THE CHARACTER BUILDER.
+    // IT IS NOT IN THE MANIFEST (THE MANIFEST IS FOR IMAGES); THE FOLDER NAME IS ITS ID.
+    listCharacters() {
+      return serial(async () => {
+        let entries = [];
+        try { entries = await storage.list('characters', false); } catch (e) { entries = []; }
+        return entries.filter((e) => e.isDir).map((e) => e.path.split('/').pop()).filter((n) => SLUG_RE.test(n)).sort();
+      });
+    },
+
+    readCharacter(character) {
+      return serial(async () => {
+        if (!SLUG_RE.test(character || '')) throw new Error('BAD_CHARACTER: character must be lowercase letters, numbers, _ or - (max 40)');
+        const raw = await storage.read('characters/' + character + '/character.json');
+        if (!raw) return null;
+        try { return JSON.parse(new TextDecoder().decode(raw)); }
+        catch (e) { throw new Error('BAD_DATA: characters/' + character + '/character.json is not valid JSON (' + e.message + '). Nothing was changed.'); }
+      });
+    },
+
+    saveCharacter(character, data) {
+      return serial(async () => {
+        if (!SLUG_RE.test(character || '')) throw new Error('BAD_CHARACTER: character must be lowercase letters, numbers, _ or - (max 40)');
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('BAD_DATA: a character sheet must be a JSON object');
+        const bytes = new TextEncoder().encode(JSON.stringify(data, null, 2) + '\n');
+        if (bytes.length > 1024 * 1024) throw new Error('BAD_DATA: character.json is larger than 1 MB');
+        await storage.write('characters/' + character + '/character.json', bytes);
+        emit({ kind: 'character', id: character });
+        return { character, bytes: bytes.length };
+      });
+    },
+
     // FORGET ENTRIES WHOSE IMAGE FILE IS GONE
     dropMissing() {
       return serial(async () => {

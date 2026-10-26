@@ -4,7 +4,7 @@
 // src IS RELATIVE TO src/ (THE FOLDER TAURI SERVES), SO ADDING A TOOL = DROP THE HTML IN src/tools/ AND SET src HERE.
 
 export const TOOLS = [
-  { id: 'character', group: 'CHAR', label: 'Builder', title: 'Character Builder',  icon: 'user',  src: null },
+  { id: 'character', group: 'CHAR', label: 'Builder', title: 'Character Builder',  icon: 'user',  src: 'tools/characterBuilder.html' },
   { id: 'draw',      group: 'DRAW',      label: 'Draw',    title: 'Drawing Tool',       icon: 'pen',   src: 'tools/drawingTool.html', status: '#status' },
   { id: 'rig',       group: 'RIG',       label: 'Rig Lab', title: 'Rig Lab',            icon: 'bones', src: 'tools/animatedRig.html' },
   { id: 'staticRig', group: 'RIG',       label: 'Static',  title: 'Static Rig',         icon: 'pose',  src: null },

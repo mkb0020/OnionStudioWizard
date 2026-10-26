@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">  <!-- OSW: resolves assets/, css/ from src/ whether run in the app or opened from src/tools/ -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="js/oswClient.js"></script>  <!-- OSW: bridge to the shell (library views + character.json) -->
+<title>Character Builder</title>
+<link rel="stylesheet" href="css/fonts.css">
+<style>
+/* =====================================================================
+   CHARACTER BUILDER: a tabletop-style character sheet (landscape).
+   Orbitron for headers, Share Tech Mono for everything else (same as the other tools).
+   Colours come from the project palette plus Nova's own art (cloak blue #0303ff, bodysuit #390363,
+   leggings #2d1b57, cloak fade #9933c3, ear pink #db4be7, eyes #03ffff, thigh lavender #a599f3 / #c3c3f3,
+   scarf #4b69f3, boots #454b8d / #212751).
+   ===================================================================== */
+:root{
+  --void:#0c001f; --bg0:#170032; --bg1:#240140; --night:#1b0339; --plum:#390363; --indigo:#2d1b57;
+  --blue:#0303ff; --blue-lit:#4b69f3; --violet:#9933c3; --orchid:#a55aff; --pink:#db4be7; --hot:#ff69b4;
+  --cyan:#03ffff; --lav:#a599f3; --lav2:#c3c3f3; --boot:#454b8d; --boot-dk:#212751;
+  --txt:#dbe2e9; --soft:#c4c3d0; --mute:#9090c0; --mint:#67febd; --gold:#fecd39;
+  --ui:'Orbitron','Segoe UI',system-ui,sans-serif;
+  --mono:'Share Tech Mono','Consolas','Courier New',monospace;
+  --edge:linear-gradient(135deg,#4b69f3 0%,#9933c3 55%,#db4be7 100%);
+  --panel:linear-gradient(180deg,#240140ee,#170032ee);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+*{scrollbar-width:thin;scrollbar-color:#830cde transparent}
+html,body{height:100%;background:var(--void);color:var(--txt);font-family:var(--mono);font-size:13px;overflow:hidden}
+body{
+  background:
+    radial-gradient(1200px 700px at 50% 38%,#390363aa 0%,#1b033955 45%,transparent 75%),
+    radial-gradient(500px 400px at 0% 100%,#0303ff22,transparent 70%),
+    radial-gradient(500px 400px at 100% 0%,#db4be71c,transparent 70%),
+    linear-gradient(#830cde14 1px,transparent 1px) 0 0/44px 44px,
+    linear-gradient(90deg,#830cde14 1px,transparent 1px) 0 0/44px 44px,
+    var(--void)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+
+/* ---------- page grid ---------- */
+#sheet{height:100%;display:grid;gap:14px;padding:14px;
+  grid-template-columns:minmax(270px,25%) minmax(300px,1fr) minmax(290px,27%);
+  grid-template-rows:minmax(0,1fr)}
+.col{display:flex;flex-direction:column;gap:14px;min-width:0;min-height:0}
+
+/* ---------- panels (each has its own silhouette) ---------- */
+.panel{position:relative;min-height:0;display:flex;flex-direction:column;padding:12px 14px 12px;
+  border:1.5px solid transparent;
+  background:var(--panel) padding-box,var(--edge) border-box;
+  box-shadow:0 0 22px #4b69f333,0 0 42px #9933c322,inset 0 0 28px #00000066}
+.panel>.body{flex:1;min-height:0;overflow:auto;padding-right:2px;scrollbar-width:none}
+.panel>.body::-webkit-scrollbar{display:none}
+.leaf{border-radius:30px 8px 30px 8px;flex:0 1 auto}
+#plaque{flex:none}
+.leafR{border-radius:8px 34px 8px 34px}
+.arch{border-radius:74px 74px 14px 14px / 56px 56px 14px 14px;padding-top:14px}
+/* chamfered plate: gradient edge is the outer shape, the face sits 2px inside it */
+.plate{--n:18px;border:0;padding:14px 18px;background:var(--edge);
+  clip-path:polygon(var(--n) 0,calc(100% - var(--n)) 0,100% var(--n),100% calc(100% - var(--n)),calc(100% - var(--n)) 100%,var(--n) 100%,0 calc(100% - var(--n)),0 var(--n));box-shadow:none}
+.plate::before{content:'';position:absolute;inset:2px;background:var(--panel);z-index:0;
+  clip-path:polygon(calc(var(--n) - 1px) 0,calc(100% - var(--n) + 1px) 0,100% calc(var(--n) - 1px),100% calc(100% - var(--n) + 1px),calc(100% - var(--n) + 1px) 100%,calc(var(--n) - 1px) 100%,0 calc(100% - var(--n) + 1px),0 calc(var(--n) - 1px))}
+.plate>*{position:relative;z-index:1}
+/* little gems on the corners of the round-cornered panels */
+.leaf::after,.leafR::after{content:'';position:absolute;width:9px;height:9px;transform:rotate(45deg);background:var(--cyan);box-shadow:0 0 10px var(--cyan);right:20px;top:-6px;border-radius:1px}
+.leafR::after{right:auto;left:22px}
+
+h2{font-family:var(--ui);font-weight:700;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--lav2);
+  display:flex;align-items:center;gap:9px;justify-content:center;margin-bottom:6px;text-shadow:0 0 10px #a55aff88;flex:none}
+h2 i{width:7px;height:7px;transform:rotate(45deg);background:var(--pink);box-shadow:0 0 8px var(--pink);flex:none}
+h2 i:last-child{background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+h2 .sub{font-family:var(--mono);font-weight:400;letter-spacing:.04em;text-transform:none;color:var(--mute);font-size:11px;text-shadow:none}
+.rule{height:9px;position:relative;margin:0 0 8px;flex:none;background:linear-gradient(90deg,transparent,#a599f388 18%,#a599f388 82%,transparent) center/100% 1px no-repeat}
+.rule::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;transform:rotate(45deg);background:var(--lav);box-shadow:0 0 6px var(--lav)}
+.note{font-size:11px;line-height:1.35;color:var(--mute)}
+.lbl{font-family:var(--ui);font-size:8px;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+
+/* ---------- inputs: written-on-the-sheet look ---------- */
+input[type=text],input[type=number],select,textarea{background:transparent;border:0;border-bottom:1px dashed #a599f355;border-radius:0;padding:3px 2px;color:var(--txt);min-width:0;width:100%;outline:none;-webkit-user-select:text;user-select:text}
+input::placeholder,textarea::placeholder{color:#9090c077}
+input:focus,select:focus,textarea:focus{border-bottom-color:var(--cyan);box-shadow:0 1px 0 0 #03ffff66}
+select{cursor:pointer;color:var(--soft)}
+select option{background:var(--bg0);color:var(--txt)}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+input[type=number]::-webkit-inner-spin-button{display:none}
+textarea{resize:none;border:1px dashed #a599f340;border-radius:6px;padding:6px 8px;line-height:1.35}
+.btn{font-family:var(--ui);font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--soft);background:#37025a66;border:1px solid #830cde99;border-radius:999px;padding:6px 12px}
+.btn:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px #03ffff44}
+.x{flex:none;width:20px;height:20px;border:0;background:none;color:#9090c088;font-size:15px;line-height:1;border-radius:50%;opacity:0;transition:opacity .12s}
+.row:hover .x,.x:focus-visible{opacity:1}
+.x:hover{color:var(--hot);background:#ff69b422}
+.gem{flex:none;width:13px;height:13px;transform:rotate(45deg);border:1.5px solid var(--lav);background:transparent;border-radius:2px;margin:0 4px}
+.gem.on{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 10px var(--cyan)}
+.gem:hover{border-color:var(--cyan)}
+
+/* ---------- name plaque (ribbon with pointed ends) ---------- */
+#plaque{flex:none;position:relative;padding:8px 34px 10px;
+  background:var(--edge);
+  clip-path:polygon(0 0,100% 0,calc(100% - 20px) 50%,100% 100%,0 100%,20px 50%)}
+#plaque::before{content:'';position:absolute;inset:2px;background:linear-gradient(180deg,#390363,#170032);
+  clip-path:polygon(0 0,100% 0,calc(100% - 19px) 50%,100% 100%,0 100%,19px 50%)}
+#plaque>*{position:relative}
+#plaqueTop{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+#charSel{width:auto;max-width:120px;font-family:var(--ui);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom-style:solid;border-bottom-color:#a599f333}
+#newChar{width:100px;font-size:11px}
+#plaqueTop .btn{padding:3px 9px;font-size:10px}
+#saveChip{margin-left:auto;font-family:var(--ui);font-size:8px;letter-spacing:.16em;color:var(--mute);display:flex;align-items:center;gap:6px;white-space:nowrap}
+#saveChip::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--mint);box-shadow:0 0 8px var(--mint)}
+#saveChip.dirty::before,#saveChip.saving::before{background:var(--gold);box-shadow:0 0 8px var(--gold)}
+#saveChip.local::before{background:var(--mute);box-shadow:none}
+#saveChip.error{color:var(--hot)}#saveChip.error::before{background:var(--hot);box-shadow:0 0 8px var(--hot)}
+#nameIn{font-family:var(--ui);font-weight:700;font-size:34px;letter-spacing:.14em;text-transform:uppercase;border:0;padding:0;
+  background:linear-gradient(90deg,#03ffff,#c3c3f3 45%,#db4be7);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;
+  filter:drop-shadow(0 0 10px #a55aff99);line-height:1.15}
+#nameIn::placeholder{-webkit-text-fill-color:#9090c055}
+#titleIn{font-size:12px;color:var(--lav2);border-bottom:1px solid #db4be755}
+
+/* ---------- info ---------- */
+#infoGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;margin-bottom:6px}
+#infoGrid label{display:flex;flex-direction:column;gap:1px}
+#notes{height:54px}
+
+/* ---------- stats ---------- */
+#statList{display:flex;flex-direction:column;gap:2px;min-height:100%;justify-content:space-around}
+.stat{display:flex;align-items:center;gap:8px}
+.stat .nm{flex:1;font-family:var(--ui);font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-bottom-color:transparent;color:var(--soft)}
+.stat .nm:focus{border-bottom-color:var(--cyan)}
+.stat .val{width:70px;flex:none;text-align:center;font-family:var(--ui);font-weight:700;font-size:14px;color:var(--cyan);
+  border:1.5px solid var(--pink);border-radius:50%/50%;background:radial-gradient(circle at 50% 30%,#390363,#1b0339);padding:3px 4px;font-size:13px;box-shadow:0 0 10px #db4be744,inset 0 0 8px #0006}
+.stat .val:focus{box-shadow:0 0 14px #03ffff77,inset 0 0 8px #0006;border-color:var(--cyan)}
+.stat .unit{width:44px;flex:none;font-size:11px;color:var(--mute);border-bottom-color:transparent}
+.foot{display:flex;align-items:center;gap:8px;margin-top:8px;flex:none}
+
+/* ---------- centre stage ---------- */
+#centre{align-items:stretch}
+#portal{position:relative;flex:1;min-height:0;display:flex;align-items:flex-end;justify-content:center;overflow:hidden;cursor:grab;touch-action:none;
+  border-radius:50% 50% 16px 16px / 24% 24% 16px 16px;border:1.5px solid transparent;
+  background:radial-gradient(ellipse at 50% 108%,#0303ff66 0%,transparent 55%) padding-box,radial-gradient(ellipse at 50% 38%,#4b69f340 0%,#39036388 38%,#0c001fee 80%) padding-box,var(--edge) border-box;
+  box-shadow:0 0 30px #4b69f355,0 0 70px #9933c333,inset 0 0 60px #000a}
+#portal.drag{cursor:grabbing}
+#halo,#floor{position:absolute;pointer-events:none}
+#halo{left:50%;top:7%;width:min(78%,520px);aspect-ratio:1;transform:translateX(-50%);opacity:.5;animation:turn 90s linear infinite}
+#floor{left:50%;bottom:5%;width:min(92%,470px);aspect-ratio:1;transform:translate(-50%,50%) perspective(520px) rotateX(74deg);opacity:.9;animation:turnFloor 40s linear infinite}
+@keyframes turn{to{transform:translateX(-50%) rotate(360deg)}}
+@keyframes turnFloor{to{transform:translate(-50%,50%) perspective(520px) rotateX(74deg) rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){#halo,#floor{animation:none}}
+#viewImg{position:relative;height:93%;max-width:100%;object-fit:contain;object-position:50% 100%;margin-bottom:4%;pointer-events:none;-webkit-user-drag:none;
+  filter:drop-shadow(0 0 14px #4b69f388) drop-shadow(0 6px 10px #000a)}
+#viewImg.flip{transform:scaleX(-1)}
+#empty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:0 12%;pointer-events:none}
+#empty .ghost{width:110px;height:250px;border:2px dashed #a599f377;border-radius:56px 56px 18px 18px;box-shadow:0 0 18px #a55aff33,inset 0 0 18px #a55aff22;position:relative}
+#empty .ghost::before{content:'';position:absolute;left:50%;top:-34px;width:46px;height:46px;margin-left:-23px;border:2px dashed #a599f377;border-radius:50%}
+#empty .note{background:#170032d9;padding:6px 10px;border-radius:8px;max-width:340px}
+#empty b{font-family:var(--ui);letter-spacing:.2em;font-size:11px;color:var(--lav2)}
+#viewTag{position:absolute;left:0;right:0;top:9px;text-align:center;pointer-events:none}
+#viewTag b{display:block;font-family:var(--ui);font-size:12px;letter-spacing:.34em;color:var(--lav2);text-shadow:0 0 10px #a55aff}
+#viewTag span{font-size:11px;color:var(--mute)}
+#controls{flex:none;display:flex;align-items:center;gap:10px;justify-content:center;padding:9px 16px;margin:0 6%;border-radius:999px;
+  border:1.5px solid transparent;background:linear-gradient(#170032f2,#170032f2) padding-box,var(--edge) border-box;box-shadow:0 0 22px #4b69f344}
+.orb{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--orchid);background:radial-gradient(circle at 35% 30%,#a599f3,#390363 70%);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 0 12px #a55aff66,inset 0 0 8px #0008;flex:none;transition:transform .1s}
+.orb svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.orb:hover{border-color:var(--cyan);box-shadow:0 0 16px #03ffff88,inset 0 0 8px #0008}
+.orb:active{transform:scale(.92)}
+.orb.big{width:46px;height:46px}
+.orb.on{border-color:var(--cyan);background:radial-gradient(circle at 35% 30%,#03ffff,#0303ff 75%);box-shadow:0 0 18px #03ffffaa}
+#speedWrap{display:flex;align-items:center;gap:7px}
+#speed{width:78px;accent-color:var(--orchid)}
+.tgl{font-family:var(--ui);font-size:8px;letter-spacing:.14em;text-transform:uppercase;padding:6px 9px;border-radius:999px;border:1px solid #a599f344;background:transparent;color:var(--mute)}
+.tgl.on{color:var(--cyan);border-color:var(--cyan);background:#03ffff14;box-shadow:0 0 10px #03ffff33}
+#pips{flex:none;display:flex;justify-content:center;gap:14px;padding:2px 0}
+.pip{width:12px;height:12px;transform:rotate(45deg);border:1.5px solid #a599f366;border-radius:2px;background:transparent;padding:0;position:relative}
+.pip.drawn{background:var(--lav);border-color:var(--lav)}
+.pip.mirror{background:repeating-linear-gradient(90deg,var(--lav) 0 2px,transparent 2px 4px);border-color:var(--lav)}
+.pip.cur{border-color:var(--cyan);box-shadow:0 0 10px var(--cyan);background:var(--cyan)}
+.pip:hover{border-color:var(--cyan)}
+
+/* ---------- items ---------- */
+.item{display:flex;flex-direction:column;padding:5px 0 6px;border-bottom:1px solid #a599f31f}
+.item .top,.row{display:flex;align-items:center;gap:6px}
+.item .nm{flex:1;color:var(--txt)}
+.item .kind{width:92px;flex:none;font-size:11px}
+.item .nt{font-size:11px;color:var(--mute);margin-left:30px;width:calc(100% - 30px)}
+
+/* ---------- spells ---------- */
+#spellHead,.spell{display:grid;grid-template-columns:minmax(0,1.5fr) 74px 50px minmax(0,.9fr) 20px;gap:7px;align-items:center}
+#spellHead{margin-bottom:3px;padding-bottom:3px;border-bottom:1px solid #a599f333}
+.spell{padding:3px 0;border-bottom:1px solid #a599f31a}
+.spell select{font-size:11px}
+.spell input[type=number]{text-align:center}
+.spell input:disabled{opacity:.35}
+.keyCell{display:flex;align-items:center;gap:3px;min-width:0}
+.cap{flex:none;width:20px;height:20px;border:1px solid #a599f355;border-radius:5px;background:transparent;color:var(--mute);font-size:10px;line-height:1;padding:0}
+.cap:hover,.cap.on{border-color:var(--cyan);color:var(--cyan)}
+
+/* ---------- to-do ---------- */
+/* ---------- to-do drawer: slides in from the right edge, above everything ---------- */
+#drawer{position:fixed;top:14px;bottom:14px;right:0;width:min(380px,92vw);z-index:60;display:flex;flex-direction:column;
+  padding:14px 16px 14px 18px;border:1.5px solid transparent;border-right:0;border-radius:40px 0 0 40px;
+  background:linear-gradient(180deg,#240140fa,#170032fa) padding-box,var(--edge) border-box;
+  box-shadow:-18px 0 50px #000c,-4px 0 28px #9933c366,inset 0 0 30px #0007;
+  transform:translateX(100%);transition:transform .28s cubic-bezier(.3,.8,.3,1)}
+#drawer.open{transform:none}
+#drawer:not(.open)>:not(#drawerTab){visibility:hidden}               /* closed: only the tab can be reached */
+#drawerTab{position:absolute;left:-40px;top:70px;width:40px;padding:14px 0 12px;border:1.5px solid transparent;border-right:0;border-radius:16px 0 0 16px;
+  background:linear-gradient(180deg,#390363,#170032) padding-box,var(--edge) border-box;color:var(--lav2);box-shadow:-6px 0 20px #9933c355;
+  display:flex;flex-direction:column;align-items:center;gap:10px}
+#drawerTab:hover{color:var(--cyan);box-shadow:-6px 0 22px #03ffff55}
+#drawerTab b{writing-mode:vertical-rl;font-family:var(--ui);font-size:10px;letter-spacing:.24em;text-transform:uppercase}
+#drawerTab em{font-style:normal;font-family:var(--ui);font-size:9px;letter-spacing:.06em;color:var(--cyan)}
+#drawerTab svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s}
+#drawer.open #drawerTab svg{transform:rotate(180deg)}
+#drawer .add{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex:none}
+#todoNew{flex:1}
+#todoKind{width:74px;flex:none;font-size:11px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;flex:none;margin-bottom:8px}
+#prog{display:flex;align-items:center;gap:9px;font-family:var(--ui);font-size:9px;letter-spacing:.14em;color:var(--lav2);flex:none;margin-bottom:8px}
+#progBar{flex:1;height:8px;border-radius:99px;border:1px solid #a599f366;background:#0c001f;overflow:hidden}
+#progBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#03ffff,#a55aff,#db4be7);box-shadow:0 0 10px #a55aff;transition:width .25s}
+#drawer .body{flex:1;min-height:0;overflow:auto;scrollbar-width:none}
+#drawer .body::-webkit-scrollbar{display:none}
+.todo{display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid #a599f31a}
+.todo .tx{flex:1;border-bottom-color:transparent}
+.todo .tx:focus{border-bottom-color:var(--cyan)}
+.todo.done .tx{text-decoration:line-through;color:var(--mute)}
+.todo .tag{flex:none;font-family:var(--ui);font-size:7px;letter-spacing:.14em;text-transform:uppercase;padding:2px 6px;border-radius:99px;border:1px solid #a599f344;color:var(--mute)}
+.todo .tag.pose{color:var(--pink);border-color:#db4be766}.todo .tag.move{color:var(--cyan);border-color:#03ffff66}.todo .tag.cycle{color:var(--gold);border-color:#fecd3966}
+#todoEmpty{margin-top:4px}
+</style>
+</head>
+<body>
+<div id="sheet">
+
+  <!-- LEFT: name, basics, physics -->
+  <div class="col" id="left">
+    <header id="plaque">
+      <div id="plaqueTop">
+        <select id="charSel" aria-label="Character"></select>
+        <button class="btn" id="newBtn" title="New character">+</button>
+        <input type="text" id="newChar" placeholder="name" maxlength="40" hidden>
+        <span id="saveChip" class="local">LOCAL</span>
+      </div>
+      <input type="text" id="nameIn" data-bind="info.name" placeholder="NAME" maxlength="24" aria-label="Character name">
+      <input type="text" id="titleIn" data-bind="info.title" placeholder="title or epithet" maxlength="60" aria-label="Title">
+    </header>
+
+    <section class="panel leaf" id="infoBox">
+      <h2><i></i>Origin<i></i></h2><div class="rule"></div>
+      <div class="body">
+        <div id="infoGrid">
+          <label><span class="lbl">Class</span><input type="text" data-bind="info.class" maxlength="40"></label>
+          <label><span class="lbl">Race</span><input type="text" data-bind="info.race" maxlength="40"></label>
+          <label><span class="lbl">Alignment</span><input type="text" data-bind="info.alignment" list="alignList" maxlength="40"></label>
+          <label><span class="lbl">Level</span><input type="text" data-bind="info.level" maxlength="12"></label>
+          <label><span class="lbl">Role</span><input type="text" data-bind="info.role" maxlength="40"></label>
+          <label><span class="lbl">Hometown</span><input type="text" data-bind="info.origin" maxlength="40"></label>
+        </div>
+        <span class="lbl">Personality &amp; skills</span>
+        <textarea id="notes" data-bind="info.notes" maxlength="1200" placeholder="who she is, what she is good at&hellip;"></textarea>
+      </div>
+    </section>
+
+    <section class="panel arch" id="statBox" style="flex:1">
+      <h2><i></i>Physics<i></i></h2><div class="rule"></div>
+      <div class="body"><div id="statList"></div></div>
+      <div class="foot"><button class="btn" id="addStat">+ stat</button><span class="note">Starter numbers: match them to PLAY.</span></div>
+    </section>
+  </div>
+
+  <!-- CENTRE: the turnaround -->
+  <div class="col" id="centre">
+    <div id="portal" aria-label="Character turnaround">
+      <svg id="halo" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <svg id="floor" viewBox="-100 -100 200 200" aria-hidden="true"></svg>
+      <div id="viewTag"><b id="viewName">RIGHT</b><span id="viewSub"></span></div>
+      <div id="empty" hidden><div class="ghost"></div><b>NO VIEW YET</b><span class="note" id="emptyNote"></span></div>
+      <img id="viewImg" alt="" hidden>
+    </div>
+    <div id="pips" aria-label="Views"></div>
+    <div id="controls">
+      <button class="orb" id="prevBtn" title="Turn left (&larr;)" aria-label="Previous view"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <button class="orb big" id="spinBtn" title="Auto-spin (Space)" aria-label="Auto-spin"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.2"/><path d="M20 3v5h-5"/></svg></button>
+      <button class="orb" id="nextBtn" title="Turn right (&rarr;)" aria-label="Next view"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>
+      <span id="speedWrap"><span class="lbl">Speed</span><input type="range" id="speed" min="0.3" max="3" step="0.1" value="1.2" aria-label="Spin speed"></span>
+      <button class="tgl on" id="mirrorBtn" title="Fill an undrawn side by flipping its opposite">Mirror</button>
+      <button class="tgl on" id="skipBtn" title="Auto-spin skips views that are not drawn">Skip empty</button>
+    </div>
+  </div>
+
+  <!-- RIGHT: spells + items -->
+  <div class="col" id="right">
+    <section class="panel leafR" id="spellBox" style="flex:1.15">
+      <h2><i></i>Spells<i></i></h2><div class="rule"></div>
+      <div id="spellHead"><span class="lbl">Spell</span><span class="lbl">VFX</span><span class="lbl" style="text-align:center">Frames</span><span class="lbl">Button</span><span></span></div>
+      <div class="body"><div id="spellList"></div></div>
+      <div class="foot"><button class="btn" id="addSpell">+ spell</button></div>
+    </section>
+    <section class="panel plate" id="itemBox" style="flex:1">
+      <h2><i></i>Weapons &amp; items<i></i></h2><div class="rule"></div>
+      <div class="body"><div id="itemList"></div></div>
+      <div class="foot"><button class="btn" id="addItem">+ item</button><span class="note">The gem marks what she carries.</span></div>
+    </section>
+  </div>
+
+</div>
+<!-- TO-DO DRAWER: collapsed to a tab on the right edge; opens over everything -->
+<aside id="drawer" class="shut" aria-label="To draw">
+  <button id="drawerTab" aria-expanded="false" title="To-do list"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><b>To draw</b><em id="tabCount">0/0</em></button>
+  <h2><i></i>To draw<i></i></h2><div class="rule"></div>
+  <div class="add">
+    <input type="text" id="todoNew" placeholder="a pose, move or cycle&hellip;" maxlength="80">
+    <select id="todoKind" aria-label="Kind"><option value="pose">pose</option><option value="move">move</option><option value="cycle">cycle</option><option value="">other</option></select>
+    <button class="btn" id="todoAdd">add</button>
+  </div>
+  <div class="chips" id="chips">
+    <button class="tgl on" data-f="all">All</button><button class="tgl" data-f="pose">Pose</button><button class="tgl" data-f="move">Move</button><button class="tgl" data-f="cycle">Cycle</button><button class="tgl" id="hideDone">Hide done</button>
+  </div>
+  <div id="prog"><span id="progTxt">0 / 0</span><div id="progBar"><i></i></div></div>
+  <div class="body"><div id="todoList"></div></div>
+</aside>
+<datalist id="alignList"><option>Lawful Good</option><option>Neutral Good</option><option>Chaotic Good</option><option>Lawful Neutral</option><option>True Neutral</option><option>Chaotic Neutral</option><option>Lawful Evil</option><option>Neutral Evil</option><option>Chaotic Evil</option></datalist>
+
+<script>
+(() => {
+'use strict';
+const $ = (s, r = document) => r.querySelector(s);
+const VIEWS = ['left', 'left-front', 'front', 'right-front', 'right', 'right-back', 'back', 'left-back'];   // same order as VIEW_NAMES in js/library/library.js
+const OPP = { left: 'right', right: 'left', 'left-front': 'right-front', 'right-front': 'left-front', 'left-back': 'right-back', 'right-back': 'left-back' };
+const hosted = !!(window.OSWClient && OSWClient.hosted);
+const slugOf = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40).replace(/_+$/g, '');
+const pref = { get(k, d) { try { return localStorage.getItem('osw.cb.' + k) || d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem('osw.cb.' + k, v); } catch (e) { /* storage may be blocked */ } } };
+const h = (tag, props, ...kids) => {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === 'class') el.className = v; else if (k === 'text') el.textContent = v; else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, ''); else if (v !== false && v != null) el.setAttribute(k, v);
+  }
+  kids.flat().forEach(c => c != null && el.append(c));
+  return el;
+};
+
+/* ---------- the sheet (what character.json holds) ---------- */
+const DEFAULT_STATS = [
+  ['Move speed', 240, 'px/s'], ['Jump force', 620, 'px/s'], ['Gravity', 1600, 'px/s²'], ['Max fall speed', 900, 'px/s'],
+  ['Wall slide speed', 90, 'px/s'], ['Wall jump force', 520, 'px/s'], ['Air control', 0.8, '×'], ['Coyote time', 90, 'ms']
+];
+function blankSheet(slug, name) {
+  return {
+    format: 'osw-character', version: 1, id: slug,
+    info: { name: name || '', title: '', class: '', race: '', alignment: '', level: '1', role: '', origin: '', notes: '' },
+    physics: DEFAULT_STATS.map(([label, value, unit]) => ({ label, value, unit })),
+    items: [], spells: [], todo: [],
+    view: { mirror: true, skipEmpty: true, speed: 1.2 },
+    updated: ''
+  };
+}
+function normalise(d, slug) {
+  const b = blankSheet(slug), o = d && typeof d === 'object' ? d : {};
+  const out = { ...b, ...o, id: slug };
+  out.info = { ...b.info, ...(o.info || {}) };
+  out.view = { ...b.view, ...(o.view || {}) };
+  for (const k of ['physics', 'items', 'spells', 'todo']) out[k] = Array.isArray(o[k]) ? o[k].filter(x => x && typeof x === 'object') : b[k];
+  return out;
+}
+let slug = slugOf(pref.get('last', 'nova')) || 'nova';
+let sheet = blankSheet(slug, 'Nova');
+let views = {};                                   // view name -> library item
+
+/* ---------- saving ---------- */
+const chip = $('#saveChip');
+function setChip(state, text) { chip.className = state; chip.textContent = text; }
+let saveTimer = 0, saving = false, again = false;
+function touch() { setChip('dirty', 'UNSAVED'); clearTimeout(saveTimer); saveTimer = setTimeout(flush, 600); }
+async function flush() {
+  clearTimeout(saveTimer); saveTimer = 0;
+  if (saving) { again = true; return; }
+  saving = true; setChip('saving', 'SAVING');
+  sheet.updated = new Date().toISOString();
+  try {
+    if (hosted) { await OSWClient.library.character.save(slug, sheet); setChip('', 'SAVED'); }
+    else { try { localStorage.setItem('osw.cb.sheet.' + slug, JSON.stringify(sheet)); } catch (e) { /* blocked */ } setChip('local', 'LOCAL ONLY'); }
+  } catch (e) { setChip('error', 'NOT SAVED: ' + String((e && e.message) || e).replace(/^[A-Z_]+: /, '').slice(0, 60)); }
+  saving = false;
+  if (again) { again = false; touch(); }
+}
+window.addEventListener('pagehide', () => { if (saveTimer) flush(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) flush(); });
+
+/* ---------- bound fields (info.*) ---------- */
+function getPath(o, p) { return p.split('.').reduce((a, k) => (a == null ? a : a[k]), o); }
+function setPath(o, p, v) { const ks = p.split('.'), last = ks.pop(); ks.reduce((a, k) => a[k], o)[last] = v; }
+document.addEventListener('input', e => {
+  const t = e.target; if (!t.dataset || !t.dataset.bind) return;
+  setPath(sheet, t.dataset.bind, t.value); touch();
+});
+function fillBound() { document.querySelectorAll('[data-bind]').forEach(el => { el.value = getPath(sheet, el.dataset.bind) || ''; }); }
+
+/* ---------- stats ---------- */
+function renderStats() {
+  const box = $('#statList'); box.textContent = '';
+  for (const s of sheet.physics) {
+    const val = h('input', { type: 'number', class: 'val', step: 'any', value: s.value, 'aria-label': s.label + ' value' });
+    val.addEventListener('input', () => { const n = parseFloat(val.value); s.value = Number.isFinite(n) ? n : 0; touch(); });
+    const nm = h('input', { type: 'text', class: 'nm', value: s.label, maxlength: 24, 'aria-label': 'Stat name' });
+    nm.addEventListener('input', () => { s.label = nm.value; touch(); });
+    const un = h('input', { type: 'text', class: 'unit', value: s.unit || '', maxlength: 8, placeholder: 'unit', 'aria-label': 'Unit' });
+    un.addEventListener('input', () => { s.unit = un.value; touch(); });
+    const x = h('button', { class: 'x', title: 'Remove', 'aria-label': 'Remove stat', text: '×', onclick: () => { sheet.physics.splice(sheet.physics.indexOf(s), 1); renderStats(); touch(); } });
+    box.append(h('div', { class: 'stat row' }, nm, val, un, x));
+  }
+}
+$('#addStat').addEventListener('click', () => { sheet.physics.push({ label: 'New stat', value: 0, unit: '' }); renderStats(); touch(); const n = $('#statList').lastChild.querySelector('.nm'); n.focus(); n.select(); });
+
+/* ---------- items ---------- */
+function renderItems() {
+  const box = $('#itemList'); box.textContent = '';
+  if (!sheet.items.length) box.append(h('p', { class: 'note', text: 'Nothing yet. Add her staff, a charm, the crossbody bag…' }));
+  for (const it of sheet.items) {
+    const gem = h('button', { class: 'gem' + (it.equipped ? ' on' : ''), title: 'Carried', 'aria-label': 'Carried', 'aria-pressed': !!it.equipped,
+      onclick: () => { it.equipped = !it.equipped; gem.classList.toggle('on', it.equipped); gem.setAttribute('aria-pressed', it.equipped); touch(); } });
+    const nm = h('input', { type: 'text', class: 'nm', value: it.name || '', placeholder: 'name', maxlength: 40, 'aria-label': 'Item name' });
+    nm.addEventListener('input', () => { it.name = nm.value; touch(); });
+    const kind = h('select', { class: 'kind', 'aria-label': 'Kind' }, ...['weapon', 'item', 'accessory'].map(k => h('option', { value: k, text: k })));
+    kind.value = it.kind || 'item'; kind.addEventListener('change', () => { it.kind = kind.value; touch(); });
+    const x = h('button', { class: 'x', title: 'Remove', 'aria-label': 'Remove item', text: '×', onclick: () => { sheet.items.splice(sheet.items.indexOf(it), 1); renderItems(); touch(); } });
+    const nt = h('input', { type: 'text', class: 'nt', value: it.note || '', placeholder: 'notes', maxlength: 80, 'aria-label': 'Item notes' });
+    nt.addEventListener('input', () => { it.note = nt.value; touch(); });
+    box.append(h('div', { class: 'item row' }, h('div', { class: 'top' }, gem, nm, kind, x), nt));
+  }
+}
+$('#addItem').addEventListener('click', () => { sheet.items.push({ name: '', kind: 'item', note: '', equipped: true }); renderItems(); touch(); $('#itemList').lastChild.querySelector('.nm').focus(); });
+
+/* ---------- spells ---------- */
+let capturing = null;
+function keyName(e) { const k = e.key; return k === ' ' ? 'Space' : k.length === 1 ? k.toUpperCase() : k; }
+function renderSpells() {
+  const box = $('#spellList'); box.textContent = '';
+  if (!sheet.spells.length) box.append(h('p', { class: 'note', text: 'No spells yet. Each one notes how its VFX is made and what triggers it.' }));
+  for (const sp of sheet.spells) {
+    const nm = h('input', { type: 'text', value: sp.name || '', placeholder: 'spell name', maxlength: 40, 'aria-label': 'Spell name' });
+    nm.addEventListener('input', () => { sp.name = nm.value; touch(); });
+    const vfx = h('select', { 'aria-label': 'VFX type' }, h('option', { value: 'sprite', text: 'sprite' }), h('option', { value: 'vector', text: 'vector' }));
+    vfx.value = sp.vfx === 'vector' ? 'vector' : 'sprite';
+    const fr = h('input', { type: 'number', min: 1, max: 999, step: 1, value: sp.frames ?? '', placeholder: '#', 'aria-label': 'Frame count' });
+    const syncFr = () => { fr.disabled = vfx.value === 'vector'; fr.title = fr.disabled ? 'Vector spells are drawn in code, so they have no frame count' : ''; };
+    vfx.addEventListener('change', () => { sp.vfx = vfx.value; syncFr(); touch(); }); syncFr();
+    fr.addEventListener('input', () => { const n = parseInt(fr.value, 10); sp.frames = Number.isFinite(n) ? n : null; touch(); });
+    const key = h('input', { type: 'text', value: sp.key || '', placeholder: 'key', maxlength: 20, 'aria-label': 'Activation button' });
+    key.addEventListener('input', () => { sp.key = key.value; touch(); });
+    const cap = h('button', { class: 'cap', title: 'Press a key to record it', 'aria-label': 'Record key', text: '⌨' });
+    cap.addEventListener('click', () => {
+      if (capturing) capturing.stop();
+      cap.classList.add('on'); key.placeholder = 'press…';
+      const on = e => { e.preventDefault(); e.stopPropagation(); if (e.key !== 'Escape') { sp.key = keyName(e); key.value = sp.key; touch(); } stop(); };
+      const stop = () => { window.removeEventListener('keydown', on, true); cap.classList.remove('on'); key.placeholder = 'key'; capturing = null; };
+      capturing = { stop }; window.addEventListener('keydown', on, true);
+    });
+    const x = h('button', { class: 'x', title: 'Remove', 'aria-label': 'Remove spell', text: '×', onclick: () => { sheet.spells.splice(sheet.spells.indexOf(sp), 1); renderSpells(); touch(); } });
+    box.append(h('div', { class: 'spell row' }, nm, vfx, fr, h('div', { class: 'keyCell' }, key, cap), x));
+  }
+}
+$('#addSpell').addEventListener('click', () => { sheet.spells.push({ name: '', vfx: 'sprite', frames: null, key: '' }); renderSpells(); touch(); $('#spellList').lastChild.querySelector('input').focus(); });
+
+/* ---------- to-do ---------- */
+let todoFilter = 'all', hideDone = false;
+function renderTodo() {
+  const box = $('#todoList'); box.textContent = '';
+  const total = sheet.todo.length, done = sheet.todo.filter(t => t.done).length;
+  $('#progTxt').textContent = done + ' / ' + total;
+  $('#progBar i').style.width = (total ? 100 * done / total : 0) + '%';
+  $('#tabCount').textContent = done + '/' + total;
+  const list = sheet.todo.filter(t => (todoFilter === 'all' || t.kind === todoFilter) && !(hideDone && t.done));
+  if (!list.length) box.append(h('p', { id: 'todoEmpty', class: 'note', text: total ? 'Nothing matches this filter.' : 'Nothing listed. Add the poses, moves and cycles you still want to draw.' }));
+  for (const t of list) {
+    const gem = h('button', { class: 'gem' + (t.done ? ' on' : ''), title: 'Done', 'aria-label': 'Done', 'aria-pressed': !!t.done,
+      onclick: () => { t.done = !t.done; renderTodo(); touch(); } });
+    const tx = h('input', { type: 'text', class: 'tx', value: t.text || '', maxlength: 80, 'aria-label': 'To-do' });
+    tx.addEventListener('input', () => { t.text = tx.value; touch(); });
+    const x = h('button', { class: 'x', title: 'Remove', 'aria-label': 'Remove', text: '×', onclick: () => { sheet.todo.splice(sheet.todo.indexOf(t), 1); renderTodo(); touch(); } });
+    box.append(h('div', { class: 'todo row' + (t.done ? ' done' : '') }, gem, tx, t.kind ? h('span', { class: 'tag ' + t.kind, text: t.kind }) : null, x));
+  }
+}
+function addTodo() {
+  const v = $('#todoNew').value.trim(); if (!v) return;
+  sheet.todo.push({ text: v, kind: $('#todoKind').value, done: false });
+  $('#todoNew').value = ''; renderTodo(); touch(); $('#todoNew').focus();
+}
+$('#todoAdd').addEventListener('click', addTodo);
+$('#todoNew').addEventListener('keydown', e => { if (e.key === 'Enter') addTodo(); });
+$('#chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'hideDone') { hideDone = !hideDone; b.classList.toggle('on', hideDone); }
+  else { todoFilter = b.dataset.f; document.querySelectorAll('#chips [data-f]').forEach(c => c.classList.toggle('on', c === b)); }
+  renderTodo();
+});
+
+/* ---------- to-do drawer ---------- */
+const drawer = $('#drawer');
+function setDrawer(open, remember = true) {
+  drawer.classList.toggle('open', open); drawer.classList.toggle('shut', !open);
+  $('#drawerTab').setAttribute('aria-expanded', open);
+  if (remember) pref.set('drawer', open ? 'open' : 'shut');
+}
+$('#drawerTab').addEventListener('click', () => setDrawer(!drawer.classList.contains('open')));
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && drawer.classList.contains('open')) setDrawer(false); });
+setDrawer(pref.get('drawer', 'shut') === 'open', false);
+
+/* ---------- the turnaround ---------- */
+const img = $('#viewImg'), portal = $('#portal');
+let idx = VIEWS.indexOf('right'), spinning = false, spinTimer = 0, shown = 0;
+const urlCache = new Map();
+function urlFor(item) {
+  const k = item.id + '|' + item.updated;
+  if (!urlCache.has(k)) {
+    for (const key of [...urlCache.keys()]) if (key.split('|')[0] === item.id) { urlCache.get(key).then(u => URL.revokeObjectURL(u)); urlCache.delete(key); }
+    urlCache.set(k, OSWClient.library.readImage(item.id).then(b => URL.createObjectURL(b)));
+  }
+  return urlCache.get(k);
+}
+function resolve(v) {
+  if (views[v]) return { item: views[v], flip: false, from: v };
+  if (sheet.view.mirror && OPP[v] && views[OPP[v]]) return { item: views[OPP[v]], flip: true, from: OPP[v] };
+  return null;
+}
+async function show() {
+  const v = VIEWS[idx], r = resolve(v), my = ++shown;
+  $('#viewName').textContent = v.replace('-', ' ').toUpperCase();
+  $('#viewSub').textContent = r ? (r.flip ? 'mirrored from ' + r.from : 'drawn') : 'not drawn yet';
+  document.querySelectorAll('.pip').forEach((p, i) => p.classList.toggle('cur', i === idx));
+  $('#empty').hidden = !!r;
+  if (!r) { img.hidden = true; $('#emptyNote').textContent = hosted
+    ? 'Draw it, then Export ▾ Save to library → Character view (character "' + slug + '", view "' + v + '").'
+    : 'Open this tool inside Onion Studio Wizard to see saved views.'; return; }
+  try {
+    const u = await urlFor(r.item); if (my !== shown) return;
+    img.src = u; img.classList.toggle('flip', r.flip); img.hidden = false;
+  } catch (e) { if (my === shown) { img.hidden = true; $('#empty').hidden = false; $('#emptyNote').textContent = 'Could not load that view: ' + String((e && e.message) || e); } }
+}
+function renderPips() {
+  const box = $('#pips'); box.textContent = '';
+  VIEWS.forEach((v, i) => {
+    const r = resolve(v);
+    const b = h('button', { class: 'pip' + (r ? (r.flip ? ' mirror' : ' drawn') : '') + (i === idx ? ' cur' : ''), title: v + (r ? (r.flip ? ' (mirrored)' : '') : ' (not drawn)'), 'aria-label': v, onclick: () => { idx = i; show(); } });
+    box.append(b);
+  });
+}
+function step(dir) {
+  const n = VIEWS.length;
+  if (sheet.view.skipEmpty && spinning) {
+    for (let k = 1; k <= n; k++) { const j = (idx + dir * k + n * 2) % n; if (resolve(VIEWS[j])) { idx = j; return show(); } }
+    return;                                           // nothing drawn at all: stay put
+  }
+  idx = (idx + dir + n) % n; show();
+}
+function spin(on) {
+  spinning = on; $('#spinBtn').classList.toggle('on', on); clearTimeout(spinTimer);
+  if (!on) return;
+  const tick = () => { step(1); spinTimer = setTimeout(tick, 1000 / sheet.view.speed); };
+  spinTimer = setTimeout(tick, 1000 / sheet.view.speed);
+}
+$('#prevBtn').addEventListener('click', () => { spin(false); step(-1); });
+$('#nextBtn').addEventListener('click', () => { spin(false); step(1); });
+$('#spinBtn').addEventListener('click', () => spin(!spinning));
+$('#speed').addEventListener('input', e => { sheet.view.speed = +e.target.value; touch(); if (spinning) spin(true); });
+$('#mirrorBtn').addEventListener('click', e => { sheet.view.mirror = !sheet.view.mirror; e.currentTarget.classList.toggle('on', sheet.view.mirror); renderPips(); show(); touch(); });
+$('#skipBtn').addEventListener('click', e => { sheet.view.skipEmpty = !sheet.view.skipEmpty; e.currentTarget.classList.toggle('on', sheet.view.skipEmpty); touch(); });
+// drag the figure to turn it like a turntable
+let drag = null;
+portal.addEventListener('pointerdown', e => { drag = { x: e.clientX, acc: 0 }; portal.setPointerCapture(e.pointerId); portal.classList.add('drag'); spin(false); });
+portal.addEventListener('pointermove', e => {
+  if (!drag) return; drag.acc += e.clientX - drag.x; drag.x = e.clientX;
+  while (drag.acc >= 46) { drag.acc -= 46; step(-1); }
+  while (drag.acc <= -46) { drag.acc += 46; step(1); }
+});
+const endDrag = () => { drag = null; portal.classList.remove('drag'); };
+portal.addEventListener('pointerup', endDrag); portal.addEventListener('pointercancel', endDrag);
+document.addEventListener('keydown', e => {
+  const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'ArrowLeft') { spin(false); step(-1); e.preventDefault(); }
+  else if (e.key === 'ArrowRight') { spin(false); step(1); e.preventDefault(); }
+  else if (e.key === ' ') { spin(!spinning); e.preventDefault(); }
+});
+function initView() { $('#speed').value = sheet.view.speed; $('#mirrorBtn').classList.toggle('on', sheet.view.mirror); $('#skipBtn').classList.toggle('on', sheet.view.skipEmpty); }
+
+/* ---------- ornament rings (drawn once) ---------- */
+(function rings() {
+  const NS = 'http://www.w3.org/2000/svg', mk = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  const halo = $('#halo'), floor = $('#floor');
+  const ring = (svg, col, col2) => {
+    svg.append(mk('circle', { r: 96, fill: 'none', stroke: col, 'stroke-width': 1.6 }), mk('circle', { r: 86, fill: 'none', stroke: col2, 'stroke-width': .8, 'stroke-dasharray': '2 4' }),
+      mk('circle', { r: 70, fill: 'none', stroke: col, 'stroke-width': .8 }));
+    for (let i = 0; i < 48; i++) {
+      const a = i / 48 * Math.PI * 2, long = i % 4 === 0, r1 = long ? 86 : 90, r2 = 96;
+      svg.append(mk('line', { x1: Math.cos(a) * r1, y1: Math.sin(a) * r1, x2: Math.cos(a) * r2, y2: Math.sin(a) * r2, stroke: long ? col2 : col, 'stroke-width': long ? 1.4 : .7 }));
+    }
+    for (let i = 0; i < 6; i++) {                       // star of David-free hexagram of two triangles
+      const pts = [0, 2, 4].map(k => { const a = (i % 2 ? 1 : 0) * Math.PI / 3 + k * Math.PI * 2 / 3 - Math.PI / 2; return (Math.cos(a) * 70).toFixed(1) + ',' + (Math.sin(a) * 70).toFixed(1); }).join(' ');
+      if (i < 2) svg.append(mk('polygon', { points: pts, fill: 'none', stroke: col, 'stroke-width': .7 }));
+    }
+  };
+  ring(halo, '#a599f3', '#db4be7'); ring(floor, '#4b69f3', '#03ffff');
+  floor.append(mk('circle', { r: 60, fill: '#4b69f31a' }));
+})();
+
+/* ---------- character loading / switching ---------- */
+async function refreshViews() {
+  views = {};
+  if (hosted) { try { for (const it of await OSWClient.library.list({ type: 'view', character: slug })) views[it.view] = it; } catch (e) { /* the library may be unavailable */ } }
+  if (!resolve(VIEWS[idx])) { const first = ['right', 'left', 'front', 'back', ...VIEWS].find(v => resolve(v)); if (first) idx = VIEWS.indexOf(first); }
+  renderPips(); show();
+}
+function renderAll() { fillBound(); renderStats(); renderItems(); renderSpells(); renderTodo(); initView(); }
+async function listCharacters() {
+  const set = new Set([slug]);
+  if (hosted) {
+    try { (await OSWClient.library.character.list()).forEach(c => set.add(c)); } catch (e) { /* ignore */ }
+    try { (await OSWClient.library.list({ type: 'view' })).forEach(v => v.character && set.add(v.character)); } catch (e) { /* ignore */ }
+  } else { try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith('osw.cb.sheet.')) set.add(k.slice(13)); } } catch (e) { /* ignore */ } }
+  const sel = $('#charSel'); sel.textContent = '';
+  [...set].sort().forEach(c => sel.append(h('option', { value: c, text: c })));
+  sel.value = slug;
+}
+async function loadCharacter(next, name) {
+  if (saveTimer) await flush();
+  spin(false);
+  slug = next; pref.set('last', slug);
+  let data = null;
+  try { data = hosted ? await OSWClient.library.character.get(slug) : JSON.parse(localStorage.getItem('osw.cb.sheet.' + slug) || 'null'); } catch (e) { data = null; }
+  const isNew = !data;
+  sheet = normalise(data, slug);
+  if (isNew) { sheet = blankSheet(slug, name || (slug === 'nova' ? 'Nova' : slug.replace(/_/g, ' '))); }
+  renderAll(); setChip(hosted ? '' : 'local', hosted ? (isNew ? 'NEW' : 'SAVED') : 'LOCAL ONLY');
+  if (isNew) touch();
+  await listCharacters(); await refreshViews();
+}
+$('#charSel').addEventListener('change', e => loadCharacter(e.target.value));
+$('#newBtn').addEventListener('click', () => { const n = $('#newChar'); n.hidden = !n.hidden; if (!n.hidden) n.focus(); });
+$('#newChar').addEventListener('keydown', e => {
+  if (e.key === 'Escape') { e.target.hidden = true; return; }
+  if (e.key !== 'Enter') return;
+  const raw = e.target.value.trim(), s = slugOf(raw); if (!s) return;
+  e.target.value = ''; e.target.hidden = true; loadCharacter(s, raw);
+});
+if (hosted) OSWClient.on('library.changed', c => { if (c && (c.kind === 'root' || (c.id && String(c.id).startsWith(slug + '.')) || c.kind === 'adopted' || c.kind === 'removed')) refreshViews(); });
+
+setChip('local', 'LOADING');
+loadCharacter(slug);
+})();
+</script>
+</body>
+</html>

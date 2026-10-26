@@ -14,7 +14,10 @@
    OSWClient.library.update(id, {name, tags, meta})
    OSWClient.library.remove(id)
    OSWClient.library.scan()               -> { missing: [id], untracked: [{file,type,name}] }
-   OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root', id?})
+   OSWClient.library.character.list()     -> [character slug]           (FOLDERS UNDER library/characters/)
+   OSWClient.library.character.get(slug)  -> object | null              (characters/<slug>/character.json)
+   OSWClient.library.character.save(slug, object)                       (FREE-FORM JSON OBJECT, MAX 1 MB)
+   OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root'|'character', id?})
    OSWClient.off(name, fn)
 
    EVERY CALL RETURNS A PROMISE. ERRORS ARE Error OBJECTS WHOSE MESSAGE STARTS WITH A CODE ("NOT_PNG: ...",
@@ -65,6 +68,11 @@
       update: function (id, patch) { return request('library.update', { id: id, patch: patch }); },
       remove: function (id) { return request('library.remove', { id: id }); },
       scan: function () { return request('library.scan'); },
+      character: {
+        list: function () { return request('library.character.list'); },
+        get: function (slug) { return request('library.character.get', { character: slug }); },
+        save: function (slug, data) { return request('library.character.save', { character: slug, data: data }); },
+      },
     },
     on: function (name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
     off: function (name, fn) { listeners[name] = (listeners[name] || []).filter(function (f) { return f !== fn; }); },

@@ -12,11 +12,12 @@
       {
         "label": "main",
         "title": "Onion Studio Wizard",
-        "width": 1500,
+        "width": 1200,
         "height": 920,
         "minWidth": 1000,
         "minHeight": 640,
         "center": true,
+        "maximized": true,
         "decorations": false,
         "transparent": true,
         "dragDropEnabled": false

@@ -250,3 +250,25 @@ test('library works end to end on top of the tauri adapter (fake disk behind inv
   assert.equal((await lib.info()).itemCount, 1);
   assert.equal((await lib.scan()).untracked.length, 0);
 });
+
+test('character sheets: save, read back, list, and bad input is refused', async () => {
+  const { storage, lib } = fresh();
+  assert.deepEqual(await lib.listCharacters(), []);
+  assert.equal(await lib.readCharacter('nova'), null);
+  const seen = [];
+  lib.onChange((c) => seen.push(c));
+  await lib.saveCharacter('nova', { info: { name: 'Nova' }, todo: [{ text: 'idle', done: true }] });
+  await lib.save({ type: 'view', name: 'x', character: 'zed', view: 'front', bytes: png(8, 8) });
+  assert.deepEqual(await lib.listCharacters(), ['nova', 'zed']);
+  assert.deepEqual(await lib.readCharacter('nova'), { info: { name: 'Nova' }, todo: [{ text: 'idle', done: true }] });
+  assert.ok(storage.files.has('characters/nova/character.json'));
+  assert.deepEqual(seen[0], { kind: 'character', id: 'nova' });
+  await assert.rejects(lib.saveCharacter('Bad Name', {}), /BAD_CHARACTER/);
+  await assert.rejects(lib.saveCharacter('nova', [1, 2]), /BAD_DATA/);
+  await assert.rejects(lib.saveCharacter('nova', null), /BAD_DATA/);
+  await assert.rejects(lib.saveCharacter('nova', { big: 'x'.repeat(1100000) }), /1 MB/);
+  storage.files.set('characters/nova/character.json', { bytes: new TextEncoder().encode('{nope'), modified: 0 });
+  await assert.rejects(lib.readCharacter('nova'), /BAD_DATA/);
+  // THE IMAGE LIBRARY IGNORES THE JSON FILE
+  assert.deepEqual((await lib.scan()).untracked, []);
+});

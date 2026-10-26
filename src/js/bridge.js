@@ -32,6 +32,9 @@ export function createBridge({ library, frames }) {
     'library.update':    (a) => library.update(a.id, a.patch || {}),
     'library.remove':    (a) => library.remove(a.id),
     'library.scan':      () => library.scan(),
+    'library.character.list': () => library.listCharacters(),
+    'library.character.get':  (a) => library.readCharacter(a.character),
+    'library.character.save': (a) => library.saveCharacter(a.character, a.data),
   };
 
   const isToolWindow = (src) => { for (const f of frames.values()) if (f.contentWindow === src) return true; return false; };

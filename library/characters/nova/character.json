@@ -1,0 +1,88 @@
+{
+  "format": "osw-character",
+  "version": 1,
+  "id": "nova",
+  "info": {
+    "name": "Nova",
+    "title": "",
+    "class": "",
+    "race": "",
+    "alignment": "",
+    "level": "1",
+    "role": "",
+    "origin": "",
+    "notes": ""
+  },
+  "physics": [
+    {
+      "label": "Move speed",
+      "value": 240,
+      "unit": "px/s"
+    },
+    {
+      "label": "Jump force",
+      "value": 620,
+      "unit": "px/s"
+    },
+    {
+      "label": "Gravity",
+      "value": 1600,
+      "unit": "px/s²"
+    },
+    {
+      "label": "Max fall speed",
+      "value": 900,
+      "unit": "px/s"
+    },
+    {
+      "label": "Wall slide speed",
+      "value": 90,
+      "unit": "px/s"
+    },
+    {
+      "label": "Wall jump force",
+      "value": 520,
+      "unit": "px/s"
+    },
+    {
+      "label": "Air control",
+      "value": 0.8,
+      "unit": "×"
+    },
+    {
+      "label": "Coyote time",
+      "value": 90,
+      "unit": "ms"
+    },
+    {
+      "label": "New stat",
+      "value": 0,
+      "unit": ""
+    }
+  ],
+  "items": [],
+  "spells": [],
+  "todo": [
+    {
+      "text": "Jump",
+      "kind": "pose",
+      "done": false
+    },
+    {
+      "text": "Attack",
+      "kind": "pose",
+      "done": false
+    },
+    {
+      "text": "Spell",
+      "kind": "pose",
+      "done": false
+    }
+  ],
+  "view": {
+    "mirror": true,
+    "skipEmpty": true,
+    "speed": 1.2
+  },
+  "updated": "2026-10-26T02:42:15.669Z"
+}
