@@ -10,7 +10,7 @@ export const TOOLS = [
   { id: 'staticRig', group: 'RIG',       label: 'Static',  title: 'Static Rig',         icon: 'pose',  src: null },
   { id: 'vectors',   group: 'FX',        label: 'Spells',  title: 'Vector Spell Lab',   icon: 'spark', src: null },
   { id: 'cape',      group: 'FX',        label: 'Cape',    title: 'Cape Lab',           icon: 'cape',  src: null },
-  { id: 'tiles',     group: 'WORLD',     label: 'Tiles',   title: 'Tile Lab',           icon: 'grid',  src: null },
+  { id: 'tiles',     group: 'WORLD',     label: 'Tiles',   title: 'Tile Lab',           icon: 'grid',  src: 'tools/tileLab.html', status: '#status' },
   { id: 'play',      group: 'PLAY',      label: 'Play',    title: 'Sprite Playground',  icon: 'play',  src: 'tools/play.html' },
 ];
 

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">  <!-- OSW: RESOLVES assets/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TILE//LAB - Tile Lab</title>
+<style>
+:root{
+  --bg:#170032; --panel:#1d0340; --panel2:#37025a; --line:#830cde; --hi:#A55AFF;
+  --soft:#c4b5fd; --pink:#dc4ce8; --hot:#ff69b4; --cyan:#00ffff; --mint:#67FEBD;
+  --gold:#fecd39; --mute:#9090C0;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    repeating-linear-gradient(0deg,rgba(131,12,222,.05) 0 1px,transparent 1px 3px),
+    radial-gradient(1200px 700px at 30% -10%,#37025a 0%,#170032 55%,#0c001f 100%);
+  color:var(--soft);
+  font:13px/1.45 ui-monospace,"Cascadia Code",Consolas,Menlo,monospace;
+  display:flex;flex-direction:column;
+}
+header{
+  padding:10px 18px;border-bottom:1px solid var(--line);
+  display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  background:linear-gradient(90deg,rgba(131,12,222,.25),transparent);
+}
+h1{margin:0;font-size:20px;letter-spacing:.18em;color:var(--cyan);text-shadow:0 0 12px rgba(0,255,255,.55)}
+h1 span{color:var(--hot)}
+header p{margin:0;color:var(--mute);font-size:12px}
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:14px;padding:14px;min-height:0}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+#stage{
+  border:1px solid var(--line);border-radius:6px;background:#0c001f;
+  box-shadow:0 0 22px rgba(131,12,222,.45), inset 0 0 30px rgba(0,0,0,.6);
+  overflow:auto;position:relative;min-height:300px;
+}
+canvas#view{display:block;cursor:crosshair;touch-action:none}
+#status{
+  position:sticky;left:0;bottom:0;padding:5px 10px;font-size:12px;color:var(--mint);
+  background:rgba(12,0,31,.88);border-top:1px solid var(--line);
+}
+aside{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0}
+.box{border:1px solid var(--line);border-radius:6px;background:rgba(29,3,64,.85);padding:10px 12px}
+.box h2{margin:0 0 8px;font-size:11px;letter-spacing:.2em;color:var(--hot)}
+label.row{display:flex;align-items:center;gap:8px;margin:3px 0;cursor:pointer}
+input[type=checkbox],input[type=radio]{accent-color:#A55AFF}
+input[type=range]{width:100%;accent-color:#dc4ce8}
+.sl{display:flex;flex-direction:column;margin:6px 0}
+.sl b{font-weight:normal;color:var(--mute);font-size:11px;display:flex;justify-content:space-between}
+button{
+  background:#37025a;color:var(--cyan);border:1px solid var(--hi);border-radius:4px;
+  padding:5px 10px;font:inherit;cursor:pointer;margin:2px 4px 2px 0;
+}
+button:hover{background:#830cde;color:#fff}
+#pal{display:grid;grid-template-columns:repeat(5,1fr);gap:3px}
+#pal .t{
+  position:relative;aspect-ratio:1;border:1px solid #37025a;border-radius:3px;cursor:pointer;
+  background-repeat:no-repeat;image-rendering:auto;
+}
+#pal .t:hover{border-color:var(--cyan)}
+#pal .t.sel{border-color:var(--gold);box-shadow:0 0 8px var(--gold)}
+#pal .t i{
+  position:absolute;left:0;top:0;font-style:normal;font-size:10px;padding:0 3px;
+  background:rgba(12,0,31,.8);color:var(--cyan);
+}
+#pal .t em{
+  position:absolute;left:0;right:0;bottom:0;font-style:normal;font-size:8px;line-height:1.1;padding:1px 2px;
+  background:rgba(12,0,31,.82);color:var(--soft);text-align:center;overflow:hidden;white-space:nowrap;
+}
+.how code{color:var(--mint)}
+select{
+  width:100%;background:#37025a;color:var(--cyan);border:1px solid var(--hi);border-radius:4px;
+  padding:5px 6px;font:inherit;
+}
+.how p{margin:4px 0;color:var(--soft);font-size:12px}
+kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)}
+#toast{
+  position:fixed;right:18px;bottom:18px;background:#37025a;border:1px solid var(--mint);color:var(--mint);
+  padding:8px 14px;border-radius:4px;opacity:0;transition:opacity .25s;pointer-events:none;
+}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1>TILE<span>//</span>LAB</h1>
+  <p>TILESET TEST MAP — PAINT SOLID / AIR AND WATCH THE TILES PICK THEMSELVES</p>
+</header>
+<main>
+  <section id="stage">
+    <canvas id="view"></canvas>
+    <div id="status">LOADING…</div>
+  </section>
+  <aside>
+    <div class="box">
+      <h2>TILESET</h2>
+      <select id="setSel"></select>
+      <div id="setInfo" style="color:var(--mute);font-size:11px;margin-top:6px"></div>
+    </div>
+    <div class="box">
+      <h2>TOOL</h2>
+      <label class="row"><input type="radio" name="tool" value="solid" checked> PAINT SOLID (autotiles)</label>
+      <label class="row"><input type="radio" name="tool" value="air"> PAINT AIR (autotiles)</label>
+      <label class="row"><input type="radio" name="tool" value="ledge"> PAINT THIN LEDGE</label>
+      <label class="row"><input type="radio" name="tool" value="stamp"> STAMP SELECTED TILE</label>
+      <label class="row"><input type="radio" name="tool" value="auto"> RESET CELL TO AUTO (PEN ERASER)</label>
+      <label class="row" style="margin-left:22px"><input type="checkbox" id="flip"> FLIP HORIZONTALLY</label>
+      <div style="color:var(--mute);font-size:11px;margin-top:4px">DRAG PAINTS · RIGHT-CLICK (OR THE RESET TOOL) RESETS A CELL TO AUTO · EDITS AUTOSAVE</div>
+    </div>
+    <div class="box">
+      <h2>TILESET (CLICK TO SELECT)</h2>
+      <div id="pal"></div>
+      <div style="color:var(--mute);font-size:11px;margin-top:6px">NUMBER = TILE INDEX. LABEL = WHAT I GUESSED IT IS — TELL ME WHERE I'M WRONG.</div>
+    </div>
+    <div class="box">
+      <h2>VIEW</h2>
+      <label class="row"><input type="checkbox" id="oGrid"> GRID <kbd>G</kbd></label>
+      <label class="row"><input type="checkbox" id="oIds"> TILE INDICES <kbd>I</kbd></label>
+      <label class="row"><input type="checkbox" id="oBack" checked> BACK WALL <kbd>B</kbd></label>
+      <label class="row"><input type="checkbox" id="oDecor" checked> DECOR <kbd>D</kbd></label>
+      <label class="row"><input type="checkbox" id="oLight" checked> LIGHTING <kbd>L</kbd></label>
+      <label class="row"><input type="checkbox" id="oAnim" checked> ANIMATE <kbd>SPACE</kbd></label>
+      <div class="sl"><b><span>ZOOM</span><span id="vZoom"></span></b><input type="range" id="zoom" min="10" max="150" value="55"></div>
+      <div class="sl"><b><span>EDGE INSET (SEAM FIX)</span><span id="vInset"></span></b><input type="range" id="inset" min="0" max="10" value="4"></div>
+      <div class="sl"><b><span>DARKNESS</span><span id="vAmb"></span></b><input type="range" id="amb" min="0" max="90" value="45"></div>
+      <button id="bFit">FIT</button><button id="bReset">RESET MAP</button><button id="bCopy">COPY MAP JSON</button><button id="bSave">SAVE MAP FILE</button><button id="bLoad">LOAD MAP FILE</button><input type="file" id="fLoad" accept=".json,application/json" hidden>
+    </div>
+    <div class="box how">
+      <h2>HOW A TILESET WORKS</h2>
+      <p id="hw1"></p>
+      <p id="hw2"></p>
+      <p>THE MAP ITSELF IS JUST A GRID OF NUMBERS. LEFT-SIDE WALLS ARE THE RIGHT-SIDE ONES FLIPPED, SO YOU ONLY DRAW ONE.</p>
+    </div>
+  </aside>
+</main>
+<div id="toast"></div>
+
+<script>
+'use strict';
+// =====================================================================
+// CONFIG — EDIT THESE
+// =====================================================================
+const MAP_DIR = 'assets/images/map/';
+// EACH TILESET = ONE PNG (A 5×5 GRID) + THE LAYOUT (WHAT EACH SLOT MEANS) IT FOLLOWS.
+// srcs ARE TRIED IN ORDER. THE FIRST TILESET IN THE LIST IS THE DEFAULT.
+const TILESETS = [
+  {id:'basic', name:'BASIC TILESET', layout:'template', srcs:[MAP_DIR + 'basic_tileset.png']},
+  {id:'first', name:'FIRST TEST SHEET (OLD LAYOUT)', layout:'legacy', srcs:[MAP_DIR + 'tileset_test.png', MAP_DIR + 'sprite_01 (17).png']},
+];
+const SHEET_COLS = 5;
+let   TILE = 100;                 // SOURCE CELL SIZE IN PX (RE-READ FROM IMAGE ON LOAD)
+
+// MAP SHAPE: '#' SOLID, '.' AIR, '=' THIN LEDGE (ONE-WAY PLATFORM)
+const MASK0 = [
+  '########################',
+  '########################',
+  '##.......###.....#######',
+  '##.......##.......######',
+  '##........#...........##',
+  '##....................##',
+  '##....................##',
+  '##....####............##',
+  '##...............####.##',
+  '#######...........###.##',
+  '#######...............##',
+  '########################',
+  '########################',
+  '########################',
+];
+let COLS = MASK0[0].length, ROWS = MASK0.length;
+
+// A LEDGE ROW (NOT SOLID) — PAINTED INTO MASK AT LOAD
+const LEDGES0 = [[18,5],[19,5],[20,5],[21,5]];
+
+// LAYOUTS: WHAT EACH OF THE 25 SLOTS MEANS + HOW THE AUTOTILER PICKS THEM.
+//   roles    SHORT LABELS FOR THE PALETTE
+//   air/back SLOTS USED FOR EMPTY CELLS / THE BACK WALL
+//   inset    DEFAULT EDGE CROP (SOURCE PX) — 0 SHOWS THE TRUE ALIGNMENT
+//   backDim  DARKENING OVER THE BACK WALL (0..1)
+//   view     DEFAULT TOGGLES (FOR CHECKING TILES, DECOR + LIGHTING ARE OFF)
+//   carve    CELLS TURNED INTO AIR AT LOAD (A PIT THAT USES EVERY CORNER TYPE)
+//   overrides  CELLS THAT BYPASS THE AUTOTILER: [x,y,tile,flip]
+const LAYOUTS = {
+  template: {
+    // MATCHES tileset_template.png
+    roles:[
+      'FILL A','FILL B','FILL C','BACK A','BACK B',
+      'FLOOR A','FLOOR B','CEIL A','CEIL B','AIR',
+      'WALL A','WALL B','OUTER 1','OUTER 2','INNER 1',
+      'INNER 2','PLAT MID','PLAT END','LEDGE MID','LEDGE END',
+      'ACCENT A','ACCENT B','TRIM A','TRIM B','SPARE',
+    ],
+    air:[9], back:[3,4], inset:0, backDim:0,
+    view:{decor:false, light:false}, selTile:5,
+    carve:[[12,11],[13,11],[14,11],[15,11]], overrides:[],
+    auto: (x,y) => autoTileTemplate(x,y),
+    info:'SLOTS FOLLOW tileset_template.png',
+  },
+  legacy: {
+    // THE FIRST 500×500 TEST SHEET
+    roles:[
+      'CEIL','CEIL','CEIL','WALL','AIR',
+      'LEDGE','LEDGE','LEDGE','WALL','AIR',
+      'FILL','FILL','FILL','CORNER','CORNER',
+      'FLOOR','FLOOR-C','POOL-END','POOL','BACKWALL',
+      'TRIM','TRIM','FLOOR-2','FLOOR-2','BACKWALL',
+    ],
+    air:[4,4,4,4,9], back:[19,24,24], inset:4, backDim:.66,
+    view:{decor:true, light:true}, selTile:16,
+    carve:[], overrides:[[12,11,17,false],[13,11,18,false],[14,11,18,false],[15,11,17,true]],   // POOL
+    auto: (x,y) => autoTileLegacy(x,y),
+    info:'MY GUESSES AT THE OLD SHEET’S SLOTS',
+  },
+};
+
+// DECOR (POSITIONS IN TILE UNITS)
+const COLUMNS = [{x:4,y0:2,y1:8},{x:11,y0:2,y1:10},{x:16,y0:2,y1:10}]; // ROWS INCLUSIVE
+const TORCHES = [
+  {x:2.5, y:9,  flame:'blue',   ph:0},
+  {x:7.6, y:11, flame:'orange', ph:2},
+  {x:21.0,y:11, flame:'blue',   ph:4},
+];
+const CRYSTALS = [
+  {kind:'cluster', x:9.4,  y:11,   s:0.85},
+  {kind:'cluster', x:19.4, y:11,   s:0.7},
+  {kind:'big',     x:18.6, y:11,   s:0.19},
+  {kind:'hang',    x:14.2, y:2,    s:0.6},
+  {kind:'float',   x:13.5, y:7.6,  s:0.27},
+];
+const PILLAR_BAND = {x0:7, x1:21, y:9};   // BACK-WALL PANELS (2 TILES TALL)
+const BACKWALL_RECT = {x0:2, y0:2, x1:21, y1:10};
+
+// =====================================================================
+// STATE
+// =====================================================================
+const $ = id => document.getElementById(id);
+const cv = $('view'), ctx = cv.getContext('2d');
+const baked = document.createElement('canvas');
+const lightC = document.createElement('canvas');
+let mask = [], over = new Map();
+let tileImg = null, tileURL = '', LAYOUT = null, CUR = null;
+const IMG = {};
+const opts = {grid:false, ids:false, back:true, decor:true, light:true, anim:true, zoom:.55, inset:4, amb:.45};
+let tool = 'solid', selTile = 16, TS = 55, U = .55, DPR = 1, dirty = true, hover = null;
+
+function loadImg(src){
+  return new Promise((res,rej)=>{ const i = new Image(); i.onload=()=>res(i); i.onerror=()=>rej(src); i.src = src; });
+}
+async function loadTileset(ts){
+  for(const s of ts.srcs){ try{ const i = await loadImg(s); tileURL = s; return i; }catch(e){} }
+  return null;
+}
+const DECOR_FILES = {
+  column:'column.png', pillars:'pillars.png', torch:'torch.png', flameB:'flame.png', flameO:'flameOrange.png',
+  c1:'crystal1.png', c2:'crystal2.png', c3:'crystal3.png',
+};
+
+// =====================================================================
+// MAP DATA + AUTOTILER
+// =====================================================================
+function resetMap(){
+  COLS = MASK0[0].length; ROWS = MASK0.length;
+  mask = MASK0.map(r => r.split(''));
+  for(const [x,y] of LEDGES0) mask[y][x] = '=';
+  for(const [x,y] of LAYOUT.carve) mask[y][x] = '.';
+  over = new Map();
+  for(const [x,y,i,fx] of LAYOUT.overrides) over.set(x+','+y, {i, fx});
+  dirty = true;
+}
+function kind(x,y){ if(x<0||y<0||x>=COLS||y>=ROWS) return '#'; return mask[y][x]; }
+const isAir = (x,y) => kind(x,y) !== '#';
+function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 1274126177 | 0; return (h ^ (h>>>16))>>>0; }
+const pick = (a,x,y) => a[hash(x,y) % a.length];
+
+const autoTile = (x,y) => LAYOUT.auto(x,y);
+
+// AUTOTILER FOR THE TEMPLATE LAYOUT (tileset_template.png).
+// IT LOOKS AT WHICH NEIGHBOURS ARE AIR AND PICKS A SLOT. "fx" = FLIP HORIZONTALLY.
+function autoTileTemplate(x,y){
+  const k = kind(x,y);
+  if(k === '='){            // THIN LEDGE: END CAP WHERE THE NEXT CELL ISN'T A LEDGE
+    const l = kind(x-1,y) === '=', r = kind(x+1,y) === '=';
+    if(l && r) return {i:18, fx:false};
+    if(l && !r) return {i:19, fx:true};
+    return {i:19, fx:false};
+  }
+  const U_ = isAir(x,y-1), D = isAir(x,y+1), L = isAir(x-1,y), R = isAir(x+1,y);
+  if(U_ && D){              // PLATFORM: AIR ABOVE AND BELOW
+    if(L) return {i:17, fx:false};
+    if(R) return {i:17, fx:true};
+    return {i:16, fx:false};
+  }
+  // OUTER CORNERS (AIR ON TWO SIDES)
+  if(U_ && L) return {i:12, fx:false};
+  if(U_ && R) return {i:12, fx:true};
+  if(D && L)  return {i:13, fx:false};
+  if(D && R)  return {i:13, fx:true};
+  // EDGES (AIR ON ONE SIDE)
+  if(U_) return {i:pick([5,6],x,y), fx:false};
+  if(D)  return {i:pick([7,8],x,y), fx:false};
+  if(L)  return {i:pick([10,11],x,y), fx:false};
+  if(R)  return {i:pick([10,11],x,y), fx:true};
+  // INNER CORNERS (ONLY A DIAGONAL NEIGHBOUR IS AIR)
+  if(isAir(x-1,y-1)) return {i:14, fx:false};
+  if(isAir(x+1,y-1)) return {i:14, fx:true};
+  if(isAir(x-1,y+1)) return {i:15, fx:false};
+  if(isAir(x+1,y+1)) return {i:15, fx:true};
+  // DEEP INSIDE THE ROCK
+  if(y === ROWS-1) return {i:pick([22,23],x,y), fx:false};      // MAP BOTTOM EDGE
+  if(hash(x+101,y*5+17) % 19 === 0) return {i:pick([20,21],x,y), fx:false};   // RARE RUNE TILE
+  return {i:pick([0,1,2],x,y), fx:false};
+}
+
+// AUTOTILER FOR THE FIRST TEST SHEET (OLD LAYOUT, KEPT FOR COMPARISON)
+function autoTileLegacy(x,y){
+  const k = kind(x,y);
+  if(k === '=') return {i:pick([5,6,7],x,y), fx:false};
+  const U_ = isAir(x,y-1), D = isAir(x,y+1), L = isAir(x-1,y), R = isAir(x+1,y);
+  // THIN SLAB (AIR ABOVE AND BELOW)
+  if(U_ && D){
+    if(L && !R) return {i:16, fx:true};
+    if(R && !L) return {i:16, fx:false};
+    return {i:pick([22,23],x,y), fx:false};
+  }
+  // CORNERS
+  if(D && L) return {i:pick([13,14],x,y), fx:false};
+  if(D && R) return {i:pick([13,14],x,y), fx:true};
+  if(U_ && R) return {i:16, fx:false};
+  if(U_ && L) return {i:16, fx:true};
+  // EDGES
+  if(D) return {i:pick([0,1,2],x,y), fx:false};
+  if(U_) return {i:pick([15,15,15,22,23],x,y), fx:false};
+  if(L) return {i:pick([3,8],x,y), fx:false};   // LIT EDGE ON LEFT
+  if(R) return {i:pick([3,8],x,y), fx:true};    // LIT EDGE ON RIGHT (FLIPPED)
+  // INTERIOR
+  if(y === ROWS-1) return {i:pick([20,21],x,y), fx:false};
+  return {i:pick([10,11,12],x,y), fx:false};
+}
+function tileAt(x,y){
+  const o = over.get(x+','+y); if(o) return {...o, ov:true};
+  if(kind(x,y) === '.') return null;
+  return autoTile(x,y);
+}
+
+// =====================================================================
+// DRAWING
+// =====================================================================
+function drawTile(c,i,fx,dx,dy,ts,inset){
+  const sx = (i % SHEET_COLS) * TILE + inset, sy = Math.floor(i / SHEET_COLS) * TILE + inset, sw = TILE - inset*2;
+  if(fx){ c.save(); c.translate(dx+ts,dy); c.scale(-1,1); c.drawImage(tileImg,sx,sy,sw,sw,0,0,ts,ts); c.restore(); }
+  else c.drawImage(tileImg,sx,sy,sw,sw,dx,dy,ts,ts);
+}
+// DRAW A SPRITE CROP, SCALE IN SOURCE-PX → TILE-SOURCE-PX, ANCHORED AT (cx,ay) IN TILE UNITS
+function sprite(c,im,crop,cx,ay,s,anchor,o={}){
+  const [sx,sy,sw,sh] = crop, w = sw*s*U, h = sh*s*U;
+  c.save();
+  if(o.alpha != null) c.globalAlpha = o.alpha;
+  c.translate(cx*TS, ay*TS);
+  if(o.rot) c.rotate(o.rot);
+  if(o.flipY) c.scale(1,-1);
+  const oy = anchor === 'bottom' ? -h : anchor === 'center' ? -h/2 : 0;
+  c.drawImage(im,sx,sy,sw,sh,-w/2,oy,w,h);
+  c.restore();
+}
+const CROP = {
+  c1:[402,167,226,512], c2:[266,148,516,690], c3:[20,77,161,123], torch:[0,0,83,310],
+};
+
+function bake(){
+  const W = COLS*TS, H = ROWS*TS;
+  baked.width = W; baked.height = H;
+  const c = baked.getContext('2d'); c.imageSmoothingQuality = 'high';
+  c.fillStyle = '#0b0220'; c.fillRect(0,0,W,H);
+  const ins = opts.inset;
+  // AIR
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+    if(kind(x,y) === '#' || over.has(x+','+y)) continue;
+    drawTile(c, pick(LAYOUT.air,x,y), false, x*TS, y*TS, TS, ins);
+  }
+  // BACK WALL (MASONRY, DIMMED)
+  if(opts.back){
+    const B = BACKWALL_RECT;
+    for(let y=B.y0;y<=B.y1;y++) for(let x=B.x0;x<=B.x1;x++){
+      if(kind(x,y) === '#') continue;
+      drawTile(c, pick(LAYOUT.back,x,y), false, x*TS, y*TS, TS, ins);
+    }
+    if(LAYOUT.backDim > 0){
+      c.fillStyle = `rgba(14,0,34,${LAYOUT.backDim})`;
+      for(let y=B.y0;y<=B.y1;y++) for(let x=B.x0;x<=B.x1;x++) if(kind(x,y) !== '#') c.fillRect(x*TS,y*TS,TS,TS);
+    }
+    if(IMG.pillars && opts.decor){
+      c.globalAlpha = .75;
+      for(let x=PILLAR_BAND.x0;x<=PILLAR_BAND.x1;x++){
+        const f = pick([0,1,2,3,1,2],x,0);
+        c.drawImage(IMG.pillars, f*40,0,40,80, x*TS, PILLAR_BAND.y*TS, TS, TS*2);
+      }
+      c.globalAlpha = 1;
+    }
+  }
+  // SOLIDS, LEDGES, OVERRIDES
+  for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+    const t = tileAt(x,y); if(!t) continue;
+    drawTile(c, t.i, t.fx, x*TS, y*TS, TS, ins);
+  }
+  // STATIC DECOR
+  if(opts.decor){
+    // COLUMNS: CAP, SHAFTS, BASE (7 FRAMES OF 50x50 IN column.png)
+    if(IMG.column) for(const col of COLUMNS) for(let y=col.y0;y<=col.y1;y++){
+      const f = y === col.y0 ? 0 : y === col.y1 ? 6 : pick([1,1,2,3,4,5],col.x,y);
+      c.drawImage(IMG.column, f*50,0,50,50, col.x*TS, y*TS, TS, TS);
+    }
+    for(const t of TORCHES) if(IMG.torch) sprite(c,IMG.torch,CROP.torch,t.x,t.y,.5,'bottom');
+    for(const k of CRYSTALS){
+      if(k.kind === 'cluster' && IMG.c3) sprite(c,IMG.c3,CROP.c3,k.x,k.y+.03,k.s,'bottom');
+      if(k.kind === 'big' && IMG.c2) sprite(c,IMG.c2,CROP.c2,k.x,k.y+.03,k.s,'bottom');
+      if(k.kind === 'hang' && IMG.c3) sprite(c,IMG.c3,CROP.c3,k.x,k.y-.03,k.s,'bottom',{flipY:true});
+    }
+  }
+}
+
+// GLOW SPRITES (PRE-RENDERED ONCE, NO shadowBlur)
+function makeGlow(r,g,b){
+  const s = document.createElement('canvas'); s.width = s.height = 128;
+  const x = s.getContext('2d'), gr = x.createRadialGradient(64,64,0,64,64,64);
+  gr.addColorStop(0,`rgba(${r},${g},${b},1)`); gr.addColorStop(.35,`rgba(${r},${g},${b},.42)`); gr.addColorStop(1,`rgba(${r},${g},${b},0)`);
+  x.fillStyle = gr; x.fillRect(0,0,128,128); return s;
+}
+const GLOW = { cyan:makeGlow(0,255,255), orange:makeGlow(255,140,40), violet:makeGlow(165,90,255), white:makeGlow(255,255,255) };
+
+function lights(t){
+  const L = [];
+  for(const k of TORCHES){
+    const fl = .88 + .12*Math.sin(t*9 + k.ph) + .06*Math.sin(t*23 + k.ph*2);
+    L.push({x:k.x, y:k.y - 1.6, r:3.4*fl, g:k.flame === 'blue' ? 'cyan' : 'orange', a:.42});
+  }
+  for(const k of CRYSTALS){
+    const p = .85 + .15*Math.sin(t*2 + k.x);
+    if(k.kind === 'cluster') L.push({x:k.x, y:k.y-.55, r:1.9*p, g:'violet', a:.4});
+    if(k.kind === 'big')     L.push({x:k.x, y:k.y-.7,  r:2.3*p, g:'cyan',   a:.4});
+    if(k.kind === 'hang')    L.push({x:k.x, y:k.y+.5,  r:1.8*p, g:'violet', a:.35});
+    if(k.kind === 'float')   L.push({x:k.x, y:k.y+bob(t,k)-.7, r:3.0*p, g:'cyan', a:.5});
+  }
+  return L;
+}
+const bob = (t,k) => Math.sin(t*1.6)*.14;
+
+function frame(t){
+  const W = COLS*TS, H = ROWS*TS;
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(baked,0,0);
+  if(opts.decor){
+    // ANIMATED FLAMES
+    for(const k of TORCHES){
+      const im = k.flame === 'blue' ? IMG.flameB : IMG.flameO; if(!im) continue;
+      const f = Math.floor(t*11 + k.ph) % 6;
+      ctx.globalCompositeOperation = 'lighter';
+      // FLAME ART CENTRE IS ABOUT (200,235) IN ITS 400x400 FRAME
+      const s = .27, w = 400*s*U, cx = k.x*TS, cy = (k.y-1.5)*TS;
+      ctx.drawImage(im, f*400,0,400,400, cx - w*.5, cy - w*.5 - w*.05, w, w);
+      ctx.globalCompositeOperation = 'source-over';
+    }
+    // FLOATING DIAMOND
+    const fk = CRYSTALS.find(k => k.kind === 'float');
+    if(fk && IMG.c1) sprite(ctx,IMG.c1,CROP.c1,fk.x,fk.y+bob(t,fk),fk.s,'center');
+  }
+  if(opts.light){
+    const lc = lightC; if(lc.width !== W || lc.height !== H){ lc.width = W; lc.height = H; }
+    const l = lc.getContext('2d');
+    l.globalCompositeOperation = 'source-over';
+    l.clearRect(0,0,W,H);
+    l.fillStyle = `rgba(8,0,26,${opts.amb})`; l.fillRect(0,0,W,H);
+    l.globalCompositeOperation = 'destination-out';
+    const Ls = lights(t);
+    for(const o of Ls){ const d = o.r*TS*2; l.globalAlpha = Math.min(1,o.a*2); l.drawImage(GLOW.white, o.x*TS - d/2, o.y*TS - d/2, d, d); }
+    l.globalAlpha = 1;
+    ctx.drawImage(lc,0,0);
+    ctx.globalCompositeOperation = 'lighter';
+    for(const o of Ls){ const d = o.r*TS*2; ctx.globalAlpha = o.a*.55; ctx.drawImage(GLOW[o.g], o.x*TS - d/2, o.y*TS - d/2, d, d); }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+  }
+  // OVERLAYS
+  if(opts.grid){
+    ctx.strokeStyle = 'rgba(0,255,255,.28)'; ctx.lineWidth = 1; ctx.beginPath();
+    for(let x=0;x<=COLS;x++){ ctx.moveTo(x*TS+.5,0); ctx.lineTo(x*TS+.5,H); }
+    for(let y=0;y<=ROWS;y++){ ctx.moveTo(0,y*TS+.5); ctx.lineTo(W,y*TS+.5); }
+    ctx.stroke();
+  }
+  if(opts.ids){
+    ctx.font = `${Math.max(9,Math.round(TS*.2))}px ui-monospace,Consolas,monospace`; ctx.textBaseline = 'top';
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+      const t_ = tileAt(x,y); if(!t_) continue;
+      const s = t_.i + (t_.fx ? '↔' : '');
+      ctx.lineWidth = 3; ctx.strokeStyle = '#0c001f'; ctx.strokeText(s, x*TS+3, y*TS+2);
+      ctx.fillStyle = t_.ov ? '#fecd39' : '#00ffff'; ctx.fillText(s, x*TS+3, y*TS+2);
+    }
+  }
+  if(hover){
+    ctx.strokeStyle = '#fecd39'; ctx.lineWidth = 2; ctx.strokeRect(hover.x*TS+1, hover.y*TS+1, TS-2, TS-2);
+  }
+}
+
+let last = 0;
+function loop(ms){
+  requestAnimationFrame(loop);
+  if(!tileImg) return;
+  if(dirty){ bake(); }
+  if(opts.anim || dirty){ frame(ms/1000); dirty = false; }
+}
+
+// =====================================================================
+// SIZING
+// =====================================================================
+function applyZoom(){
+  DPR = window.devicePixelRatio || 1;
+  TS = Math.max(8, Math.round(TILE * opts.zoom * DPR));
+  U = TS / TILE;
+  cv.width = COLS*TS; cv.height = ROWS*TS;
+  cv.style.width = (cv.width/DPR) + 'px'; cv.style.height = (cv.height/DPR) + 'px';
+  ctx.imageSmoothingQuality = 'high';
+  $('vZoom').textContent = Math.round(opts.zoom*100) + '%';
+  dirty = true;
+}
+function fit(){
+  const st = $('stage'); const w = st.clientWidth - 2;
+  opts.zoom = Math.max(.1, Math.min(1.5, w / (COLS*TILE)));
+  $('zoom').value = Math.round(opts.zoom*100);
+  applyZoom();
+}
+
+// =====================================================================
+// INPUT
+// =====================================================================
+function cellFrom(e){
+  const r = cv.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) / (r.width / COLS)), y = Math.floor((e.clientY - r.top) / (r.height / ROWS));
+  if(x<0||y<0||x>=COLS||y>=ROWS) return null; return {x,y};
+}
+function paint(c,btn){
+  if(!c) return;
+  const key = c.x+','+c.y;
+  if(btn === 2 || tool === 'auto'){ over.delete(key); }
+  else if(tool === 'solid'){ mask[c.y][c.x] = '#'; over.delete(key); }
+  else if(tool === 'air'){ mask[c.y][c.x] = '.'; over.delete(key); }
+  else if(tool === 'ledge'){ mask[c.y][c.x] = '='; over.delete(key); }
+  else if(tool === 'stamp'){ over.set(key, {i:selTile, fx:$('flip').checked}); if(mask[c.y][c.x] === '.') mask[c.y][c.x] = '#'; }
+  dirty = true; saveSoon();
+}
+let drawing = false;
+cv.addEventListener('contextmenu', e => e.preventDefault());
+cv.addEventListener('pointerdown', e => { drawing = true; cv.setPointerCapture(e.pointerId); paint(cellFrom(e), e.button); });
+cv.addEventListener('pointerup', () => drawing = false);
+cv.addEventListener('pointermove', e => {
+  const c = cellFrom(e); hover = c; dirty = true;
+  if(c){
+    const t = tileAt(c.x,c.y), k = kind(c.x,c.y);
+    const desc = t ? `TILE ${t.i} (r${Math.floor(t.i/SHEET_COLS)}c${t.i%SHEET_COLS}) ${LAYOUT.roles[t.i]}${t.fx?' · FLIPPED':''}${t.ov?' · STAMPED':' · AUTO'}` : 'AIR';
+    $('status').textContent = `CELL ${c.x},${c.y} · ${k === '#' ? 'SOLID' : k === '=' ? 'LEDGE' : 'EMPTY'} · ${desc}`;
+  }
+  if(drawing) paint(c, e.buttons & 2 ? 2 : 0);
+});
+cv.addEventListener('pointerleave', () => { hover = null; dirty = true; });
+
+document.querySelectorAll('input[name=tool]').forEach(r => r.addEventListener('change', () => tool = r.value));
+const bind = (id,key) => $(id).addEventListener('change', e => { opts[key] = e.target.checked; dirty = true; });
+bind('oGrid','grid'); bind('oIds','ids'); bind('oBack','back'); bind('oDecor','decor'); bind('oLight','light'); bind('oAnim','anim');
+$('zoom').addEventListener('input', e => { opts.zoom = e.target.value/100; applyZoom(); });
+$('inset').addEventListener('input', e => { opts.inset = +e.target.value; $('vInset').textContent = opts.inset + 'px'; dirty = true; });
+$('amb').addEventListener('input', e => { opts.amb = e.target.value/100; $('vAmb').textContent = e.target.value + '%'; dirty = true; });
+$('bFit').onclick = fit;
+$('bReset').onclick = () => { resetMap(); applyZoom(); fit(); const o = readSaves(); delete o[CUR.id]; writeSaves(o); toast('MAP RESET'); };
+$('bCopy').onclick = () => {
+  const json = JSON.stringify(mapObject());
+  (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(() => toast('MAP JSON COPIED'), () => {
+    const ta = document.createElement('textarea'); ta.value = json; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand('copy'); toast('MAP JSON COPIED'); }catch(e){ toast('COPY FAILED'); } ta.remove();
+  });
+};
+function toast(s){ const t = $('toast'); t.textContent = s; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 1400); }
+const chk = (id,key) => { opts[key] = !opts[key]; $(id).checked = opts[key]; dirty = true; };
+addEventListener('keydown', e => {
+  if(e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'radio') return;
+  const k = e.key.toLowerCase();
+  if(k === 'g') chk('oGrid','grid'); else if(k === 'i') chk('oIds','ids'); else if(k === 'b') chk('oBack','back');
+  else if(k === 'd') chk('oDecor','decor'); else if(k === 'l') chk('oLight','light');
+  else if(e.key === ' '){ e.preventDefault(); chk('oAnim','anim'); }
+});
+addEventListener('resize', () => { applyZoom(); });
+
+// =====================================================================
+// SAVE / LOAD (AUTOSAVE PER TILESET IN localStorage, PLUS MAP FILES)
+// =====================================================================
+const SAVE_KEY = 'tileLabMaps_v1';
+function mapObject(){
+  const o = [...over].map(([k,v]) => { const [x,y] = k.split(',').map(Number); return [x,y,v.i,v.fx]; });
+  return {format:'osw-tilemap', version:1, tileset:CUR.id, cols:COLS, rows:ROWS, mask:mask.map(r => r.join('')), overrides:o};
+}
+function applyMapObject(m){   // -> true IF IT LOOKED LIKE A MAP
+  if(!m || !Array.isArray(m.mask) || m.mask.length < 2 || m.mask.length > 200) return false;
+  const w = m.mask[0].length; if(w < 2 || w > 200 || m.mask.some(r => typeof r !== 'string' || r.length !== w || /[^#.=]/.test(r))) return false;
+  mask = m.mask.map(r => r.split('')); ROWS = mask.length; COLS = w;
+  over = new Map(); for(const e of (Array.isArray(m.overrides) ? m.overrides : [])){ const [x,y,i,fx] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && i>=0 && i<25) over.set(x+','+y, {i, fx:!!fx}); }
+  dirty = true; return true;
+}
+function readSaves(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; }catch(e){ return {}; } }
+function writeSaves(o){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(o)); }catch(e){ /* STORAGE CAN BE UNAVAILABLE */ } }
+let saveT = 0;
+function saveSoon(){ clearTimeout(saveT); saveT = setTimeout(() => { if(!CUR) return; const o = readSaves(); o[CUR.id] = mapObject(); writeSaves(o); }, 400); }
+function restoreSaved(){ const m = readSaves()[CUR.id]; if(m && applyMapObject(m)) applyZoom(); }
+function download(name, text){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], {type:'application/json'})); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+$('bSave').onclick = () => { download('tilemap_' + CUR.id + '.json', JSON.stringify(mapObject())); toast('MAP FILE SAVED'); };
+$('bLoad').onclick = () => $('fLoad').click();
+$('fLoad').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if(!f) return;
+  try{ const m = JSON.parse(await f.text()); if(applyMapObject(m)){ applyZoom(); fit(); saveSoon(); toast('MAP LOADED'); } else toast('NOT A TILE LAB MAP'); }
+  catch(err){ toast('COULD NOT READ THAT FILE'); }
+};
+
+// =====================================================================
+// PALETTE UI
+// =====================================================================
+function buildPalette(){
+  const pal = $('pal'); pal.innerHTML = '';
+  const px = 52;
+  for(let i=0;i<25;i++){
+    const d = document.createElement('div'); d.className = 't' + (i === selTile ? ' sel' : '');
+    d.style.backgroundImage = `url("${encodeURI(tileURL)}")`;
+    d.style.backgroundSize = '500% 500%';
+    d.style.backgroundPosition = `${(i%5)*25}% ${Math.floor(i/5)*25}%`;
+    d.innerHTML = `<i>${i}</i><em>${LAYOUT.roles[i]}</em>`;
+    d.title = `TILE ${i} · r${Math.floor(i/5)}c${i%5} · ${LAYOUT.roles[i]}`;
+    d.onclick = () => {
+      selTile = i; document.querySelectorAll('#pal .t').forEach(n => n.classList.remove('sel')); d.classList.add('sel');
+      document.querySelector('input[name=tool][value=stamp]').checked = true; tool = 'stamp';
+    };
+    pal.appendChild(d);
+  }
+}
+
+// =====================================================================
+// BOOT
+// =====================================================================
+// SWITCH TO A TILESET: LOAD ITS PNG, APPLY ITS LAYOUT + DEFAULT VIEW, REBUILD EVERYTHING
+async function useTileset(ts){
+  const img = await loadTileset(ts);
+  if(!img){
+    $('status').textContent = 'COULD NOT LOAD ' + ts.srcs.join(' OR ') + ' — PUT THIS FILE NEXT TO index.html SO THE assets/ FOLDER LINES UP.';
+    return false;
+  }
+  tileImg = img; CUR = ts; LAYOUT = LAYOUTS[ts.layout];
+  TILE = Math.round(img.naturalWidth / SHEET_COLS);
+  opts.inset = LAYOUT.inset; $('inset').value = opts.inset; $('vInset').textContent = opts.inset + 'px';
+  for(const [k,id] of [['decor','oDecor'],['light','oLight']]){ opts[k] = LAYOUT.view[k]; $(id).checked = opts[k]; }
+  selTile = LAYOUT.selTile;
+  $('setInfo').textContent = `${img.naturalWidth}×${img.naturalHeight}px · ${TILE}px CELLS · ${LAYOUT.info}`;
+  $('hw1').innerHTML = `THE PNG IS A 5×5 GRID OF <b>${TILE}px</b> CELLS. TILE NUMBER <code>i</code> = <code>row*5 + col</code>.`;
+  $('hw2').innerHTML = `TO DRAW IT: <code>sx=(i%5)*${TILE}, sy=floor(i/5)*${TILE}</code>, THEN COPY THAT ${TILE}×${TILE} SQUARE TO <code>(x*size, y*size)</code>.`;
+  resetMap(); restoreSaved(); buildPalette(); fit();
+  return true;
+}
+
+(async function(){
+  $('vAmb').textContent = Math.round(opts.amb*100) + '%';
+  const sel = $('setSel');
+  TILESETS.forEach((t,i) => { const o = document.createElement('option'); o.value = i; o.textContent = t.name; sel.appendChild(o); });
+  sel.addEventListener('change', async () => { if(await useTileset(TILESETS[+sel.value])) toast('SWITCHED TILESET'); });
+  // DECOR IMAGES (SEPARATE FILES: COLUMNS, TORCHES, FLAMES, CRYSTALS)
+  await Promise.all(Object.entries(DECOR_FILES).map(([k,f]) => loadImg(MAP_DIR + f).then(i => IMG[k] = i, () => {})));
+  // FIRST TILESET THAT LOADS WINS
+  let ok = false;
+  for(let i=0;i<TILESETS.length && !ok;i++){ ok = await useTileset(TILESETS[i]); if(ok) sel.value = i; }
+  if(!ok){
+    cv.width = 600; cv.height = 120; ctx.fillStyle = '#ff69b4'; ctx.font = '14px monospace';
+    ctx.fillText('NO TILESET FOUND — SEE STATUS BAR', 20, 60); return;
+  }
+  $('status').textContent = 'HOVER A CELL FOR INFO · PAINT SOLID/AIR AND THE EDGES REPICK THEMSELVES';
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
