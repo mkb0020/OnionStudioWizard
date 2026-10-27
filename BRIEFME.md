@@ -29,7 +29,7 @@
  - [x] Character Builder with the turnaround. (tested in a headless browser; needs a first look in the real app)
  - [x] Part import into Rig Lab, with pivot sidecars. (tested in a headless browser against the real library files in memory; needs a first look in the real app)
  - [x] PLAY first pass: plain-JS Canvas 2D port of the Kaplay playground (core loop, movement, sprites, physics from character.json). (tested in a headless browser; needs a first look in the real app)
- - [ ] Remaining tools (Static Rig, Spells, Cape, Tiles), then PLAY's FX pass (see Step 6).
+ - [ ] Remaining tools (Static Rig, Spells, Cape, Tiles), then PLAY's remaining FX (cape, double jump spiral, dissolve, lighting, torches; see Step 6).
 
 
 
@@ -283,7 +283,8 @@
 - **Physics from the character:** the CHAR dropdown reads `character.json` physics rows and maps them by **label** (`LABEL_KEYS` in `play.html`: Move speed, Jump force, Gravity, Max fall speed, Wall slide speed, Wall jump force, Wall jump push, Dash speed, Double jump force, Air control, Coyote time). Missing labels fall back to the Kaplay defaults. Saving the sheet in Character Builder updates PLAY live (`library.changed`). Coyote time is stored in ms in the sheet and used in seconds. Outside the Wizard it runs on the defaults.
 - **Checks (headless):** run 650 px/s, jump apex 267.8 vs 267.9 in Kaplay, dash 240 px, double-jump spin, one-way pass-through and landing, wall touch/slide/jump, coyote, hosted physics load and live reload. Test hook: `window.__play` (P, PHYS, tick(dt), pause, spawnPlayer, state).
 - **Wall slide not compared to the original:** the Kaplay probe passed through the wall when teleported, so slide speed (cap 150, ~186 after a gravity step) is from the source code, not measured.
-- **Not ported yet (Kaplay-only FX):** cape, particles, afterimages, squash/stretch, hit-stop, camera shake, lighting, dissolve, torches. Planned order: cheap FX first (squash/stretch, hit-stop, shake, particles, afterimages), then cape, lighting, dissolve, torches.
+- **Cheap FX pass (done, visual only, never touches position, velocity or the hitbox):** spring squash/stretch (jump pop, landing squash by impact, air stretch by speed, dash pose, air kick and double jump pops), hit-stop (ground kick 0.09 s, air kick 0.06 s on its impact frame 4), camera shake (kick 10 px/0.18 s, air kick 8/0.14, spell 4/0.08), run and air motes, landing puff sprite, dash afterimages and air kick afterimages (flat neon silhouettes, cached per sheet/frame/colour), air kick burst of motes. All numbers are the Kaplay constants (top of the FX block in `play.html`). **F2 toggles every FX** (HUD line shows state); with FX off the sim is identical. FX step inside the fixed tick, so hit-stop freezes them; only the shake runs on real time. Hit-stop is honoured by the frame loop only, so `tick()` driven by tests is never frozen.
+- **Not ported yet:** cape, the double jump spiral (ghosts and motes), the dissolve shader (so the air kick/double jump dissolving afterimages are plain silhouettes for now, and no spawn dissolve), lighting, torches. Planned order: cape, then double jump spiral + dissolve, then lighting and torches.
 
 ### Things to watch
 - **Art sheet (updated Oct 25 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, a 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 bag, 2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm, 7 near hand, 8 far hand, 9 thigh, 10 calf, 11 shoe. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops. Accessories load from `assets/images/nova/mannequins/accessories.png`. CLAUDE.md's description of a ten-frame `mannequin_side.png` with a base64 fallback is stale.
