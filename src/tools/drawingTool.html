@@ -3882,6 +3882,7 @@ const Engine = (() => {
         const slot = t.type === 'part' ? $('#libSlot').value : '';
         if (slot) meta.slot = slot;
         if (ch) meta.character = ch;
+        if (t.type === 'part') await keepPivots(meta, t.id);
         item = await OSWClient.library.save({ type: t.type, name: t.name, id: t.id, blob: await toBlob(cv), tags: ch ? [ch] : [], meta });
       }
       libPref.set('Char', ch || 'nova');
@@ -3968,6 +3969,8 @@ const Engine = (() => {
     { i: 10, type: 'part', label: 'calf', slot: 'calf' },
     { i: 11, type: 'part', label: 'shoe', slot: 'shoe' }
   ];
+  // RE-SAVING A PART REPLACES ITS META, SO CARRY OVER THE PIVOT SIDECAR RIG LAB WROTE (meta.pivots) OR IT WOULD BE LOST
+  const keepPivots = async (meta, id) => { try { const ex = await OSWClient.library.get(id); if (ex && ex.meta && ex.meta.pivots) meta.pivots = ex.meta.pivots; } catch (e) { /* NEW ITEM */ } return meta; };
   const loadImg = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + url)); im.src = url; });
   $('#pmSheetBtn').addEventListener('click', async () => {
     if (!libOK() || busy) return;
@@ -3989,7 +3992,8 @@ const Engine = (() => {
           const c = cropWithPad(cv, 2); if (!c) continue;
           meta.origin = c.origin; meta.slot = f.slot; meta.view = 'side';
           const name = `${ch} side ${f.label}`;
-          await OSWClient.library.save({ type: f.type, name, id: libSlug(name), blob: await toBlob(c.canvas), tags: [ch, 'side'], meta });
+          const id = libSlug(name); await keepPivots(meta, id);
+          await OSWClient.library.save({ type: f.type, name, id, blob: await toBlob(c.canvas), tags: [ch, 'side'], meta });
         }
       }
       flash(`Sliced ${saved} items into the library for "${ch}"`);
