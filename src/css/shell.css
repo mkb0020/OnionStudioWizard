@@ -42,7 +42,7 @@
   transition: border-color var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast); }
 .tb-btn, .tb-caret {
   display: flex; align-items: center; justify-content: center;
-  height: 28px; padding: 0; border: 0; background: transparent;
+  height: 25px; padding: 0; border: 0; background: transparent;
   color: var(--BohrsBabyBlue); cursor: pointer;
   transition: color var(--transition-fast);
 }

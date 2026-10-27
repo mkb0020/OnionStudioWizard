@@ -63,7 +63,7 @@
   );
 
   --window-radius:       12px;
-  --titlebar-height:     27px;
+  --titlebar-height:     23px;
   --window-border:       1px solid rgba(0, 255, 255, 0.20);
   --window-shadow:
     0 0 0 1px rgba(165, 90, 255, 0.15),
@@ -329,7 +329,7 @@ body::-webkit-scrollbar {
 #pretty-title {
   flex: 1;
   font-family: var(--font-display);
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   font-weight: normal;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -356,8 +356,8 @@ body::-webkit-scrollbar {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 23px;
-  height: 23px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.05);
