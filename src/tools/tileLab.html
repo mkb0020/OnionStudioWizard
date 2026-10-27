@@ -105,6 +105,7 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
       <label class="row"><input type="radio" name="tool" value="air"> PAINT AIR (autotiles)</label>
       <label class="row"><input type="radio" name="tool" value="ledge"> PAINT THIN LEDGE</label>
       <label class="row"><input type="radio" name="tool" value="stamp"> STAMP SELECTED TILE</label>
+      <label class="row"><input type="radio" name="tool" value="spawn"> SET PLAYER SPAWN (PLAY STARTS HERE)</label>
       <label class="row"><input type="radio" name="tool" value="auto"> RESET CELL TO AUTO (PEN ERASER)</label>
       <label class="row" style="margin-left:22px"><input type="checkbox" id="flip"> FLIP HORIZONTALLY</label>
       <div style="color:var(--mute);font-size:11px;margin-top:4px">DRAG PAINTS · RIGHT-CLICK (OR THE RESET TOOL) RESETS A CELL TO AUTO · EDITS AUTOSAVE</div>
@@ -125,7 +126,13 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
       <div class="sl"><b><span>ZOOM</span><span id="vZoom"></span></b><input type="range" id="zoom" min="10" max="150" value="55"></div>
       <div class="sl"><b><span>EDGE INSET (SEAM FIX)</span><span id="vInset"></span></b><input type="range" id="inset" min="0" max="10" value="4"></div>
       <div class="sl"><b><span>DARKNESS</span><span id="vAmb"></span></b><input type="range" id="amb" min="0" max="90" value="45"></div>
-      <button id="bFit">FIT</button><button id="bReset">RESET MAP</button><button id="bCopy">COPY MAP JSON</button><button id="bSave">SAVE MAP FILE</button><button id="bLoad">LOAD MAP FILE</button><input type="file" id="fLoad" accept=".json,application/json" hidden>
+      <button id="bFit">FIT</button><button id="bReset">RESET MAP</button><button id="bCopy">COPY MAP JSON</button><button id="bSave">SAVE MAP FILE</button><button id="bLoad">LOAD MAP FILE</button>
+      <div id="libBox" hidden style="margin-top:8px">
+        <input id="libName" placeholder="library map name (a-z 0-9 - _)" maxlength="40" style="width:100%;box-sizing:border-box;background:#170032;color:#c4b5fd;border:1px solid #37025a;padding:4px">
+        <button id="bLibSave">SAVE TO LIBRARY (PLAY CAN LOAD IT)</button>
+        <select id="libSel" style="width:100%"></select>
+        <button id="bLibLoad">LOAD FROM LIBRARY</button>
+      </div><input type="file" id="fLoad" accept=".json,application/json" hidden>
     </div>
     <div class="box how">
       <h2>HOW A TILESET WORKS</h2>
@@ -137,6 +144,8 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
 </main>
 <div id="toast"></div>
 
+<script src="js/tileset.js"></script>
+<script src="js/oswClient.js"></script>
 <script>
 'use strict';
 // =====================================================================
@@ -195,7 +204,7 @@ const LAYOUTS = {
     air:[9], back:[3,4], inset:0, backDim:0,
     view:{decor:false, light:false}, selTile:5,
     carve:[[12,11],[13,11],[14,11],[15,11]], overrides:[],
-    auto: (x,y) => autoTileTemplate(x,y),
+    auto: (x,y) => OSWTiles.autoTileTemplate(G,x,y),
     info:'SLOTS FOLLOW tileset_template.png',
   },
   legacy: {
@@ -210,7 +219,7 @@ const LAYOUTS = {
     air:[4,4,4,4,9], back:[19,24,24], inset:4, backDim:.66,
     view:{decor:true, light:true}, selTile:16,
     carve:[], overrides:[[12,11,17,false],[13,11,18,false],[14,11,18,false],[15,11,17,true]],   // POOL
-    auto: (x,y) => autoTileLegacy(x,y),
+    auto: (x,y) => OSWTiles.autoTileLegacy(G,x,y),
     info:'MY GUESSES AT THE OLD SHEET’S SLOTS',
   },
 };
@@ -243,6 +252,7 @@ let mask = [], over = new Map();
 let tileImg = null, tileURL = '', LAYOUT = null, CUR = null;
 const IMG = {};
 const opts = {grid:false, ids:false, back:true, decor:true, light:true, anim:true, zoom:.55, inset:4, amb:.45};
+let spawn = null;   // [col,row] OR null (PLAY PICKS THE FIRST FLOOR)
 let tool = 'solid', selTile = 16, TS = 55, U = .55, DPR = 1, dirty = true, hover = null;
 
 function loadImg(src){
@@ -265,79 +275,15 @@ function resetMap(){
   mask = MASK0.map(r => r.split(''));
   for(const [x,y] of LEDGES0) mask[y][x] = '=';
   for(const [x,y] of LAYOUT.carve) mask[y][x] = '.';
-  over = new Map();
+  spawn = null; over = new Map();
   for(const [x,y,i,fx] of LAYOUT.overrides) over.set(x+','+y, {i, fx});
   dirty = true;
 }
 function kind(x,y){ if(x<0||y<0||x>=COLS||y>=ROWS) return '#'; return mask[y][x]; }
 const isAir = (x,y) => kind(x,y) !== '#';
-function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 1274126177 | 0; return (h ^ (h>>>16))>>>0; }
-const pick = (a,x,y) => a[hash(x,y) % a.length];
-
+const G = { kind, isAir, get rows(){ return ROWS; } };   // WHAT THE SHARED AUTOTILER READS
+const {hash, pick} = OSWTiles;
 const autoTile = (x,y) => LAYOUT.auto(x,y);
-
-// AUTOTILER FOR THE TEMPLATE LAYOUT (tileset_template.png).
-// IT LOOKS AT WHICH NEIGHBOURS ARE AIR AND PICKS A SLOT. "fx" = FLIP HORIZONTALLY.
-function autoTileTemplate(x,y){
-  const k = kind(x,y);
-  if(k === '='){            // THIN LEDGE: END CAP WHERE THE NEXT CELL ISN'T A LEDGE
-    const l = kind(x-1,y) === '=', r = kind(x+1,y) === '=';
-    if(l && r) return {i:18, fx:false};
-    if(l && !r) return {i:19, fx:true};
-    return {i:19, fx:false};
-  }
-  const U_ = isAir(x,y-1), D = isAir(x,y+1), L = isAir(x-1,y), R = isAir(x+1,y);
-  if(U_ && D){              // PLATFORM: AIR ABOVE AND BELOW
-    if(L) return {i:17, fx:false};
-    if(R) return {i:17, fx:true};
-    return {i:16, fx:false};
-  }
-  // OUTER CORNERS (AIR ON TWO SIDES)
-  if(U_ && L) return {i:12, fx:false};
-  if(U_ && R) return {i:12, fx:true};
-  if(D && L)  return {i:13, fx:false};
-  if(D && R)  return {i:13, fx:true};
-  // EDGES (AIR ON ONE SIDE)
-  if(U_) return {i:pick([5,6],x,y), fx:false};
-  if(D)  return {i:pick([7,8],x,y), fx:false};
-  if(L)  return {i:pick([10,11],x,y), fx:false};
-  if(R)  return {i:pick([10,11],x,y), fx:true};
-  // INNER CORNERS (ONLY A DIAGONAL NEIGHBOUR IS AIR)
-  if(isAir(x-1,y-1)) return {i:14, fx:false};
-  if(isAir(x+1,y-1)) return {i:14, fx:true};
-  if(isAir(x-1,y+1)) return {i:15, fx:false};
-  if(isAir(x+1,y+1)) return {i:15, fx:true};
-  // DEEP INSIDE THE ROCK
-  if(y === ROWS-1) return {i:pick([22,23],x,y), fx:false};      // MAP BOTTOM EDGE
-  if(hash(x+101,y*5+17) % 19 === 0) return {i:pick([20,21],x,y), fx:false};   // RARE RUNE TILE
-  return {i:pick([0,1,2],x,y), fx:false};
-}
-
-// AUTOTILER FOR THE FIRST TEST SHEET (OLD LAYOUT, KEPT FOR COMPARISON)
-function autoTileLegacy(x,y){
-  const k = kind(x,y);
-  if(k === '=') return {i:pick([5,6,7],x,y), fx:false};
-  const U_ = isAir(x,y-1), D = isAir(x,y+1), L = isAir(x-1,y), R = isAir(x+1,y);
-  // THIN SLAB (AIR ABOVE AND BELOW)
-  if(U_ && D){
-    if(L && !R) return {i:16, fx:true};
-    if(R && !L) return {i:16, fx:false};
-    return {i:pick([22,23],x,y), fx:false};
-  }
-  // CORNERS
-  if(D && L) return {i:pick([13,14],x,y), fx:false};
-  if(D && R) return {i:pick([13,14],x,y), fx:true};
-  if(U_ && R) return {i:16, fx:false};
-  if(U_ && L) return {i:16, fx:true};
-  // EDGES
-  if(D) return {i:pick([0,1,2],x,y), fx:false};
-  if(U_) return {i:pick([15,15,15,22,23],x,y), fx:false};
-  if(L) return {i:pick([3,8],x,y), fx:false};   // LIT EDGE ON LEFT
-  if(R) return {i:pick([3,8],x,y), fx:true};    // LIT EDGE ON RIGHT (FLIPPED)
-  // INTERIOR
-  if(y === ROWS-1) return {i:pick([20,21],x,y), fx:false};
-  return {i:pick([10,11,12],x,y), fx:false};
-}
 function tileAt(x,y){
   const o = over.get(x+','+y); if(o) return {...o, ov:true};
   if(kind(x,y) === '.') return null;
@@ -496,6 +442,12 @@ function frame(t){
       ctx.fillStyle = t_.ov ? '#fecd39' : '#00ffff'; ctx.fillText(s, x*TS+3, y*TS+2);
     }
   }
+  if(spawn){   // PLAYER SPAWN MARKER (FEET AT THE BOTTOM OF THE CELL)
+    const sx = (spawn[0]+.5)*TS, sy = (spawn[1]+1)*TS;
+    ctx.save(); ctx.strokeStyle = '#67FEBD'; ctx.fillStyle = 'rgba(103,254,189,.25)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(sx, sy-TS*.5, TS*.22, TS*.45, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#67FEBD'; ctx.font = (TS*.22|0)+'px monospace'; ctx.textAlign = 'center'; ctx.fillText('SPAWN', sx, sy-TS*1.05); ctx.restore();
+  }
   if(hover){
     ctx.strokeStyle = '#fecd39'; ctx.lineWidth = 2; ctx.strokeRect(hover.x*TS+1, hover.y*TS+1, TS-2, TS-2);
   }
@@ -544,6 +496,7 @@ function paint(c,btn){
   else if(tool === 'solid'){ mask[c.y][c.x] = '#'; over.delete(key); }
   else if(tool === 'air'){ mask[c.y][c.x] = '.'; over.delete(key); }
   else if(tool === 'ledge'){ mask[c.y][c.x] = '='; over.delete(key); }
+  else if(tool === 'spawn'){ if(kind(c.x,c.y) !== '#') spawn = [c.x,c.y]; else { toast('SPAWN NEEDS AN EMPTY CELL'); return; } }
   else if(tool === 'stamp'){ over.set(key, {i:selTile, fx:$('flip').checked}); if(mask[c.y][c.x] === '.') mask[c.y][c.x] = '#'; }
   dirty = true; saveSoon();
 }
@@ -594,12 +547,13 @@ addEventListener('resize', () => { applyZoom(); });
 const SAVE_KEY = 'tileLabMaps_v1';
 function mapObject(){
   const o = [...over].map(([k,v]) => { const [x,y] = k.split(',').map(Number); return [x,y,v.i,v.fx]; });
-  return {format:'osw-tilemap', version:1, tileset:CUR.id, cols:COLS, rows:ROWS, mask:mask.map(r => r.join('')), overrides:o};
+  return {format:'osw-tilemap', version:1, tileset:CUR.id, cols:COLS, rows:ROWS, mask:mask.map(r => r.join('')), overrides:o, ...(spawn ? {spawn} : {})};
 }
 function applyMapObject(m){   // -> true IF IT LOOKED LIKE A MAP
   if(!m || !Array.isArray(m.mask) || m.mask.length < 2 || m.mask.length > 200) return false;
   const w = m.mask[0].length; if(w < 2 || w > 200 || m.mask.some(r => typeof r !== 'string' || r.length !== w || /[^#.=]/.test(r))) return false;
   mask = m.mask.map(r => r.split('')); ROWS = mask.length; COLS = w;
+  spawn = (Array.isArray(m.spawn) && Number.isInteger(m.spawn[0]) && Number.isInteger(m.spawn[1]) && m.spawn[0]>=0 && m.spawn[1]>=0 && m.spawn[0]<COLS && m.spawn[1]<ROWS && mask[m.spawn[1]][m.spawn[0]] !== '#') ? [m.spawn[0], m.spawn[1]] : null;
   over = new Map(); for(const e of (Array.isArray(m.overrides) ? m.overrides : [])){ const [x,y,i,fx] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && i>=0 && i<25) over.set(x+','+y, {i, fx:!!fx}); }
   dirty = true; return true;
 }
@@ -619,6 +573,31 @@ $('fLoad').onchange = async e => {
   try{ const m = JSON.parse(await f.text()); if(applyMapObject(m)){ applyZoom(); fit(); saveSoon(); toast('MAP LOADED'); } else toast('NOT A TILE LAB MAP'); }
   catch(err){ toast('COULD NOT READ THAT FILE'); }
 };
+
+// LIBRARY (ONLY WHEN HOSTED IN THE APP): maps/<name>.json
+(function(){
+  if(!(window.OSWClient && OSWClient.hosted)) return;
+  $('libBox').hidden = false;
+  const fill = async keep => {
+    let names = []; try{ names = await OSWClient.library.map.list(); }catch(e){}
+    const sel = $('libSel'); sel.innerHTML = '';
+    for(const n of names){ const o = document.createElement('option'); o.value = o.textContent = n; sel.appendChild(o); }
+    if(keep && names.includes(keep)) sel.value = keep;
+  };
+  fill();
+  OSWClient.on('library.changed', c => { if(c && c.kind === 'map') fill(); });
+  $('bLibSave').onclick = async () => {
+    const name = $('libName').value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+    if(!name){ toast('NAME THE MAP FIRST'); return; }
+    try{ await OSWClient.library.map.save(name, mapObject()); $('libName').value = name; await fill(name); toast('SAVED TO LIBRARY: ' + name); }
+    catch(e){ toast('SAVE FAILED: ' + (e && e.message || e)); }
+  };
+  $('bLibLoad').onclick = async () => {
+    const n = $('libSel').value; if(!n){ toast('NO LIBRARY MAPS YET'); return; }
+    try{ const m = await OSWClient.library.map.get(n); if(applyMapObject(m)){ $('libName').value = n; applyZoom(); fit(); saveSoon(); toast('LOADED ' + n); } else toast('NOT A TILE LAB MAP'); }
+    catch(e){ toast('LOAD FAILED'); }
+  };
+})();
 
 // =====================================================================
 // PALETTE UI

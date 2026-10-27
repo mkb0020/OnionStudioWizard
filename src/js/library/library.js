@@ -281,6 +281,37 @@ export function createLibrary(storage) {
       });
     },
 
+    // MAPS: maps/<map>.json IS A TILE LAB MAP (osw-tilemap). FREE-FORM JSON OBJECT, NOT IN THE MANIFEST.
+    listMaps() {
+      return serial(async () => {
+        let entries = [];
+        try { entries = await storage.list('maps', false); } catch (e) { entries = []; }
+        return entries.filter((e) => !e.isDir).map((e) => e.path.split('/').pop()).filter((n) => /\.json$/.test(n)).map((n) => n.replace(/\.json$/, '')).filter((n) => SLUG_RE.test(n)).sort();
+      });
+    },
+
+    readMap(map) {
+      return serial(async () => {
+        if (!SLUG_RE.test(map || '')) throw new Error('BAD_MAP: map must be lowercase letters, numbers, _ or - (max 40)');
+        const raw = await storage.read('maps/' + map + '.json');
+        if (!raw) return null;
+        try { return JSON.parse(new TextDecoder().decode(raw)); }
+        catch (e) { throw new Error('BAD_DATA: maps/' + map + '.json is not valid JSON (' + e.message + '). Nothing was changed.'); }
+      });
+    },
+
+    saveMap(map, data) {
+      return serial(async () => {
+        if (!SLUG_RE.test(map || '')) throw new Error('BAD_MAP: map must be lowercase letters, numbers, _ or - (max 40)');
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('BAD_DATA: a map must be a JSON object');
+        const bytes = new TextEncoder().encode(JSON.stringify(data) + '\n');
+        if (bytes.length > 1024 * 1024) throw new Error('BAD_DATA: the map is larger than 1 MB');
+        await storage.write('maps/' + map + '.json', bytes);
+        emit({ kind: 'map', id: map });
+        return { map, bytes: bytes.length };
+      });
+    },
+
     // FORGET ENTRIES WHOSE IMAGE FILE IS GONE
     dropMissing() {
       return serial(async () => {

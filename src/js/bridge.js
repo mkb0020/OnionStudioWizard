@@ -35,6 +35,9 @@ export function createBridge({ library, frames }) {
     'library.character.list': () => library.listCharacters(),
     'library.character.get':  (a) => library.readCharacter(a.character),
     'library.character.save': (a) => library.saveCharacter(a.character, a.data),
+    'library.map.list': () => library.listMaps(),
+    'library.map.get':  (a) => library.readMap(a.map),
+    'library.map.save': (a) => library.saveMap(a.map, a.data),
   };
 
   const isToolWindow = (src) => { for (const f of frames.values()) if (f.contentWindow === src) return true; return false; };

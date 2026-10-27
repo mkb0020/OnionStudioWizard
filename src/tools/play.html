@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <base href="../">  <!-- OSW: RESOLVES assets/ AND js/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="js/tileset.js"></script>
 <script src="js/oswClient.js"></script>  <!-- OSW: BRIDGE TO THE SHELL (CHARACTER PHYSICS FROM THE LIBRARY) -->
 <title>PLAY - Sprite Playground</title>
 <style>
@@ -17,7 +18,7 @@
 </head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
-<div id="ui"><span id="uiLbl" hidden>CHARACTER</span><select id="charSel" hidden title="Where the physics numbers come from: a character sheet (character.json) or the built-in defaults"></select></div>
+<div id="ui"><span id="uiLbl" hidden>CHARACTER</span><span id="mapLbl" hidden>MAP</span><select id="mapSel" hidden title="The level: the built-in test level, or a map saved from Tile Lab"></select><select id="charSel" hidden title="Where the physics numbers come from: a character sheet (character.json) or the built-in defaults"></select></div>
 
 <script>
 'use strict';
@@ -101,7 +102,7 @@ const SWOOSH = { src: 'assets/images/vfx/swoosh.png', frames: 4, fps: 25, scale:
 const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
 const ONE_WAY_TOLERANCE = 4;
 const CAM_Y_OFFSET = 120, CAM_LERP_SPEED = 6;
-const LEVEL_MIN_X = 0, LEVEL_MAX_X = 13500;
+let LEVEL_MIN_X = 0, LEVEL_MAX_X = 13500;
 
 const PLAYER_ANIMS = {
   idle:       { sheet: 'idle',       from: 0, to: PLAYER_SHEETS.idle.frames - 1, fps: 6, loop: true },
@@ -130,11 +131,13 @@ const PLATS = [
   { x: 8000, y: 240, w: 200 }, { x: 9000, y: 300, w: 240 }, { x: 11000, y: 300, w: 280 },
 ];
 const BG = '#030013';
+let FALL_Y = GROUND_Y + 300, FLOOR_MAX = GROUND_Y, SPAWN = { x: 100, y: GROUND_Y };   // PER LEVEL: RESPAWN DEPTH, CAPE FLOOR CAP, WHERE THE PLAYER STARTS
 
 function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
   let a = seed;
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 }
+function floorBelow(x, y) { let f = Infinity; for (const s of solids) if (x >= s.x && x <= s.x + s.w && s.y >= y - 6 && s.y < f) f = s.y; return f; }   // TOP OF THE SOLID UNDER A POINT
 const solids = [];    // { x, y, w, h }  BLOCK FROM EVERY SIDE (GROUND + WALLS)
 const walls = [];     // SUBSET OF solids YOU CAN CLING TO, WITH ITS ART PIECES
 const oneWays = [];   // { x, y, w, h, tiles[] }  SOLID ONLY WHEN LANDING FROM ABOVE
@@ -151,6 +154,72 @@ function buildLevel() {
     wall.pieces.push({ frame: COLUMN_TOP, y: 0, h: COLUMN_FRAME }, { frame: COLUMN_BASE, y: w.h - COLUMN_FRAME, h: COLUMN_FRAME });
     solids.push(wall); walls.push(wall);
   });
+}
+
+/* ---------- MAP LEVELS (A TILE LAB MAP FROM THE LIBRARY BECOMES THE LEVEL) ----------
+   '#' -> SOLID (EVERY SOLID CAN BE CLUNG TO), '=' -> ONE-WAY LEDGE, '.' -> AIR. ONE CELL = MAP.cell WORLD PX (A 65 PX HITBOX FITS A 2-CELL GAP).
+   map.spawn = [col,row] (THE PLAYER'S FEET SIT ON THE BOTTOM OF THAT CELL); NO SPAWN = THE FIRST FLOOR FOUND, LEFT TO RIGHT. */
+const MAP = { on: false, cell: 64, grid: null, set: null, img: null, tile: 128, name: '' };
+function defaultSpawn(g) {
+  for (let x = 0; x < g.cols; x++) for (let y = 1; y < g.rows - 1; y++) if (g.kind(x, y) === '.' && g.kind(x, y - 1) === '.' && g.kind(x, y + 1) === '#') return [x, y];
+  return [1, 1];
+}
+function mapSolids(g, C) {   // MERGE RUNS OF '#' INTO RECTS (ROW RUNS, THEN STACK EQUAL RUNS VERTICALLY)
+  const out = [], open = new Map();
+  for (let y = 0; y <= g.rows; y++) {
+    const seen = new Set();
+    for (let x = 0; x < g.cols && y < g.rows;) {
+      if (g.kind(x, y) !== '#') { x++; continue; }
+      let x2 = x; while (x2 < g.cols && g.kind(x2, y) === '#') x2++;
+      const key = x + ':' + (x2 - x), r = open.get(key);
+      if (r) r.h += C; else { const n = { x: x * C, y: y * C, w: (x2 - x) * C, h: C }; open.set(key, n); out.push(n); }
+      seen.add(key); x = x2;
+    }
+    for (const k of [...open.keys()]) if (!seen.has(k)) open.delete(k);
+  }
+  return out;
+}
+function loadDefaultLevel() {
+  solids.length = walls.length = oneWays.length = lamps.length = 0; MAP.on = false; MAP.grid = null; buildLevel(); lamps.push(...defaultLamps());
+  LEVEL_MIN_X = 0; LEVEL_MAX_X = 13500; FALL_Y = GROUND_Y + 300; FLOOR_MAX = GROUND_Y; SPAWN = { x: 100, y: GROUND_Y };
+}
+async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
+  const def = OSWTiles.TILESETS[m && m.tileset] || OSWTiles.TILESETS.basic;
+  if (!m || !Array.isArray(m.mask) || m.mask.length < 2 || m.mask.some(r => typeof r !== 'string' || r.length !== m.mask[0].length || /[^#.=]/.test(r))) throw new Error('not a Tile Lab map');
+  let img = null; for (const src of def.srcs) { try { img = await loadImg(src); break; } catch (e) { /* TRY THE NEXT */ } }
+  if (!img) throw new Error('could not load the map\'s tileset');
+  const g = OSWTiles.makeGrid(m, def.layout), C = MAP.cell;
+  solids.length = walls.length = oneWays.length = lamps.length = 0;
+  for (const r of mapSolids(g, C)) { solids.push(r); walls.push(r); }
+  const wallsEnd = { x: -100, y: -100, w: 100, h: g.rows * C + 200 }, wallsEndR = { x: g.cols * C, y: -100, w: 100, h: g.rows * C + 200 };
+  for (const r of [wallsEnd, wallsEndR]) { solids.push(r); walls.push(r); }
+  solids.push({ x: -100, y: -100, w: g.cols * C + 200, h: 100 });   // THE MAP'S EDGES ARE WALLS (NO CLIMBING OUT OF THE TOP)
+  for (let y = 0; y < g.rows; y++) for (let x = 0; x < g.cols;) {   // LEDGE RUNS -> ONE-WAY PLATFORMS
+    if (g.kind(x, y) !== '=') { x++; continue; } let x2 = x; while (x2 < g.cols && g.kind(x2, y) === '=') x2++;
+    oneWays.push({ x: x * C, y: y * C, w: (x2 - x) * C, h: C, tiles: [] }); x = x2;
+  }
+  let lastX = -99, n = 0;   // A TORCH ABOUT EVERY 8 COLUMNS, ON A FLOOR WITH 3 CELLS OF HEADROOM
+  for (let x = 0; x < g.cols; x++) {
+    if (x - lastX < 8) continue;
+    for (let y = 2; y < g.rows - 1; y++) if (g.kind(x, y) === '.' && g.kind(x, y - 1) === '.' && g.kind(x, y - 2) === '.' && g.kind(x, y + 1) === '#') { lamps.push({ x: (x + 0.5) * C, y: (y + 1) * C, color: LAMP.colors[n % LAMP.colors.length], phase: n * 1.7 }); n++; lastX = x; break; }
+  }
+  MAP.on = true; MAP.grid = g; MAP.set = def; MAP.img = img; MAP.tile = Math.round(img.naturalWidth / 5); MAP.name = name || '';
+  LEVEL_MIN_X = 0; LEVEL_MAX_X = g.cols * C; FALL_Y = g.rows * C + 400; FLOOR_MAX = Infinity;
+  const sp = (Array.isArray(m.spawn) && g.kind(m.spawn[0], m.spawn[1]) !== '#') ? m.spawn : defaultSpawn(g);
+  SPAWN = { x: (sp[0] + 0.5) * C, y: (sp[1] + 1) * C };
+  return true;
+}
+function drawMapLevel(vl, vr) {
+  const g = MAP.grid, C = MAP.cell, set = MAP.set, img = MAP.img, T = MAP.tile, ins = set.inset;
+  const x0 = Math.max(0, Math.floor(vl / C)), x1 = Math.min(g.cols - 1, Math.floor(vr / C)), y0 = Math.max(0, Math.floor((cam.y - H / 2 - 60) / C)), y1 = Math.min(g.rows - 1, Math.floor((cam.y + H / 2 + 60) / C));
+  const { pick, drawTile } = OSWTiles;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {   // AIR + BACK WALL
+    if (g.kind(x, y) === '#' || g.over.has(x + ',' + y)) continue;
+    drawTile(ctx, img, T, pick(set.air, x, y), false, x * C, y * C, C, ins);
+    drawTile(ctx, img, T, pick(set.back, x, y), false, x * C, y * C, C, ins);
+  }
+  if (set.backDim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + set.backDim + ')'; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (g.kind(x, y) !== '#') ctx.fillRect(x * C, y * C, C, C); }
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const t = g.tileAt(x, y); if (t) drawTile(ctx, img, T, t.i, t.fx, x * C, y * C, C, ins); }
 }
 
 /* ---------- ASSETS ---------- */
@@ -204,7 +273,7 @@ const spells = [], swooshes = [];
 const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET };
 let showHitboxes = false, physSource = 'defaults (Kaplay values)';
 
-function spawnPlayer(x = 100, y = GROUND_Y) {
+function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
@@ -333,7 +402,7 @@ function tick(dt) {
   spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
   swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
   if (P.x < LEVEL_MIN_X) P.x = LEVEL_MIN_X; if (P.x > LEVEL_MAX_X) P.x = LEVEL_MAX_X;
-  if (P.y > GROUND_Y + 300) spawnPlayer();
+  if (P.y > FALL_Y) spawnPlayer();
 }
 function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
   let moving = false;
@@ -681,7 +750,7 @@ function stepCloth(dt) {
       for (let i = 0; i < n - 1; i++) clothLink(Pn[i], Pn[i + 1], C.segLen, i === 0 ? 0 : 1, 1, 1);
       for (let i = 0; i < n - 2; i++) clothLink(Pn[i], Pn[i + 2], C.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, C.bend);
     }
-    for (let i = 1; i < n; i++) if (Pn[i].y > GROUND_Y - 2) Pn[i].y = GROUND_Y - 2;   // DON'T SINK INTO THE FLOOR
+    for (let i = 1; i < n; i++) { const fl = Math.min(floorBelow(Pn[i].x, Pn[i].y), FLOOR_MAX) - 2; if (Pn[i].y > fl) Pn[i].y = fl; }   // DON'T SINK INTO THE FLOOR
     cloth.t += h;
   }
   cloth.lastRoot = rootNow;
@@ -779,8 +848,9 @@ function drawCloak(which) {
 const LIGHT = { z: 500, max: 8, ambient: 0.85, ambientColor: '#170032', glow: 0.1, player: { radius: 520, color: '#c4b5fd', height: 70 }, spell: { radius: 320, color: '#ff69b4' } };
 const LAMP = { colors: ['#ff6200', '#fecd39', '#ff9a9e', '#ff6200'], firstX: 350, spacing: 650, count: 15, radius: 400 };
 const TORCH = { src: 'assets/images/map/torch.png', w: 83, h: 310, scale: 0.6, flameSrc: 'assets/images/map/flame.png', frames: 6, fps: 9, flameScale: 0.37, baseFrac: 0.78, centerFrac: 0.5, flameY: 42 };
-const lighting = { on: true }, lamps = Array.from({ length: LAMP.count }, (_, i) => ({ x: LAMP.firstX + i * LAMP.spacing, color: LAMP.colors[i % LAMP.colors.length], phase: i * 1.7 }));
-const torchTopY = GROUND_Y - TORCH.h * TORCH.scale, flameBaseY = torchTopY + TORCH.flameY * TORCH.scale, flameLightY = flameBaseY - (TORCH.baseFrac - TORCH.centerFrac) * 400 * TORCH.flameScale;
+const defaultLamps = () => Array.from({ length: LAMP.count }, (_, i) => ({ x: LAMP.firstX + i * LAMP.spacing, y: GROUND_Y, color: LAMP.colors[i % LAMP.colors.length], phase: i * 1.7 }));
+const lighting = { on: true }, lamps = defaultLamps();   // EACH LAMP STANDS ON ITS OWN y
+const torchTopOff = -TORCH.h * TORCH.scale, flameBaseOff = torchTopOff + TORCH.flameY * TORCH.scale, flameLightOff = flameBaseOff - (TORCH.baseFrac - TORCH.centerFrac) * 400 * TORCH.flameScale;   // OFFSETS FROM A LAMP'S FLOOR y
 let clockT = 0;   // REAL SECONDS (FLICKER AND FLAMES KEEP MOVING THROUGH HIT-STOP)
 const lampFlicker = l => 1 + 0.04 * Math.sin(clockT * 2.1 + l.phase) + 0.035 * Math.sin(clockT * 11 + l.phase * 2.3) + 0.02 * Math.sin(clockT * 27 + l.phase * 5.1);   // SLOW SWELL + TWO FASTER WOBBLES
 const LIGHT_DIV = 4, lightSprites = new Map();   // THE BUFFER IS 1/4 SCREEN RESOLUTION: THE LIGHT IS SOFT ANYWAY AND THE FILL / STRETCH IS THE COST
@@ -795,15 +865,15 @@ function collectLights(px, py, cx) {   // { x, y, r, color } IN WORLD PX
   const L = [{ x: px, y: py - LIGHT.player.height, r: LIGHT.player.radius * (1 + 0.015 * Math.sin(clockT * 3)), color: LIGHT.player.color }];
   for (let i = 0; i < Math.min(2, spells.length); i++) L.push({ x: spells[i].x, y: spells[i].y, r: LIGHT.spell.radius * (1 + 0.06 * Math.sin(clockT * 40)), color: LIGHT.spell.color });
   const near = lamps.filter(l => Math.abs(l.x - cx) < W / 2 + LAMP.radius).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx)).slice(0, LIGHT.max - L.length);
-  for (const l of near) L.push({ x: l.x, y: flameLightY, r: LAMP.radius * lampFlicker(l), color: l.color });
+  for (const l of near) L.push({ x: l.x, y: l.y + flameLightOff, r: LAMP.radius * lampFlicker(l), color: l.color });
   return L;
 }
 function drawTorches(vl, vr) {   // TORCH STAFF + ANIMATED FLAME, BEHIND THE PLAYER, IN FRONT OF THE LEVEL ART
   for (const l of lamps) {
     if (l.x < vl - 60 || l.x > vr + 60) continue;
-    ctx.drawImage(IMG.torch, l.x - TORCH.w * TORCH.scale / 2, GROUND_Y - TORCH.h * TORCH.scale, TORCH.w * TORCH.scale, TORCH.h * TORCH.scale);
+    ctx.drawImage(IMG.torch, l.x - TORCH.w * TORCH.scale / 2, l.y + torchTopOff, TORCH.w * TORCH.scale, TORCH.h * TORCH.scale);
     const frame = Math.floor(clockT * TORCH.fps + l.phase * 2) % TORCH.frames, f = lampFlicker(l), sc = TORCH.flameScale * (0.97 + 0.06 * (f - 0.9)), fw = IMG.flame.naturalWidth / TORCH.frames, fh = IMG.flame.naturalHeight;
-    ctx.drawImage(IMG.flame, frame * fw, 0, fw, fh, l.x - fw * sc / 2, flameBaseY - TORCH.baseFrac * fh * sc, fw * sc, fh * sc);   // THE FLAME'S BASE (78% DOWN THE FRAME) LANDS ON THE TORCH HEAD
+    ctx.drawImage(IMG.flame, frame * fw, 0, fw, fh, l.x - fw * sc / 2, l.y + flameBaseOff - TORCH.baseFrac * fh * sc, fw * sc, fh * sc);   // THE FLAME'S BASE (78% DOWN THE FRAME) LANDS ON THE TORCH HEAD
   }
 }
 function drawLighting(px, py, cx, cy) {   // OVER THE WORLD, UNDER THE HUD
@@ -823,6 +893,7 @@ let W = 0, H = 0, DPR = 1;
 function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
 addEventListener('resize', resize);
 function drawLevel(vl, vr) {
+  if (MAP.on) { drawMapLevel(vl, vr); return; }
   const g = IMG.ground;
   for (let i = Math.max(0, Math.floor(vl / GROUND_TILE_W)); i * GROUND_TILE_W < Math.min(vr, GROUND_W); i++) ctx.drawImage(g, i * GROUND_TILE_W, GROUND_Y, GROUND_TILE_W, GROUND_H);
   for (const o of oneWays) { if (o.x > vr || o.x + o.w + TILE_SIZE < vl) continue; o.tiles.forEach((f, i) => ctx.drawImage(IMG.tiles, f * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, o.x + i * TILE_SIZE, o.y, TILE_SIZE, TILE_SIZE)); }
@@ -922,6 +993,29 @@ async function useCharacter(slug) {
   try { const c = await OSWClient.library.character.get(slug); applyPhysics(c && c.physics, slug + '/character.json'); if (!c) physSource = slug + ' has no character.json, using defaults'; }
   catch (e) { applyPhysics(null, ''); physSource = 'defaults (library error: ' + (e.message || e) + ')'; }
 }
+async function initMaps() {
+  if (!(window.OSWClient && OSWClient.hosted)) return;
+  const sel = document.getElementById('mapSel'); let names = [];
+  const fill = async () => {
+    try { names = await OSWClient.library.map.list(); } catch (e) { names = []; }
+    const cur = sel.value; sel.innerHTML = '';
+    [['', 'test level'], ...names.map(s => [s, s])].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+    sel.value = names.includes(cur) ? cur : '';
+    sel.hidden = false; document.getElementById('mapLbl').hidden = false;
+  };
+  const use = async name => {
+    try {
+      if (!name) loadDefaultLevel(); else { const m = await OSWClient.library.map.get(name); if (!m) { loadDefaultLevel(); sel.value = ''; } else await loadMapLevel(m, name); }
+    } catch (e) { console.warn('[play] map ' + name + ': ' + e.message); loadDefaultLevel(); sel.value = ''; }
+    spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
+  };
+  await fill();
+  let pref = ''; try { pref = localStorage.getItem('playMap_v1') || ''; } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ }
+  if (names.includes(pref)) { sel.value = pref; await use(pref); }
+  sel.onchange = async () => { sel.blur(); cv.focus(); try { localStorage.setItem('playMap_v1', sel.value); } catch (e) { /* IGNORE */ } await use(sel.value); };
+  let t = 0;   // RE-SAVING THE MAP YOU ARE PLAYING IN TILE LAB RELOADS IT
+  OSWClient.on('library.changed', c => { if (!c || c.kind !== 'map') return; clearTimeout(t); t = setTimeout(async () => { await fill(); if (c.id === sel.value) await use(c.id); }, 300); });
+}
 async function initCharacters() {
   if (!(window.OSWClient && OSWClient.hosted)) return;
   const sel = document.getElementById('charSel'); let slugs = [];
@@ -944,12 +1038,12 @@ async function initCharacters() {
 /* ---------- BOOT ---------- */
 function showError(e) { const d = document.createElement('div'); d.id = 'err'; d.textContent = 'PLAY load error: ' + e.message + '. Serve the folder over http (the app does; plain file:// cannot read the sprite sheets).'; document.body.appendChild(d); }
 (async function () {
-  resize(); buildLevel();
+  resize(); loadDefaultLevel();
   try { await loadAssets(); } catch (e) { showError(e); return; }
   spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
-  initCharacters();
+  initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>

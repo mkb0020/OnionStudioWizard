@@ -272,3 +272,22 @@ test('character sheets: save, read back, list, and bad input is refused', async 
   // THE IMAGE LIBRARY IGNORES THE JSON FILE
   assert.deepEqual((await lib.scan()).untracked, []);
 });
+
+test('maps: save, read back, list, and bad input is refused', async () => {
+  const { storage, lib } = fresh();
+  assert.deepEqual(await lib.listMaps(), []);
+  assert.equal(await lib.readMap('cave'), null);
+  const seen = [];
+  lib.onChange((c) => seen.push(c));
+  const m = { format: 'osw-tilemap', version: 1, mask: ['##', '..'] };
+  await lib.saveMap('cave', m);
+  await lib.saveMap('arena-2', m);
+  assert.deepEqual(await lib.listMaps(), ['arena-2', 'cave']);
+  assert.deepEqual(await lib.readMap('cave'), m);
+  assert.ok(storage.files.has('maps/cave.json'));
+  assert.deepEqual(seen[0], { kind: 'map', id: 'cave' });
+  await assert.rejects(lib.saveMap('Bad Name', {}), /BAD_MAP/);
+  await assert.rejects(lib.saveMap('cave', [1]), /BAD_DATA/);
+  await assert.rejects(lib.saveMap('cave', { big: 'x'.repeat(1100000) }), /1 MB/);
+  assert.deepEqual((await lib.scan()).untracked, []);
+});

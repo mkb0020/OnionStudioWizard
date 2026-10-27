@@ -17,7 +17,10 @@
    OSWClient.library.character.list()     -> [character slug]           (FOLDERS UNDER library/characters/)
    OSWClient.library.character.get(slug)  -> object | null              (characters/<slug>/character.json)
    OSWClient.library.character.save(slug, object)                       (FREE-FORM JSON OBJECT, MAX 1 MB)
-   OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root'|'character', id?})
+   OSWClient.library.map.list()           -> [map slug]                 (library/maps/<slug>.json, TILE LAB MAPS)
+   OSWClient.library.map.get(slug)        -> object | null
+   OSWClient.library.map.save(slug, obj)                                (FREE-FORM JSON OBJECT, MAX 1 MB)
+   OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root'|'character'|'map', id?})
    OSWClient.off(name, fn)
 
    EVERY CALL RETURNS A PROMISE. ERRORS ARE Error OBJECTS WHOSE MESSAGE STARTS WITH A CODE ("NOT_PNG: ...",
@@ -68,6 +71,11 @@
       update: function (id, patch) { return request('library.update', { id: id, patch: patch }); },
       remove: function (id) { return request('library.remove', { id: id }); },
       scan: function () { return request('library.scan'); },
+      map: {
+        list: function () { return request('library.map.list'); },
+        get: function (slug) { return request('library.map.get', { map: slug }); },
+        save: function (slug, data) { return request('library.map.save', { map: slug, data: data }); },
+      },
       character: {
         list: function () { return request('library.character.list'); },
         get: function (slug) { return request('library.character.get', { character: slug }); },
