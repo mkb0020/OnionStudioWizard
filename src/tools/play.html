@@ -29,7 +29,7 @@
    WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
    DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / KICK / AIR KICK, CAMERA, LEVEL.
    CHEAP FX (F2 TOGGLES ALL): SQUASH + STRETCH, HIT-STOP, CAMERA SHAKE, RUN / AIR MOTES, LANDING PUFF, DASH + AIR KICK AFTERIMAGES.
-   NOT YET (STILL IN THE KAPLAY FILE): CAPE, DOUBLE JUMP SPIRAL, DISSOLVE SHADER, LIGHTING, TORCHES.
+   CAPE: 3 MODES (V), GHOST TAIL (G). NOT YET (STILL IN THE KAPLAY FILE): DOUBLE JUMP SPIRAL, DISSOLVE SHADER ON THE BODY, LIGHTING, TORCHES.
    PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
    WHEN RUN INSIDE THE WIZARD; THE DEFAULTS BELOW ARE THE ORIGINAL KAPLAY VALUES.
    ====================================================================== */
@@ -168,7 +168,7 @@ async function loadAssets() {
     const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
-  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src);
+  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
@@ -181,7 +181,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'v', 'g']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { keys.delete(keyName(e)); });
@@ -205,7 +205,7 @@ function spawnPlayer(x = 100, y = GROUND_Y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
-  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0; resetFx();
+  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape();
   playAnim('idle');
 }
 
@@ -234,7 +234,7 @@ function stepAnim(dt) {   // KAPLAY'S sprite update(): EITHER A FPS LOOP, OR A D
 function startAttack(anim, hold) { isAttacking = true; attackT = hold; dashTimer = 0; currentAnim = anim; visualLift = 0; playSheetAnim(anim); }
 function playAttack() {
   if (isAttacking) return;
-  startAttack('attack', ATTACK_HOLD_TIME); shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s);
+  startAttack('attack', ATTACK_HOLD_TIME); shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape();
   const dir = P.flip ? -1 : 1, halfW = (PLAYER_FRAME * SCALE) / 2, fullH = PLAYER_FRAME * SCALE;
   spells.push({ x: P.x + dir * (halfW + SPELL.forwardOffset), y: P.y - fullH * (1 - SPELL.handHeightRatio), dir, t: 0 });
 }
@@ -271,11 +271,12 @@ function tryDash() {
   if (!P.grounded && !airDashReady) return;
   if (!P.grounded) airDashReady = false;
   dashDir = P.flip ? -1 : 1; dashTimer = DASH_TIME; dashCooldown = DASH_COOLDOWN;
+  kickSquash(SQUASH_DASH.x, SQUASH_DASH.y); kickCape(1);
 }
 function startDoubleJump() {
   airJumpReady = false; dashTimer = 0; P.vy = -PHYS.doubleJump; jumpStartTimer = 0; landTimer = 0;
   doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.angle = 0; doubleJump.dir = P.flip ? -1 : 1;
-  playAnim('doubleJump'); kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y);
+  playAnim('doubleJump'); kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1);
 }
 function updateDoubleJump(dt) {
   const D = DOUBLE_JUMP;
@@ -287,10 +288,10 @@ function updateDoubleJump(dt) {
 function pressJump() {
   if (isAttacking) return;
   if (P.grounded || coyoteT > 0) {
-    P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0; kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y);
+    P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0; kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
   } else if (touching) {   // WALL JUMP: UP AND AWAY FROM THE WALL BEING CLUNG TO
     wallJumpPushDir = touching.dir * -1; P.vy = -PHYS.wallJump; wallJumpLock = WALL_JUMP_LOCK_TIME; touching = null;
-    P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart'); kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y);
+    P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart'); kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
   } else if (DOUBLE_JUMP.enabled && airJumpReady) startDoubleJump();
 }
 
@@ -305,6 +306,8 @@ function tick(dt) {
     else if (k === 'r') spawnPlayer();
     else if (k === 'f1') showHitboxes = !showHitboxes;
     else if (k === 'f2') { FX.on = !FX.on; if (!FX.on) resetFx(); }
+    else if (k === 'v') { cape.mode = (cape.mode + 1) % CAPE_MODES.length; cloth.need = true; }
+    else if (k === 'g') CAPE_DISSOLVE.enabled = !CAPE_DISSOLVE.enabled;
   }
   P.mx = 0;
   if (isAttacking) {
@@ -316,7 +319,7 @@ function tick(dt) {
   physics(dt);
   stepAnim(dt);
   if (currentAnim === 'run') updateRun(dt);
-  stepFx(dt);
+  stepFx(dt); stepCape(dt);
   spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
   swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
   if (P.x < LEVEL_MIN_X) P.x = LEVEL_MIN_X; if (P.x > LEVEL_MAX_X) P.x = LEVEL_MAX_X;
@@ -405,7 +408,7 @@ function resetFx() { particles.length = ghosts.length = puffs.length = 0; squash
 function landSquash(impact) {
   if (impact < SQUASH_LAND_MIN_IMPACT) return;
   const t = Math.min(1, (impact - SQUASH_LAND_MIN_IMPACT) / (SQUASH_LAND_FULL_IMPACT - SQUASH_LAND_MIN_IMPACT));
-  kickSquash(1 + (SQUASH_LAND_MAX.x - 1) * t, 1 + (SQUASH_LAND_MAX.y - 1) * t);
+  kickCape(-t); kickSquash(1 + (SQUASH_LAND_MAX.x - 1) * t, 1 + (SQUASH_LAND_MAX.y - 1) * t);
 }
 function updateSquash(dt) {   // A DAMPED SPRING PER AXIS TOWARD THE TARGET POSE
   if (!FX.on) { squash.x = squash.y = 1; squash.vx = squash.vy = 0; return; }
@@ -494,6 +497,186 @@ function drawGhosts() {
   }
 }
 
+/* ---------- CAPE (PORTED FROM THE KAPLAY BUILD: V CYCLES THE 3 MODES, G TOGGLES THE GHOST-TAIL DISSOLVE) ----------
+   0 sprites  - THE HAND-DRAWN 4-FRAME CLOAK (cloakBottom BEHIND THE BODY, cloakTop IN FRONT), RUN ONLY
+   1 spring   - SAME ART: A DAMPED SPRING SWINGS IT, STRIPS RIPPLE WITH A TRAVELLING WAVE
+   2 verlet   - NO ART: A VERLET CHAIN DRAWN AS A TAPERED NEON RIBBON BEHIND THE BODY (DEFAULT)
+   IDLE, THE SPELL CAST AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
+   EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
+const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
+const CLOAK_POSE = { run: { x: 150, y: -35, rot: 0 } };
+const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
+const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'wallSlide', 'doubleJump']);
+const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
+const CAPE_SPRING = { stiffness: 100, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
+const CAPE_CLOTH = { segments: 12, segLen: 9, gravity: 1500, drag: 5.6, lift: 0.2, flutter: 400, backBias: 5000, iterations: 6, bend: 0.5, step: 1 / 120, maxSteps: 6, w0: 10, w1: 55, ripple: 0.4, rootOffset: { x: -110, y: -180 } };
+const CAPE_COLORS = ['#0000ff', '#0000ff', '#0000ff'], CAPE_EDGE = '#0000ff', CAPE_EDGE_GLOW = '#0000ff';
+const CAPE_DISSOLVE = { enabled: true, start: 0.8, amount: 0.7, cell: 9, edge: 0.1, flow: 30, speed: 0.5, fade: 0.9, glow: 0.2, edgeFade: 0.25 };
+const DISSOLVE_EDGE_INNER = '#c8fcff', DISSOLVE_EDGE_OUTER = '#dc4ce8';
+const IDLE_CAPE = { enabled: true, root: { x: 30, y: -222 }, rootBob: [0, -2, -6, -7, -7, -5], blendRate: 6, backBias: 150, gust: 850, gustHz: 0.35, flutter: 150, layered: true, topWidth: 0.84, liningShift: 0.12, liningColors: ['#37025a', '#830cde', '#00ffff'], liningEdge: '#A55AFF', liningGlow: '#830cde' };
+const ATTACK_CAPE = { enabled: true, root: { x: 0, y: -185 }, blendRate: 20, backBias: 600, flutter: 250, gust: 7000, gustLift: 0.7, gustTime: 0.6 };
+const JUMP_CAPE = { roots: { jumpStart: { x: 14, y: -205 }, jump: { x: 8, y: -215 }, fall: { x: 20, y: -244 }, land: { x: 26, y: -238 } }, blendRate: 16, rootEase: 30 };
+const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mixRgb = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const rgbCss = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
+const CAPE_RGB = CAPE_COLORS.map(hexRgb), CAPE_EDGE_RGB = hexRgb(CAPE_EDGE), CAPE_GLOW_RGB = hexRgb(CAPE_EDGE_GLOW);
+const LINING_RGB = IDLE_CAPE.liningColors.map(hexRgb), LINING_EDGE_RGB = hexRgb(IDLE_CAPE.liningEdge), LINING_GLOW_RGB = hexRgb(IDLE_CAPE.liningGlow);
+const EDGE_A = hexRgb(DISSOLVE_EDGE_INNER), EDGE_B = hexRgb(DISSOLVE_EDGE_OUTER);
+const cape = { mode: 2, spring: { a: 0, v: 0 }, hVel: 0, prevX: null, speed: 0, wave: 0, dirSmooth: 1, jumpBlend: 0, jumpRoot: { x: 0, y: 0, set: false }, attackBlend: 0, idleBlend: 1, cloakFrame: 0, cloakT: 0 };
+const cloth = { p: [], need: true, t: 0, acc: 0, lastRoot: null, dormant: false, gustT: 0 };
+const clamp01 = v => Math.max(0, Math.min(1, v));
+function kickCape(n) { cape.spring.v += CAPE_SPRING.kick * n; }
+function gustCape() { if (ATTACK_CAPE.enabled) cloth.gustT = ATTACK_CAPE.gustTime; }
+function resetCape() { cape.spring.a = cape.spring.v = 0; cape.hVel = 0; cape.prevX = null; cape.speed = 0; cape.jumpBlend = 0; cape.jumpRoot.set = false; cape.attackBlend = 0; cape.idleBlend = 1; cape.dirSmooth = P.flip ? -1 : 1; cloth.need = true; cloth.gustT = 0; }
+function updateCape(dt) {
+  const dir = P.flip ? -1 : 1, C = cape;
+  const dx = C.prevX === null ? 0 : P.x - C.prevX; C.prevX = P.x;   // SIDEWAYS SPEED FROM DISTANCE TRAVELLED (P.mx IS ZERO IN THE AIR AFTER A WALL KICK ETC.)
+  const hv = Math.max(-3000, Math.min(3000, dx / dt));
+  C.hVel += (hv - C.hVel) * Math.min(1, dt * 14); C.speed = Math.abs(C.hVel) / PHYS.move; C.dirSmooth += (dir - C.dirSmooth) * Math.min(1, dt * 18);
+  C.idleBlend += ((IDLE_CAPE.enabled && currentAnim === 'idle' ? 1 : 0) - C.idleBlend) * Math.min(1, dt * IDLE_CAPE.blendRate);
+  C.attackBlend += ((ATTACK_CAPE.enabled && currentAnim === 'attack' ? 1 : 0) - C.attackBlend) * Math.min(1, dt * ATTACK_CAPE.blendRate);
+  const jr = JUMP_CAPE.roots[currentAnim]; C.jumpBlend += ((jr ? 1 : 0) - C.jumpBlend) * Math.min(1, dt * JUMP_CAPE.blendRate);
+  if (jr) {
+    const pl = sheetPlace('jump', P.frame, false), tx = jr.x * pl.s + pl.ox, ty = jr.y * pl.s + pl.oy;
+    if (!C.jumpRoot.set) { C.jumpRoot.x = tx; C.jumpRoot.y = ty; C.jumpRoot.set = true; } else { const e = Math.min(1, dt * JUMP_CAPE.rootEase); C.jumpRoot.x += (tx - C.jumpRoot.x) * e; C.jumpRoot.y += (ty - C.jumpRoot.y) * e; }
+  } else if (C.jumpBlend < 0.001) C.jumpRoot.set = false;
+  const rel = Math.max(-1.6, Math.min(1.6, C.hVel * dir / PHYS.move)), fall = Math.max(-1, Math.min(1, P.vy / 1000));   // MODE 1: THE SPRING CHASES A TARGET SWING
+  const target = CAPE_SPRING.runAngle * rel + CAPE_SPRING.fallAngle * fall, h = Math.min(dt, 1 / 30);
+  C.spring.v += (-CAPE_SPRING.stiffness * (C.spring.a - target) - CAPE_SPRING.damping * C.spring.v) * h; C.spring.a += C.spring.v * h;
+  C.wave += dt * (CAPE_SPRING.freqMin + (CAPE_SPRING.freqMax - CAPE_SPRING.freqMin) * Math.min(1, C.speed)) * Math.PI * 2;
+  C.cloakT += dt; while (C.cloakT >= 1 / CLOAK.fps) { C.cloakT -= 1 / CLOAK.fps; C.cloakFrame = (C.cloakFrame + 1) % CLOAK.frames; }
+}
+function clothActive() { return cape.mode === 2 || (IDLE_CAPE.enabled && currentAnim === 'idle') || (ATTACK_CAPE.enabled && currentAnim === 'attack') || !!JUMP_CAPE.roots[currentAnim]; }
+function clothRoot(px, py) {   // WORLD POSITION OF THE COLLAR PIN (px, py = WHERE TO MEASURE FROM: THE SIM POSITION OR THE INTERPOLATED ONE)
+  const pose = CLOAK_POSE[currentAnim] || CLOAK_POSE.run, sx = SCALE * squash.x, sy = SCALE * squash.y, C = cape;
+  let lx = pose.x + CAPE_CLOTH.rootOffset.x, ly = pose.y + CAPE_CLOTH.rootOffset.y - visualLift;
+  if (C.idleBlend > 0.001) { const fr = currentAnim === 'idle' ? P.frame : 0, pl = sheetPlace('idle', fr, false), bob = IDLE_CAPE.rootBob[fr] || 0; lx += (IDLE_CAPE.root.x * pl.s + sheetTweak('idle').offsetX - lx) * C.idleBlend; ly += ((IDLE_CAPE.root.y + bob) * pl.s + pl.oy - ly) * C.idleBlend; }
+  if (C.attackBlend > 0.001) { const pl = sheetPlace('attack', 0, false); lx += (ATTACK_CAPE.root.x * pl.s + sheetTweak('attack').offsetX - lx) * C.attackBlend; ly += (ATTACK_CAPE.root.y * pl.s + pl.oy - ly) * C.attackBlend; }
+  if (C.jumpBlend > 0.001) { lx += (C.jumpRoot.x - lx) * C.jumpBlend; ly += (C.jumpRoot.y - ly) * C.jumpBlend; }
+  return { x: px + lx * C.dirSmooth * sx, y: py + ly * sy };
+}
+function resetCloth() {
+  const C = CAPE_CLOTH, r = clothRoot(P.x, P.y), dir = P.flip ? -1 : 1; cloth.p.length = 0;
+  for (let i = 0; i < C.segments; i++) { const x = r.x - dir * i * C.segLen * 0.35, y = r.y + i * C.segLen * 0.93; cloth.p.push({ x, y, px: x, py: y }); }
+  cloth.need = false; cloth.acc = 0; cloth.lastRoot = r;
+}
+function clothLink(a, b, rest, wA, wB, stiff) {
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.0001, w = wA + wB; if (w === 0) return;
+  const diff = (d - rest) / d * stiff; a.x += dx * diff * (wA / w); a.y += dy * diff * (wA / w); b.x -= dx * diff * (wB / w); b.y -= dy * diff * (wB / w);
+}
+function stepCloth(dt) {
+  if (!clothActive()) { cloth.dormant = true; return; }
+  if (cloth.dormant) { cloth.dormant = false; cloth.need = true; }
+  if (cloth.need) resetCloth();
+  const C = CAPE_CLOTH; cloth.acc = Math.min(cloth.acc + dt, C.maxSteps * C.step);
+  const steps = Math.floor(cloth.acc / C.step); if (steps === 0) return; cloth.acc -= steps * C.step;
+  const Pn = cloth.p, n = Pn.length, rootNow = clothRoot(P.x, P.y), rootPrev = cloth.lastRoot || rootNow, h = C.step, damp = Math.max(0, 1 - C.drag * h);
+  const run = Math.min(1, cape.speed), I = IDLE_CAPE, B = cape.idleBlend, A = ATTACK_CAPE, Ab = cape.attackBlend;
+  for (let st = 1; st <= steps; st++) {
+    const gust = 0.5 + 0.5 * Math.sin(cloth.t * I.gustHz * Math.PI * 2) * (0.6 + 0.4 * Math.sin(cloth.t * 0.7 + 1)), f = st / steps;   // IDLE GUST: TWO SLOW SINES, SO THE PEAKS ARE IRREGULAR
+    let gustEnv = 0;   // CAST GUST: SWELLS FAST, PEAKS ~1/4 IN, EASES OFF
+    if (cloth.gustT > 0) { const gp = 1 - cloth.gustT / A.gustTime; gustEnv = Math.sin(Math.PI * Math.sqrt(clamp01(gp))); cloth.gustT = Math.max(0, cloth.gustT - h); }
+    Pn[0].x = rootPrev.x + (rootNow.x - rootPrev.x) * f; Pn[0].y = rootPrev.y + (rootNow.y - rootPrev.y) * f; Pn[0].px = Pn[0].x; Pn[0].py = Pn[0].y;
+    for (let i = 1; i < n; i++) {
+      const q = Pn[i], vx = (q.x - q.px) * damp, vy = (q.y - q.py) * damp; q.px = q.x; q.py = q.y;
+      const tip = i / (n - 1);
+      let fl = C.flutter * run + (I.flutter - C.flutter * run) * B, bias = C.backBias + (I.backBias + gust * I.gust - C.backBias) * B;
+      fl += (A.flutter - fl) * Ab; bias += (A.backBias - bias) * Ab; bias += A.gust * gustEnv; fl *= tip;
+      const ax = Math.sin(cloth.t * 9 + i * 0.8) * fl - cape.dirSmooth * bias * tip, ay = C.gravity * (1 - C.lift * run - A.gustLift * gustEnv) + Math.cos(cloth.t * 7.3 + i * 1.1) * fl;
+      q.x += vx + ax * h * h; q.y += vy + ay * h * h;
+    }
+    for (let it = 0; it < C.iterations; it++) {
+      for (let i = 0; i < n - 1; i++) clothLink(Pn[i], Pn[i + 1], C.segLen, i === 0 ? 0 : 1, 1, 1);
+      for (let i = 0; i < n - 2; i++) clothLink(Pn[i], Pn[i + 2], C.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, C.bend);
+    }
+    for (let i = 1; i < n; i++) if (Pn[i].y > GROUND_Y - 2) Pn[i].y = GROUND_Y - 2;   // DON'T SINK INTO THE FLOOR
+    cloth.t += h;
+  }
+  cloth.lastRoot = rootNow;
+}
+function stepCape(dt) { updateCape(dt); stepCloth(dt); }
+/* ----- GHOST-TAIL DISSOLVE: THE KAPLAY FRAGMENT SHADER, EVALUATED PER SMALL CELL OF THE RIBBON INSTEAD OF PER PIXEL ----- */
+const fract = x => x - Math.floor(x);
+function hash21(x, y) { x = fract(x * 123.34); y = fract(y * 456.21); const d = x * (x + 45.32) + y * (y + 45.32); x += d; y += d; return fract(x * y); }
+function vnoise(x, y) {
+  const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy, ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
+  const a = hash21(ix, iy), b = hash21(ix + 1, iy), c = hash21(ix, iy + 1), d = hash21(ix + 1, iy + 1);
+  return (a + (b - a) * ux) * (1 - uy) + (c + (d - c) * ux) * uy;
+}
+const capeDis = { on: false, start: 0, len: 1, wid: 1 };
+function disCell(u, v) {   // -> null (EATEN) OR { rgb | null (= KEEP BASE COLOUR), a (ALPHA MULTIPLIER) }
+  const D = CAPE_DISSOLVE, t = clamp01((v - capeDis.start) / Math.max(1 - capeDis.start, 0.001)); if (t <= 0) return { rgb: null, a: 1 };
+  const px = v * capeDis.len - cloth.t * D.flow, py = u * capeDis.wid, cell = Math.max(2, D.cell);
+  let n = vnoise(px / cell, py / cell) * 0.65 + vnoise(px / (cell * 0.4) + 17, py / (cell * 0.4) + 17) * 0.35; n = clamp01((n - 0.18) / 0.64);
+  const edge = Math.max(0.01, D.edge), thr = t * D.amount * (1 + edge) - edge; if (n < thr) return null;
+  const keep = 1 - D.fade * t, band = (n - thr) / edge;
+  if (band < 1) { const g = mixRgb(EDGE_A, EDGE_B, band), k = 1 + 0.6 * D.glow * (1 - band); return { rgb: [Math.min(255, g[0] * k), Math.min(255, g[1] * k), Math.min(255, g[2] * k)], a: keep }; }
+  return { rgb: null, a: keep };
+}
+function drawCloth(x, y) {
+  if (!clothActive() || cloth.need || cloth.p.length < 3 || CAPE_VERLET_SKIP_ANIMS.has(currentAnim)) return;
+  const Pn = cloth.p, r = clothRoot(x, y); Pn[0].x = r.x; Pn[0].y = r.y;   // PIN THE HEAD TO *THIS* FRAME'S FINAL COLLAR SO IT NEVER LAGS THE BODY
+  const D = CAPE_DISSOLVE; capeDis.on = D.enabled;
+  if (capeDis.on) { capeDis.start = Math.max(0, Math.min(0.98, D.start - D.speed * Math.min(1.5, cape.speed) * 0.5)); capeDis.len = (Pn.length - 1) * CAPE_CLOTH.segLen; capeDis.wid = (CAPE_CLOTH.w0 + CAPE_CLOTH.w1) / 2; }
+  const layer = IDLE_CAPE.layered ? Math.min(1, cape.idleBlend + cape.attackBlend) : 0;   // IDLE AND CAST SHARE THE LINED LOOK
+  if (layer > 0.02) drawClothRibbon(Pn, 1.05, IDLE_CAPE.liningShift, LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB, layer, false);
+  drawClothRibbon(Pn, 1 + (IDLE_CAPE.topWidth - 1) * layer, 0, CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, 1, true);
+}
+function drawClothRibbon(Pn, wMul, shift, rgb, edgeRgb, glowRgb, alpha, folds) {
+  const C = CAPE_CLOTH, n = Pn.length, dir = P.flip ? -1 : 1, L = [], R = [];
+  for (let i = 0; i < n; i++) {
+    const a = Pn[Math.max(0, i - 1)], b = Pn[Math.min(n - 1, i + 1)]; let tx = b.x - a.x, ty = b.y - a.y; const len = Math.hypot(tx, ty) || 1; tx /= len; ty /= len;
+    const nx = -ty * dir, ny = tx * dir, s = i / (n - 1);   // SIDE NORMAL, FLIPPED WITH FACING SO THE "TOP" EDGE IS ALWAYS THE UPPER ONE
+    let w = C.w0 + (C.w1 - C.w0) * Math.pow(s, 0.8); w *= 1 + C.ripple * Math.min(1, cape.speed + 0.3) * Math.sin(cloth.t * 8 - s * 7) * s;
+    const cx = Pn[i].x + nx * w * shift, cy = Pn[i].y + ny * w * shift; w *= wMul;
+    L.push([cx + nx * w / 2, cy + ny * w / 2]); R.push([cx - nx * w / 2, cy - ny * w / 2]);
+  }
+  const colAt = s => s < 0.5 ? mixRgb(rgb[0], rgb[1], s * 2) : mixRgb(rgb[1], rgb[2], (s - 0.5) * 2);
+  ctx.save();
+  for (let i = 0; i < n - 1; i++) {
+    const s0 = i / (n - 1), s1 = (i + 1) / (n - 1), col = colAt((s0 + s1) / 2);
+    if (!capeDis.on || s1 <= capeDis.start) {   // PLAIN QUAD: THE PART OF THE CAPE THE DISSOLVE DOESN'T TOUCH
+      ctx.globalAlpha = alpha * 0.98; ctx.fillStyle = rgbCss(col, 1); ctx.beginPath(); ctx.moveTo(L[i][0], L[i][1]); ctx.lineTo(L[i + 1][0], L[i + 1][1]); ctx.lineTo(R[i + 1][0], R[i + 1][1]); ctx.lineTo(R[i][0], R[i][1]); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke(); continue;
+    }
+    const KA = 4, KU = 10;   // CELLS ALONG x ACROSS THIS SEGMENT
+    for (let ka = 0; ka < KA; ka++) for (let ku = 0; ku < KU; ku++) {
+      const v0 = ka / KA, v1 = (ka + 1) / KA, u0 = ku / KU, u1 = (ku + 1) / KU, v = s0 + (s1 - s0) * (v0 + v1) / 2, u = (u0 + u1) / 2, res = disCell(u, v); if (!res) continue;
+      const pt = (vv, uu) => { const lx = L[i][0] + (L[i + 1][0] - L[i][0]) * vv, ly = L[i][1] + (L[i + 1][1] - L[i][1]) * vv, rx = R[i][0] + (R[i + 1][0] - R[i][0]) * vv, ry = R[i][1] + (R[i + 1][1] - R[i][1]) * vv; return [lx + (rx - lx) * uu, ly + (ry - ly) * uu]; };
+      const q0 = pt(v0, u0), q1 = pt(v0, u1), q2 = pt(v1 + 0.04, u1), q3 = pt(v1 + 0.04, u0);
+      ctx.globalAlpha = alpha * res.a; ctx.fillStyle = rgbCss(res.rgb || col, 1); ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]); ctx.lineTo(q2[0], q2[1]); ctx.lineTo(q3[0], q3[1]); ctx.closePath(); ctx.fill();
+    }
+  }
+  const fadeAt = i => { if (!capeDis.on) return 1; const x = clamp01(((i + 0.5) / (n - 1) - capeDis.start) / Math.max(0.001, CAPE_DISSOLVE.edgeFade)); return 1 - x * x * (3 - 2 * x); };
+  const stroke = (line, width, color, opacity) => {
+    ctx.strokeStyle = rgbCss(color, 1); ctx.lineWidth = width; ctx.lineCap = 'round';
+    if (!capeDis.on) { ctx.globalAlpha = opacity; ctx.beginPath(); line.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke(); return; }
+    for (let i = 0; i < n - 1; i++) { const f = fadeAt(i); if (f * opacity > 0.01) { ctx.globalAlpha = opacity * f; ctx.beginPath(); ctx.moveTo(line[i][0], line[i][1]); ctx.lineTo(line[i + 1][0], line[i + 1][1]); ctx.stroke(); } }
+  };
+  if (folds) for (const f of [0.33, 0.66]) stroke(L.map((l, i) => [l[0] + (R[i][0] - l[0]) * f, l[1] + (R[i][1] - l[1]) * f]), 1.5, edgeRgb, 0.22 * alpha);
+  for (const edge of [L, R]) { stroke(edge, 7, glowRgb, 0.16 * alpha); stroke(edge, 2, edgeRgb, 0.9 * alpha); }
+  if (!capeDis.on) { ctx.globalAlpha = 0.9 * alpha; ctx.strokeStyle = rgbCss(glowRgb, 1); ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(L[n - 1][0], L[n - 1][1]); ctx.lineTo(R[n - 1][0], R[n - 1][1]); ctx.stroke(); }   // HEM CAP: THE DISSOLVE EATS THE HEM
+  ctx.restore();
+}
+/* ----- MODES 0 + 1: THE SPRITE CLOAK, DRAWN INSIDE THE PLAYER'S LOCAL SPACE (1 unit = 1 ART PX, UNFLIPPED; SEE drawPlayer) ----- */
+function drawCloak(which) {
+  if (cape.mode === 2 || CAPE_BAKED_ANIMS.has(currentAnim)) return;
+  const im = which === 'back' ? IMG.cloakBack : IMG.cloakFront; if (!im) return;
+  const pose = CLOAK_POSE[currentAnim] || CLOAK_POSE.run, dir = P.flip ? -1 : 1, fw = im.naturalWidth / CLOAK.frames, fh = im.naturalHeight, sx = cape.cloakFrame * fw;
+  const ax = (CLOAK.anchor.x + 1) / 2 * fw, ay = (CLOAK.anchor.y + 1) / 2 * fh;   // ATTACH POINT INSIDE THE ART (THE ANCHOR IS MIRRORED WITH FACING)
+  ctx.save(); ctx.translate(pose.x * dir, pose.y); ctx.scale(dir * CLOAK.scale, CLOAK.scale);
+  if (cape.mode === 0) { ctx.rotate(pose.rot * Math.PI / 180); ctx.drawImage(im, sx, 0, fw, fh, -ax, -ay, fw, fh); }
+  else {   // MODE 1: SPRING SWING + A TRAVELLING WAVE THROUGH VERTICAL STRIPS
+    ctx.rotate((pose.rot + cape.spring.a) * Math.PI / 180);
+    const n = CAPE_SPRING.strips, sw = fw / n, t = Math.min(1, cape.speed), amp = CAPE_SPRING.ampMin + (CAPE_SPRING.ampMax - CAPE_SPRING.ampMin) * t;
+    for (let j = 0; j < n; j++) {
+      const xL = j * sw, s = clamp01((ax - (xL + sw / 2)) / ax), dy = amp * Math.pow(s, 1.3) * Math.sin(cape.wave - s * CAPE_SPRING.phase);
+      ctx.drawImage(im, sx + j * sw, 0, sw, fh, xL - ax, -ay + dy, sw + 0.75, fh);   // TINY OVERLAP SO NO SEAMS SHOW
+    }
+  }
+  ctx.restore();
+}
+
 /* ---------- RENDER ---------- */
 const cv = document.getElementById('game'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
@@ -509,9 +692,12 @@ function drawPlayer(x, y) {
   const pl = sheetPlace(P.sheet, P.frame, P.flip), im = IMG[P.sheet]; if (!im) return;
   ctx.save(); ctx.translate(x, y); ctx.scale(SCALE * squash.x, SCALE * squash.y); ctx.translate(wallSlideHOffset, -visualLift);   // LOCAL SPACE: 1 unit = 1 ART PX
   if (P.spin) { const cy = pl.oy - DOUBLE_JUMP.pivotY * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(P.spin * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
-  ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1);
+  drawCloak('back');
+  ctx.save(); ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1);
   const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[P.sheet].frames), sz = PLAYER_FRAME * pl.s;
   ctx.drawImage(im, P.frame * cw, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
+  ctx.restore();
+  drawCloak('front');
   ctx.restore();
 }
 function drawSheetFx(arr, img, frames, fps, scale) {
@@ -535,6 +721,7 @@ function drawHud() {
     'physics: ' + physSource,
     'move ' + PHYS.move + '  jump ' + PHYS.jump + '  gravity ' + PHYS.gravity + '  maxFall ' + PHYS.maxFall + '  wallSlide ' + PHYS.wallSlide + '  wallJump ' + PHYS.wallJump + '  airCtl ' + PHYS.airControl + '  coyote ' + Math.round(PHYS.coyote * 1000) + 'ms',
     'fx: ' + (FX.on ? 'ON' : 'OFF') + '   squash ' + squash.x.toFixed(2) + ' x ' + squash.y.toFixed(2) + '   particles ' + particles.length + '   ghosts ' + ghosts.length + '   F2 toggles',
+    'cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
     'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
@@ -548,6 +735,7 @@ function render(alpha) {
   drawParticles();                                                        // z 8
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
+  drawCloth(x, y);                                                        // z 9.5: THE VERLET CAPE, BEHIND THE BODY
   drawPlayer(x, y);
   drawSwooshes();                                                         // z 11: IN FRONT
   if (showHitboxes) {
@@ -617,7 +805,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
   initCharacters();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
