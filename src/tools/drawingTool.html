@@ -132,7 +132,28 @@ header .tb.hb svg{width:16px;height:16px}
 .sec h2 output{color:var(--cy)}
 input[type=range]{width:100%;accent-color:var(--acc2);height:22px}
 .row{display:flex;gap:8px;align-items:center}
-input[type=color]{width:42px;height:30px;border:1px solid var(--acc2);border-radius:var(--r);background:var(--bg0);padding:2px;cursor:pointer}
+/* color swatch buttons: they open the built-in picker (#cpop) instead of the native color dialog */
+.cswatch{flex:none;width:42px;height:30px;border:1px solid var(--acc2);border-radius:var(--r);padding:2px;cursor:pointer;background:var(--bg0);
+  background-clip:content-box;box-shadow:inset 0 0 0 1px #ffffff22}
+.cswatch:hover,.cswatch.open{border-color:var(--cy);box-shadow:0 0 10px #00ffff55}
+#stage.pick{cursor:crosshair}
+#cpop{position:fixed;z-index:60;width:236px;padding:10px;border-radius:var(--r);border:1px solid var(--acc2);background:#170032f7;
+  box-shadow:0 0 22px #830cde88,0 0 0 1px #00000066;display:flex;flex-direction:column;gap:9px;touch-action:none}
+#cpop[hidden]{display:none}
+#cpSV{position:relative;width:100%;height:150px;border-radius:var(--r);border:1px solid #ffffff33;cursor:crosshair;touch-action:none;overflow:hidden;
+  background:linear-gradient(to top,#000,transparent),linear-gradient(to right,#fff,transparent),hsl(var(--cph,0),100%,50%)}
+#cpSV i{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #000,0 0 6px #000;pointer-events:none}
+#cpHue{position:relative;width:100%;height:18px;border-radius:var(--r);border:1px solid #ffffff33;cursor:ew-resize;touch-action:none;
+  background:linear-gradient(to right,#f00,#ff0 17%,#0f0 33%,#0ff 50%,#00f 67%,#f0f 83%,#f00)}
+#cpHue i{position:absolute;top:-3px;bottom:-3px;width:6px;margin-left:-3px;border-radius:2px;border:2px solid #fff;box-shadow:0 0 0 1px #000;pointer-events:none}
+#cpop .cprow{display:flex;gap:7px;align-items:center}
+#cpCmp{flex:none;width:44px;height:28px;border-radius:var(--r);border:1px solid #ffffff33;display:flex;overflow:hidden}
+#cpCmp b{flex:1}
+#cpHex{flex:1;min-width:0;width:100%;font-family:var(--mono);font-size:13px;text-transform:uppercase;background:var(--bg1);color:var(--txt);border:1px solid var(--acc);
+  border-radius:var(--r);padding:5px 6px;-webkit-user-select:text;user-select:text}
+#cpHex:focus{border-color:var(--cy);outline:none}
+#cpHex.bad{border-color:var(--pk)}
+#cpEye{flex:none;width:34px;height:30px}
 .hex{font-family:var(--mono);font-size:13px;color:var(--soft)}
 .swatches{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:7px}
 .sw{aspect-ratio:1;border-radius:var(--r);border:1px solid #ffffff33;cursor:pointer;min-height:0}
@@ -364,6 +385,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="fill"><svg viewBox="0 0 24 24"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg></button>
       <button class="tb" data-tool="blur"><svg viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
       <button class="tb" data-tool="move"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
+      <button class="tb" data-tool="picker" title="Eyedropper (Q): pick a color from the canvas"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
       </div>
@@ -626,7 +648,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
     <div class="sec" id="colorSec" style="margin-top:7px;">
       
       <h2>Color</h2>
-      <div class="row"><input type="color" id="color" value="#000000"><span class="hex" id="hex">#000000</span></div>
+      <div class="row"><button type="button" class="cswatch" id="color" aria-label="Pick a color" title="Click to open the color picker"></button><span class="hex" id="hex">#000000</span></div>
       <select id="palSel" style="width:100%;margin-top:7px" aria-label="Color palette"></select>
       <div class="swatches" id="swatches"></div>
       
@@ -638,7 +660,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
 
     <div class="sec">
       <h2>Paper</h2>
-      <div class="row"><input type="color" id="paperColor" value="#ffffff"><span class="note">Background only. Not exported.</span></div>
+      <div class="row"><button type="button" class="cswatch" id="paperColor" aria-label="Paper color" title="Click to open the color picker"></button><span class="note">Background only. Not exported.</span></div>
     </div>
     <div class="sec">
       <h2>Onion skin</h2>
@@ -696,6 +718,15 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
   <div id="popBody"><canvas id="popCanvas" width="1000" height="1000"></canvas></div>
 </div>
 <div id="busy" hidden><div id="busyMsg">Working&hellip;</div></div>
+<div id="cpop" hidden role="dialog" aria-label="Color picker">
+  <div id="cpSV"><i></i></div>
+  <div id="cpHue"><i></i></div>
+  <div class="cprow">
+    <div id="cpCmp" title="Old / new"><b id="cpOld"></b><b id="cpNew"></b></div>
+    <input type="text" id="cpHex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color">
+    <button type="button" class="tb" id="cpEye" title="Eyedropper (Q)"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
+  </div>
+</div>
 
 <script>
 /* =====================================================================
@@ -2166,6 +2197,7 @@ const Engine = (() => {
     if (t !== 'move') flushNudge();
     stage.classList.toggle('pan', t === 'hand');
     stage.classList.toggle('mv', t === 'move');
+    stage.classList.toggle('pick', t === 'picker');
     cursorEl.classList.toggle('erase', t === 'eraser');
     $('#assistSec').hidden = !(t === 'brush' || t === 'eraser');
     $('#tidyRow').hidden = $('#mergeRow').hidden = t !== 'brush';
@@ -2184,7 +2216,7 @@ const Engine = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -2474,6 +2506,8 @@ const Engine = (() => {
       shape = { id: e.pointerId, a: p, b: p, shift: e.shiftKey, alt: e.altKey };
     } else if (state.tool === 'fill') {
       fillPending = e.pointerId;       // fills on release, so a second finger can still start a pinch
+    } else if (state.tool === 'picker') {
+      pickId = e.pointerId; pickAt(e);
     }
   });
 
@@ -2489,6 +2523,7 @@ const Engine = (() => {
       state.panX = panning.px + (s.x - panning.sx); state.panY = panning.py + (s.y - panning.sy); applyView(); return;
     }
     if (stroke && stroke.id === e.pointerId) { moveStroke(e); return; }
+    if (pickId === e.pointerId) { pickAt(e); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -2506,6 +2541,7 @@ const Engine = (() => {
       else if (gestureLock) return;
     }
     if (panning && panning.id === e.pointerId) { panning = null; stage.classList.remove('panning'); return; }
+    if (pickId === e.pointerId) { pickId = null; return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -3195,6 +3231,124 @@ const Engine = (() => {
   };
   
 
+  /* ---------- color picker ----------
+     Built in on purpose: the browser's own <input type="color"> opens a native OS dialog, which can fail to
+     appear (or fire no events) inside the Tauri webview. This one is plain DOM + pointer events, so it works
+     with mouse, touch and the XP-PEN pen. Two swatch buttons use it: ink (#color) and paper (#paperColor). */
+  const normHex = s => {
+    s = String(s || '').trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(s)) s = s.replace(/./g, m => m + m);
+    return /^[0-9a-f]{6}$/i.test(s) ? '#' + s.toLowerCase() : null;
+  };
+  function hexToHsv(hex) {
+    const n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const mx = Math.max(r, g, b), d = mx - Math.min(r, g, b);
+    let h = 0;
+    if (d) h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    return { h: h * 60, s: mx ? d / mx : 0, v: mx };
+  }
+  function hsvToHex(h, s, v) {
+    const f = n => { const k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    const to = x => Math.round(x * 255).toString(16).padStart(2, '0');
+    return '#' + to(f(5)) + to(f(3)) + to(f(1));
+  }
+  const cp = { el: $('#cpop'), sv: $('#cpSV'), hue: $('#cpHue'), hex: $('#cpHex'), h: 0, s: 0, v: 0, target: null, anchor: null };
+  const cpTargets = {
+    ink:   { btn: $('#color'),      get: () => state.color,      set: c => setColor(c) },
+    paper: { btn: $('#paperColor'), get: () => state.paperColor, set: c => applyPaper(c) }
+  };
+  function cpPaint(fromHexField) {
+    const hex = hsvToHex(cp.h, cp.s, cp.v);
+    cp.el.style.setProperty('--cph', cp.h);
+    cp.sv.firstElementChild.style.left = cp.s * 100 + '%';
+    cp.sv.firstElementChild.style.top = (1 - cp.v) * 100 + '%';
+    cp.hue.firstElementChild.style.left = cp.h / 360 * 100 + '%';
+    $('#cpNew').style.background = hex;
+    if (!fromHexField) { cp.hex.value = hex.toUpperCase(); cp.hex.classList.remove('bad'); }
+    return hex;
+  }
+  function cpCommit(fromHexField) { const hex = cpPaint(fromHexField); if (cp.target) cp.target.set(hex); }
+  function cpOpen(name) {
+    const t = cpTargets[name];
+    if (cp.target === t && !cp.el.hidden) { cpClose(); return; }
+    cpClose();
+    cp.target = t; cp.anchor = t.btn; t.btn.classList.add('open');
+    const hex = normHex(t.get()) || '#000000', hsv = hexToHsv(hex);
+    Object.assign(cp, hsv);
+    $('#cpOld').style.background = hex;
+    cp.el.hidden = false;
+    cpPaint(false);
+    const r = t.btn.getBoundingClientRect(), w = cp.el.offsetWidth, h = cp.el.offsetHeight;
+    let left = r.left - w - 12;                                   // the panel is on the right edge: open to its left
+    if (left < 4) left = Math.min(r.right + 12, window.innerWidth - w - 4);
+    cp.el.style.left = Math.max(4, left) + 'px';
+    cp.el.style.top = Math.max(4, Math.min(r.top - 4, window.innerHeight - h - 4)) + 'px';
+  }
+  function cpClose() {
+    if (cp.anchor) cp.anchor.classList.remove('open');
+    cp.el.hidden = true; cp.target = null; cp.anchor = null;
+  }
+  // The color changed from outside the picker (palette swatch, eyedropper): follow it, keeping the hue when gray.
+  function cpFollow(hex) {
+    if (cp.el.hidden || cp.target !== cpTargets.ink || hsvToHex(cp.h, cp.s, cp.v) === hex) return;
+    const hsv = hexToHsv(hex);
+    cp.s = hsv.s; cp.v = hsv.v; if (hsv.s > 0.001 && hsv.v > 0.001) cp.h = hsv.h;
+    cpPaint(false);
+  }
+  function cpDrag(el, apply) {
+    el.addEventListener('pointerdown', e => {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation();
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
+      el._drag = e.pointerId; apply(e);
+    });
+    el.addEventListener('pointermove', e => { if (el._drag === e.pointerId) apply(e); });
+    const end = e => { if (el._drag === e.pointerId) el._drag = null; };
+    el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+    el.addEventListener('contextmenu', e => e.preventDefault());
+  }
+  cpDrag(cp.sv, e => {
+    const r = cp.sv.getBoundingClientRect();
+    cp.s = clamp((e.clientX - r.left) / r.width, 0, 1); cp.v = 1 - clamp((e.clientY - r.top) / r.height, 0, 1);
+    cpCommit(false);
+  });
+  cpDrag(cp.hue, e => {
+    const r = cp.hue.getBoundingClientRect();
+    cp.h = clamp((e.clientX - r.left) / r.width, 0, 1) * 360;
+    cpCommit(false);
+  });
+  cp.hex.addEventListener('input', () => {
+    const hex = normHex(cp.hex.value);
+    cp.hex.classList.toggle('bad', !hex);
+    if (!hex) return;
+    const hsv = hexToHsv(hex); cp.s = hsv.s; cp.v = hsv.v; if (hsv.s > 0.001 && hsv.v > 0.001) cp.h = hsv.h;
+    cpCommit(true);
+  });
+  cp.hex.addEventListener('blur', () => cpPaint(false));
+  cp.hex.addEventListener('keydown', e => { if (e.key === 'Enter') cp.hex.blur(); });
+  cp.el.addEventListener('keydown', e => { if (e.key === 'Escape') { e.stopPropagation(); cpClose(); } });
+  $('#cpEye').addEventListener('click', () => { cpClose(); setTool('picker'); });
+  for (const [name, t] of Object.entries(cpTargets)) t.btn.addEventListener('click', () => cpOpen(name));
+  document.addEventListener('pointerdown', e => {
+    if (!cp.el.hidden && !cp.el.contains(e.target) && !(cp.anchor && cp.anchor.contains(e.target))) cpClose();
+  }, true);
+
+  /* ---------- eyedropper tool ----------
+     Press (or drag) on the canvas to pick what you SEE: the visible layers of this frame over the paper color.
+     Stays on the tool so you can keep sampling; press B (or any tool button) to go back to drawing. */
+  let pickId = null;
+  function pickAt(e) {
+    const p = toCanvas(e), k = view.width / FRAME, x = Math.floor(p.x * k), y = Math.floor(p.y * k);
+    if (x < 0 || y < 0 || x >= view.width || y >= view.height) return;
+    const [r, g, b, a] = vctx.getImageData(x, y, 1, 1).data;
+    const pc = parseInt((normHex(state.paperColor) || '#ffffff').slice(1), 16), al = a / 255;
+    const mix = (c, bg) => Math.round(c * al + bg * (1 - al));
+    const to = n => n.toString(16).padStart(2, '0');
+    const hex = '#' + to(mix(r, pc >> 16 & 255)) + to(mix(g, pc >> 8 & 255)) + to(mix(b, pc & 255));
+    setColor(hex);
+    flash('Picked ' + hex.toUpperCase());
+  }
+
   const swWrap = $('#swatches'), palSel = $('#palSel');
   Object.keys(PALETTES).forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; palSel.appendChild(o); });
   function showPalette(name) {
@@ -3214,18 +3368,17 @@ const Engine = (() => {
   });
   function setColor(c) {
     state.color = c;
-    $('#color').value = c.length === 7 ? c.toLowerCase() : c;
+    $('#color').style.backgroundColor = c;
     $('#hex').textContent = c.toUpperCase();
     $$('.sw').forEach(s => s.classList.toggle('sel', s.dataset.c.toLowerCase() === c.toLowerCase()));
+    cpFollow(normHex(c) || c);
   }
-  $('#color').addEventListener('input', e => setColor(e.target.value));
   setColor('#000000');
   { let saved = 'Default'; try { saved = localStorage.getItem('dtPalette') || 'Default'; } catch (err) { /* optional */ } showPalette(saved); }
 
-  $('#paperColor').addEventListener('input', e => {
-    paper.style.background = e.target.value; state.paperColor = e.target.value;
-    project.frames.forEach((_, i) => drawThumb(i)); settingsChanged();
-  });
+  function setPaperColor(c) { $('#paperColor').style.backgroundColor = c; paper.style.background = c; state.paperColor = c; }
+  function applyPaper(c) { setPaperColor(c); project.frames.forEach((_, i) => drawThumb(i)); settingsChanged(); }
+  setPaperColor(state.paperColor);
 
   /* ---------- export ---------- */
   const MAX_SHEET = 16384;                       // browsers cap canvas size around here
@@ -3449,7 +3602,7 @@ const Engine = (() => {
     const fps = clamp(Math.round(+m.fps) || 12, 1, 30);
     project.load(frames, +m.currentFrame || 0, fps);
     const pc = typeof m.paperColor === 'string' && /^#[0-9a-f]{6}$/i.test(m.paperColor) ? m.paperColor : '#ffffff';
-    $('#paperColor').value = pc; paper.style.background = pc; state.paperColor = pc;
+    setPaperColor(pc);
     if (m.onion && typeof m.onion === 'object') {
       onion.prev = m.onion.prev !== false;
       const op = clamp(+m.onion.prevOpacity || 0.35, 0.05, 1); onion.prevOpacity = op;
@@ -3726,6 +3879,7 @@ const Engine = (() => {
       case 'c': setTool('circle'); break;
       case 'g': setTool('fill'); break;
       case 'u': setTool('blur'); break;
+      case 'q': setTool('picker'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -3747,7 +3901,7 @@ const Engine = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': closeMenus(); cancelChain(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {

@@ -20,6 +20,7 @@
   - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` into the library
   - Step 5: Rig Lab ART menu imports a character's parts from the library; pivots are saved as sidecars in each part's `meta.pivots`
+  - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
 
