@@ -131,6 +131,13 @@ const PLATS = [
   { x: 8000, y: 240, w: 200 }, { x: 9000, y: 300, w: 240 }, { x: 11000, y: 300, w: 280 },
 ];
 const BG = '#030013';
+
+/* ---------- BACKDROP: STATIC BACKGROUND + SLOW-SCROLLING PARALLAX COLUMNS ----------
+   THE BACKGROUND IS PINNED TO THE SCREEN (IT NEVER MOVES). ITS HEIGHT FILLS THE CANVAS SO THE DARK BANDS STAY ON THE SAME ROWS AT ANY WINDOW SIZE
+   (A WIDER WINDOW STRETCHES IT SIDEWAYS ONLY; A NARROWER ONE CROPS THE EDGES).
+   topY / bottomY = THE ROWS OF background.png (IN ITS OWN 800 x 450 PX) WHERE THE TOP DARK BAND ENDS AND THE BOTTOM ONE BEGINS; THE COLUMNS RUN EXACTLY BETWEEN THEM.
+   speed = HOW MUCH OF THE CAMERA'S MOVEMENT THE COLUMNS FOLLOW (1 = LOCKED TO THE LEVEL, 0 = LOCKED TO THE SCREEN). spacing = GAP BETWEEN COLUMN CENTRES, IN COLUMN WIDTHS. */
+const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: 24, bottomY: 399, speed: 0.5, spacing: 4.5, on: true };
 let FALL_Y = GROUND_Y + 300, FLOOR_MAX = GROUND_Y, SPAWN = { x: 100, y: GROUND_Y };   // PER LEVEL: RESPAWN DEPTH, CAPE FLOOR CAP, WHERE THE PLAYER STARTS
 
 function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
@@ -242,6 +249,7 @@ async function loadAssets() {
   }
   IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
+  IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
 function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX SHIFT (FORWARD-MIRRORED / DOWN)
@@ -892,6 +900,14 @@ const cv = document.getElementById('game'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
 addEventListener('resize', resize);
+function drawBackdrop() {   // SCREEN SPACE (CALLED BEFORE THE WORLD TRANSFORM): BACKGROUND, THEN THE PARALLAX COLUMNS
+  const B = BACKDROP, bg = IMG.backdrop, col = IMG.parallaxCol; if (!B.on || !bg || !col) return;
+  const s = H / B.bgH, bgDrawW = Math.max(W, B.bgW * s);   // HEIGHT-FIT; ONLY EVER STRETCHED SIDEWAYS
+  ctx.drawImage(bg, 0, 0, B.bgW, B.bgH, Math.round((W - bgDrawW) / 2), 0, Math.ceil(bgDrawW), H);
+  const top = B.topY * s, colH = (B.bottomY - B.topY) * s, colW = colH * col.naturalWidth / col.naturalHeight, gap = colW * B.spacing;
+  const shift = cam.x * B.speed, first = Math.floor((shift - W / 2 - colW) / gap), last = Math.ceil((shift + W / 2 + colW) / gap);
+  for (let i = first; i <= last; i++) ctx.drawImage(col, Math.round(W / 2 + i * gap - shift - colW / 2), Math.round(top), Math.ceil(colW), Math.round(colH));
+}
 function drawLevel(vl, vr) {
   if (MAP.on) { drawMapLevel(vl, vr); return; }
   const g = IMG.ground;
@@ -942,6 +958,7 @@ function render(alpha) {
   const x = P.px + (P.x - P.px) * alpha, y = P.py + (P.y - P.py) * alpha;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  if (!MAP.on) drawBackdrop();   // z -2 / -1: BEHIND EVERYTHING. A MAP LEVEL PAINTS ITS OWN OPAQUE AIR TILES, SO IT WOULD HIDE THIS ANYWAY
   ctx.save(); ctx.translate(Math.round(W / 2 - cam.x - shake.x), Math.round(H / 2 - cam.y - shake.y));
   drawLevel(cam.x - W / 2 - 60, cam.x + W / 2 + 60);
   drawTorches(cam.x - W / 2, cam.x + W / 2);                              // z 3
