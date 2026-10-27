@@ -343,8 +343,10 @@ const h = (tag, props, ...kids) => {
 
 /* ---------- the sheet (what character.json holds) ---------- */
 const DEFAULT_STATS = [
-  ['Move speed', 240, 'px/s'], ['Jump force', 620, 'px/s'], ['Gravity', 1600, 'px/s²'], ['Max fall speed', 900, 'px/s'],
-  ['Wall slide speed', 90, 'px/s'], ['Wall jump force', 520, 'px/s'], ['Air control', 0.8, '×'], ['Coyote time', 90, 'ms']
+  // THESE ARE PLAY'S REAL NUMBERS (THE KAPLAY PLAYGROUND'S VALUES). PLAY MATCHES ROWS BY LABEL, SO KEEP THE LABELS.
+  ['Move speed', 650, 'px/s'], ['Jump force', 1000, 'px/s'], ['Gravity', 1800, 'px/s²'], ['Max fall speed', 1500, 'px/s'],
+  ['Wall slide speed', 150, 'px/s'], ['Wall jump force', 850, 'px/s'], ['Wall jump push', 480, 'px/s'], ['Dash speed', 1500, 'px/s'],
+  ['Double jump force', 900, 'px/s'], ['Air control', 1, '×'], ['Coyote time', 0, 'ms']
 ];
 function blankSheet(slug, name) {
   return {

@@ -11,7 +11,7 @@ export const TOOLS = [
   { id: 'vectors',   group: 'FX',        label: 'Spells',  title: 'Vector Spell Lab',   icon: 'spark', src: null },
   { id: 'cape',      group: 'FX',        label: 'Cape',    title: 'Cape Lab',           icon: 'cape',  src: null },
   { id: 'tiles',     group: 'WORLD',     label: 'Tiles',   title: 'Tile Lab',           icon: 'grid',  src: null },
-  { id: 'play',      group: 'PLAY',      label: 'Play',    title: 'Sprite Playground',  icon: 'play',  src: null },
+  { id: 'play',      group: 'PLAY',      label: 'Play',    title: 'Sprite Playground',  icon: 'play',  src: 'tools/play.html' },
 ];
 
 // 24x24 STROKE ICONS (INNER SVG MARKUP ONLY; STYLED BY .rail-btn svg IN shell.css)

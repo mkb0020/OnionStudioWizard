@@ -16,42 +16,57 @@
   "physics": [
     {
       "label": "Move speed",
-      "value": 240,
+      "value": 650,
       "unit": "px/s"
     },
     {
       "label": "Jump force",
-      "value": 620,
+      "value": 1000,
       "unit": "px/s"
     },
     {
       "label": "Gravity",
-      "value": 1600,
+      "value": 1800,
       "unit": "px/s²"
     },
     {
       "label": "Max fall speed",
-      "value": 900,
+      "value": 1500,
       "unit": "px/s"
     },
     {
       "label": "Wall slide speed",
-      "value": 90,
+      "value": 150,
       "unit": "px/s"
     },
     {
       "label": "Wall jump force",
-      "value": 520,
+      "value": 850,
+      "unit": "px/s"
+    },
+    {
+      "label": "Wall jump push",
+      "value": 480,
+      "unit": "px/s"
+    },
+    {
+      "label": "Dash speed",
+      "value": 1500,
+      "unit": "px/s"
+    },
+    {
+      "label": "Double jump force",
+      "value": 900,
       "unit": "px/s"
     },
     {
       "label": "Air control",
-      "value": 0.8,
+      "value": 1,
       "unit": "×"
     },
     {
       "label": "Coyote time",
-      "value": 90,
+      "value": 0,
       "unit": "ms"
     },
     {

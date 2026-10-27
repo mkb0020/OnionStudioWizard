@@ -1,0 +1,498 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">  <!-- OSW: RESOLVES assets/ AND js/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="js/oswClient.js"></script>  <!-- OSW: BRIDGE TO THE SHELL (CHARACTER PHYSICS FROM THE LIBRARY) -->
+<title>PLAY - Sprite Playground</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#030013}
+  canvas{display:block;width:100vw;height:100vh;outline:none}
+  #ui{position:fixed;top:10px;right:12px;display:flex;gap:8px;align-items:center;font:12px Consolas,monospace;color:#9090C0;z-index:5}
+  #ui select{background:#170032;border:1px solid #830cde;color:#c4b5fd;padding:4px 6px;border-radius:3px;font:inherit}
+  #ui select:hover{border-color:#00ffff;color:#00ffff}
+  #err{position:fixed;left:14px;top:12px;max-width:560px;padding:10px 14px;background:#170032;border:1px solid #ff6200;color:#ff9a9e;font:13px Consolas,monospace;z-index:20;box-shadow:0 0 14px rgba(255,98,0,.5)}
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0"></canvas>
+<div id="ui"><span id="uiLbl" hidden>CHARACTER</span><select id="charSel" hidden title="Where the physics numbers come from: a character sheet (character.json) or the built-in defaults"></select></div>
+
+<script>
+'use strict';
+/* ======================================================================
+   PLAY - SPRITE PLAYGROUND (PLAIN JS + CANVAS 2D)
+   PORTED FROM kinematics/index.html (KAPLAY). SAME NAMES, SAME NUMBERS, SAME FEEL:
+   THE GAME RUNS ON A FIXED 1/50 s STEP WITH VELOCITY UPDATED BEFORE POSITION (KAPLAY'S OWN STEP),
+   SO A JUMP OF 1000 px/s UNDER GRAVITY 1800 PEAKS AT THE SAME ~268 px AS BEFORE.
+   WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
+   DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / KICK / AIR KICK, CAMERA, LEVEL.
+   NOT YET (ALL VISUAL FX, STILL IN THE KAPLAY FILE): CAPE, PARTICLES, AFTERIMAGES, SQUASH + STRETCH,
+   HIT-STOP, CAMERA SHAKE, LIGHTING, DISSOLVE, TORCHES.
+   PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
+   WHEN RUN INSIDE THE WIZARD; THE DEFAULTS BELOW ARE THE ORIGINAL KAPLAY VALUES.
+   ====================================================================== */
+
+/* ---------- PHYSICS (OVERRIDDEN BY THE CHARACTER SHEET) ---------- */
+const DEFAULT_PHYS = {
+  move: 650,          // px/s
+  jump: 1000,         // px/s UPWARD
+  gravity: 1800,      // px/s^2
+  maxFall: 1500,      // px/s (STOPS TUNNELING THROUGH THIN PLATFORMS)
+  wallSlide: 150,     // px/s MAX FALL WHILE CLINGING
+  wallJump: 850,      // px/s UPWARD KICK OF A WALL JUMP
+  wallPush: 480,      // px/s PUSHED AWAY FROM THE WALL
+  dash: 1500,         // px/s
+  doubleJump: 900,    // px/s UPWARD
+  airControl: 1,      // x MULTIPLIER ON SIDEWAYS SPEED WHILE AIRBORNE (1 = FULL, AS BEFORE)
+  coyote: 0,          // SECONDS OF JUMP FORGIVENESS AFTER WALKING OFF AN EDGE (0 = NONE, AS BEFORE)
+};
+const PHYS = Object.assign({}, DEFAULT_PHYS);
+// character.json LABEL (LOWERCASE, LETTERS ONLY) -> [PHYS KEY, UNIT DIVISOR, MIN, MAX]
+const LABEL_KEYS = {
+  movespeed: ['move', 1, 1, 5000], jumpforce: ['jump', 1, 1, 5000], gravity: ['gravity', 1, 1, 20000], maxfallspeed: ['maxFall', 1, 50, 10000],
+  wallslidespeed: ['wallSlide', 1, 1, 5000], walljumpforce: ['wallJump', 1, 1, 5000], walljumppush: ['wallPush', 1, 0, 5000],
+  dashspeed: ['dash', 1, 1, 8000], doublejumpforce: ['doubleJump', 1, 1, 5000], aircontrol: ['airControl', 1, 0, 3], coyotetime: ['coyote', 1000, 0, 1000],
+};
+
+/* ---------- PLAYER SHEETS (ONE ROW OF 400x400 FRAMES EACH) ---------- */
+const PLAYER_FRAME = 400, SCALE = 0.5, FIXED_DT = 1 / 50;
+const SHEET_DIR = 'assets/images/nova/sprites/';
+const PLAYER_SHEETS = {
+  run:        { src: 'run.png',        frames: 8 },
+  idle:       { src: 'idle.png',       frames: 6 },
+  jump:       { src: 'jump.png',       frames: 5 },   // 0 START, 1 RISE, 2 FLIP (DOUBLE JUMP BALL), 3 FALL, 4 LAND
+  wall_slide: { src: 'wall_slide.png', frames: 1 },
+  attack:     { src: 'attack.png',     frames: 1 },
+  kick:       { src: 'kick.png',       frames: 6 },
+  airKick:    { src: 'airKick.png',    frames: 8 },
+};
+const RUN = { from: 0, to: 7 };
+const JUMP_FRAME = { start: 0, rise: 1, flip: 2, fall: 3, land: 4 };
+const JUMP_START_TIME = 0.05, JUMP_LAND_TIME = 0.07, JUMP_LAND_TIME_MOVING = 0.05, JUMP_LAND_MIN_IMPACT = 250;
+const PLAYER_SHEET_TWEAKS = {   // VISUAL ONLY. snapFeet DROPS EACH FRAME BY ITS FOOT GAP; snapFrames DOES IT FOR THE LISTED FRAMES ONLY
+  idle: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: true },
+  jump: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false, snapFrames: [JUMP_FRAME.land] },
+};
+const FOOT_ALPHA_MIN = 24;
+const WALL_SLIDE_VISUAL_OFFSET_X = 150;   // THE WALL SLIDE ART SITS OFF-CENTRE IN ITS CELL
+const FALL_VEL_THRESHOLD = 30;
+const RUN_BASE_FPS = 11;
+const POSES = { contact: { hold: 1.0, lift: 3 }, passing: { hold: 0.7, lift: 0 }, takeoff: { hold: 1.0, lift: 3 }, up: { hold: 1.6, lift: 7 } };
+const RUN_POSE_ORDER = ['contact', 'passing', 'takeoff', 'up', 'contact', 'passing', 'takeoff', 'up'];
+const RUN_CYCLE = RUN_POSE_ORDER.map((pose, i) => ({ frame: RUN.from + i, hold: POSES[pose].hold / RUN_BASE_FPS, lift: POSES[pose].lift }));
+
+/* ---------- MOVES ---------- */
+const WALL_JUMP_LOCK_TIME = 0.18;
+const DASH_TIME = 0.16, DASH_COOLDOWN = 0.45;
+const ATTACK_HOLD_TIME = 0.35, ATTACK_KICK_HOLD_TIME = 0.25;
+const KICK_FRAME_HOLDS = [1.3, 0.4, 0.3, 0.4, 2.7, 0.3];
+const AIR_KICK = { enabled: true, holdTime: 0.32, holds: [1, 1, 1, 1, 1.4, 1.4, 1.4, 1], oncePerAirtime: true, lunge: 520, gravityScale: 0.3, vyKeep: 0.25 };
+const DOUBLE_JUMP = { enabled: true, spinTime: 0.45, turns: 2, pivotY: 207 };
+const SPELL = { src: 'assets/images/vfx/spell.png', frames: 7, scale: 1, fps: 14, handHeightRatio: 1 / 2, forwardOffset: 40 };
+const SWOOSH = { src: 'assets/images/vfx/swoosh.png', frames: 4, fps: 25, scale: 1.3 };
+const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
+const ONE_WAY_TOLERANCE = 4;
+const CAM_Y_OFFSET = 120, CAM_LERP_SPEED = 6;
+const LEVEL_MIN_X = 0, LEVEL_MAX_X = 13500;
+
+const PLAYER_ANIMS = {
+  idle:       { sheet: 'idle',       from: 0, to: PLAYER_SHEETS.idle.frames - 1, fps: 6, loop: true },
+  run:        { sheet: 'run',        from: RUN.from, to: RUN.to, manual: true },
+  jumpStart:  { sheet: 'jump',       from: JUMP_FRAME.start, to: JUMP_FRAME.start },
+  jump:       { sheet: 'jump',       from: JUMP_FRAME.rise,  to: JUMP_FRAME.rise },
+  doubleJump: { sheet: 'jump',       from: JUMP_FRAME.flip,  to: JUMP_FRAME.flip },
+  fall:       { sheet: 'jump',       from: JUMP_FRAME.fall,  to: JUMP_FRAME.fall },
+  land:       { sheet: 'jump',       from: JUMP_FRAME.land,  to: JUMP_FRAME.land },
+  wallSlide:  { sheet: 'wall_slide', from: 0, to: 0 },
+  attack:     { sheet: 'attack',     from: 0, to: 0, duration: ATTACK_HOLD_TIME },
+  attackKick: { sheet: 'kick',       from: 0, to: PLAYER_SHEETS.kick.frames - 1, duration: ATTACK_KICK_HOLD_TIME, holds: KICK_FRAME_HOLDS },
+  airKick:    { sheet: 'airKick',    from: 0, to: PLAYER_SHEETS.airKick.frames - 1, duration: AIR_KICK.holdTime, holds: AIR_KICK.holds },
+};
+
+/* ---------- LEVEL (SAME LAYOUT AS THE KAPLAY PLAYGROUND) ---------- */
+const GROUND_Y = 460, GROUND_W = 16000, GROUND_H = 80, GROUND_TILE_W = 160;
+const TILE_SIZE = 50, PLATFORM_H = 50, TILE_FRAME_COUNT = 6, TILE_SEED = 1337;
+const COLUMN_FRAME = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3, 4, 5], COLUMN_BASE = 6;
+const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;
+const WALL_W = COLUMN_FRAME - COLUMN_SHAFT_INSET * 2;
+const WALLS = [{ x: 4000, h: 400 }, { x: 12000 + 160, h: 440 }, { x: 12550, h: 400 }];
+const PLATS = [
+  { x: 700, y: 300, w: 200 }, { x: 500, y: 110, w: 160 }, { x: 550, y: 0, w: 200 }, { x: 3000, y: 300, w: 160 },
+  { x: 4000, y: 330, w: 240 }, { x: 5000, y: 260, w: 160 }, { x: 6000, y: 300, w: 240 }, { x: 7000, y: 380, w: 160 },
+  { x: 8000, y: 240, w: 200 }, { x: 9000, y: 300, w: 240 }, { x: 11000, y: 300, w: 280 },
+];
+const BG = '#030013';
+
+function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
+  let a = seed;
+  return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const solids = [];    // { x, y, w, h }  BLOCK FROM EVERY SIDE (GROUND + WALLS)
+const walls = [];     // SUBSET OF solids YOU CAN CLING TO, WITH ITS ART PIECES
+const oneWays = [];   // { x, y, w, h, tiles[] }  SOLID ONLY WHEN LANDING FROM ABOVE
+function buildLevel() {
+  solids.push({ x: 0, y: GROUND_Y, w: GROUND_W, h: GROUND_H });
+  const rand = makeRng(TILE_SEED); let prev = -1;
+  const pickMid = () => { let f; do { f = Math.floor(rand() * TILE_FRAME_COUNT); } while (f === prev && TILE_FRAME_COUNT > 1); prev = f; return f; };
+  PLATS.forEach(pd => { const cols = Math.ceil(pd.w / TILE_SIZE), tiles = []; for (let i = 0; i < cols; i++) tiles.push(pickMid()); oneWays.push({ x: pd.x, y: pd.y, w: pd.w, h: PLATFORM_H, tiles }); });
+  const r2 = makeRng(COLUMN_SEED);
+  WALLS.forEach(w => {
+    const wall = { x: w.x, y: GROUND_Y - w.h, w: WALL_W, h: w.h, pieces: [] };
+    const midH = Math.max(0, w.h - COLUMN_FRAME * 2), n = Math.max(1, Math.ceil(midH / COLUMN_FRAME)), pieceH = midH / n;
+    if (midH > 0) for (let i = 0; i < n; i++) wall.pieces.push({ frame: r2() < COLUMN_RUNE_CHANCE ? COLUMN_RUNES[Math.floor(r2() * COLUMN_RUNES.length)] : COLUMN_PLAIN, y: COLUMN_FRAME + i * pieceH, h: pieceH });
+    wall.pieces.push({ frame: COLUMN_TOP, y: 0, h: COLUMN_FRAME }, { frame: COLUMN_BASE, y: w.h - COLUMN_FRAME, h: COLUMN_FRAME });
+    solids.push(wall); walls.push(wall);
+  });
+}
+
+/* ---------- ASSETS ---------- */
+const IMG = {};            // name -> HTMLImageElement
+const sheetScales = {};    // SCALE-TO-FIT PER SHEET (1 WHEN IT IS ALREADY 400 TALL)
+const footGaps = {};       // PER-FRAME PX BETWEEN THE LOWEST VISIBLE PIXEL AND THE CELL BOTTOM (snapFeet SHEETS ONLY)
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });
+function measureFootGaps(key, img, frames) {   // SCANS THE SHEET ONCE. FAILS SOFT (USE offsetY INSTEAD)
+  try {
+    const cw = Math.floor(img.width / frames), ch = img.height, cv = document.createElement('canvas'); cv.width = img.width; cv.height = ch;
+    const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0); const px = cx.getImageData(0, 0, img.width, ch).data, gaps = [];
+    for (let f = 0; f < frames; f++) { let bottom = -1; for (let y = ch - 1; y >= 0 && bottom < 0; y--) for (let x = f * cw; x < (f + 1) * cw; x++) if (px[(y * img.width + x) * 4 + 3] > FOOT_ALPHA_MIN) { bottom = y; break; } gaps.push(bottom < 0 ? 0 : ch - 1 - bottom); }
+    footGaps[key] = gaps;
+  } catch (e) { console.warn('[play] ' + key + ': could not measure foot gaps (' + e.message + ')'); }
+}
+async function loadAssets() {
+  for (const [key, sh] of Object.entries(PLAYER_SHEETS)) {
+    const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
+    const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
+  }
+  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src);
+  IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
+}
+function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
+function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX SHIFT (FORWARD-MIRRORED / DOWN)
+  const tw = sheetTweak(key), s = (sheetScales[key] || 1) * tw.scale, snap = tw.snapFeet || (tw.snapFrames && tw.snapFrames.includes(frame));
+  const gap = snap ? ((footGaps[key] && footGaps[key][frame]) || 0) : 0;
+  return { s, ox: (flip ? -1 : 1) * tw.offsetX, oy: gap * s + tw.offsetY };
+}
+
+/* ---------- INPUT ---------- */
+const keys = new Set(), pressQ = [];
+const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1']);
+const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
+addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
+addEventListener('keyup', e => { keys.delete(keyName(e)); });
+addEventListener('blur', () => keys.clear());
+const down = (...n) => n.some(k => keys.has(k));
+
+/* ---------- GAME STATE ---------- */
+const P = { x: 100, y: GROUND_Y, px: 100, py: GROUND_Y, vx: 0, vy: 0, gs: 1, grounded: false, flip: false, sheet: 'idle', frame: 0, anim: PLAYER_ANIMS.idle, animT: 0, spin: 0, mx: 0 };
+let currentAnim = 'idle', isAttacking = false, attackT = 0;
+let runIdx = 0, runTimer = 0, visualLift = 0;
+let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0;
+let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpReady = true, airKickReady = true;
+let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
+const airKick = { t: 0, dir: 1 };
+const doubleJump = { t: 0, angle: 0 };
+const spells = [], swooshes = [];
+const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET };
+let showHitboxes = false, physSource = 'defaults (Kaplay values)';
+
+function spawnPlayer(x = 100, y = GROUND_Y) {
+  Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
+  currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
+  dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
+  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0;
+  playAnim('idle');
+}
+
+/* ---------- ANIMATION ---------- */
+function startRun() { runIdx = 0; runTimer = 0; playSheetAnim('run'); P.frame = RUN_CYCLE[0].frame; visualLift = RUN_CYCLE[0].lift; }
+function updateRun(dt) {
+  runTimer += dt;
+  while (runTimer >= RUN_CYCLE[runIdx].hold) { runTimer -= RUN_CYCLE[runIdx].hold; runIdx = (runIdx + 1) % RUN_CYCLE.length; }
+  P.frame = RUN_CYCLE[runIdx].frame; visualLift = RUN_CYCLE[runIdx].lift;
+}
+function playSheetAnim(name) { const d = PLAYER_ANIMS[name]; if (!d) return; P.anim = d; P.sheet = d.sheet; P.frame = d.from; P.animT = 0; }
+function playAnim(name) {
+  if (currentAnim === name) return;
+  currentAnim = name;
+  if (name === 'run') { startRun(); return; }
+  visualLift = 0; playSheetAnim(name);
+}
+function stepAnim(dt) {   // KAPLAY'S sprite update(): EITHER A FPS LOOP, OR A DURATION SPLIT BY holds WEIGHTS
+  const a = P.anim; if (!a || a.manual || a.to === a.from) return;
+  const n = a.to - a.from + 1; P.animT += dt;
+  if (a.holds) { let w = (P.animT / a.duration) * a.holds.reduce((s, h) => s + h, 0), i = 0; while (i < n - 1 && w >= a.holds[i]) { w -= a.holds[i]; i++; } P.frame = a.from + i; return; }
+  const fps = a.fps != null ? a.fps : n / a.duration; let i = Math.floor(P.animT * fps); i = a.loop ? i % n : Math.min(i, n - 1); P.frame = a.from + i;
+}
+
+/* ---------- MOVES ---------- */
+function startAttack(anim, hold) { isAttacking = true; attackT = hold; dashTimer = 0; currentAnim = anim; visualLift = 0; playSheetAnim(anim); }
+function playAttack() {
+  if (isAttacking) return;
+  startAttack('attack', ATTACK_HOLD_TIME);
+  const dir = P.flip ? -1 : 1, halfW = (PLAYER_FRAME * SCALE) / 2, fullH = PLAYER_FRAME * SCALE;
+  spells.push({ x: P.x + dir * (halfW + SPELL.forwardOffset), y: P.y - fullH * (1 - SPELL.handHeightRatio), dir, t: 0 });
+}
+function playKickAttack() {
+  if (isAttacking) return;
+  startAttack('attackKick', ATTACK_KICK_HOLD_TIME);
+  swooshes.push({ x: P.x + 20 * (P.flip ? -1 : 1), y: P.y + 20, dir: P.flip ? -1 : 1, t: 0 });
+}
+function pressKick() {
+  if (isAttacking) return;
+  if (P.grounded || !AIR_KICK.enabled) { playKickAttack(); return; }
+  if (AIR_KICK.oncePerAirtime && !airKickReady) return;
+  playAirKick();
+}
+function playAirKick() {
+  const A = AIR_KICK;
+  isAttacking = true; attackT = 0; airKickReady = false; dashTimer = 0; jumpStartTimer = 0; landTimer = 0; wallSlideHOffset = 0;
+  currentAnim = 'airKick'; visualLift = 0; playSheetAnim('airKick');
+  airKick.t = A.holdTime; airKick.dir = P.flip ? -1 : 1;
+  P.vy *= A.vyKeep; P.gs = A.gravityScale;
+}
+function updateAirKick(dt) {   // LUNGE + ENDING THE KICK. RUNS WHILE isAttacking (THE MAIN UPDATE IS SKIPPED THEN)
+  const A = AIR_KICK; if (airKick.t <= 0) return;
+  const end = () => { airKick.t = 0; isAttacking = false; P.gs = 1; };
+  if (currentAnim !== 'airKick') { airKick.t = 0; P.gs = 1; return; }
+  if (P.grounded) { end(); return; }
+  const u = 1 - airKick.t / A.holdTime;
+  P.mx = airKick.dir * A.lunge * (1 - u * u);
+  airKick.t -= dt; if (airKick.t <= 0) end();
+}
+function tryDash() {
+  if (isAttacking || dashTimer > 0 || dashCooldown > 0 || wallJumpLock > 0) return;
+  if (!P.grounded && !airDashReady) return;
+  if (!P.grounded) airDashReady = false;
+  dashDir = P.flip ? -1 : 1; dashTimer = DASH_TIME; dashCooldown = DASH_COOLDOWN;
+}
+function startDoubleJump() {
+  airJumpReady = false; dashTimer = 0; P.vy = -PHYS.doubleJump; jumpStartTimer = 0; landTimer = 0;
+  doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.angle = 0; doubleJump.dir = P.flip ? -1 : 1;
+  playAnim('doubleJump');
+}
+function updateDoubleJump(dt) {
+  const D = DOUBLE_JUMP;
+  if (doubleJump.t <= 0 || currentAnim !== 'doubleJump') { doubleJump.t = 0; P.spin = 0; return; }
+  doubleJump.t = Math.max(0, doubleJump.t - dt);
+  const u = 1 - doubleJump.t / D.spinTime, ease = 1 - (1 - u) * (1 - u);   // easeOutQuad: FAST OUT OF THE LAUNCH, ENDS EXACTLY UPRIGHT
+  doubleJump.angle = 360 * D.turns * ease; P.spin = doubleJump.angle * doubleJump.dir;
+}
+function pressJump() {
+  if (isAttacking) return;
+  if (P.grounded || coyoteT > 0) {
+    P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0;
+  } else if (touching) {   // WALL JUMP: UP AND AWAY FROM THE WALL BEING CLUNG TO
+    wallJumpPushDir = touching.dir * -1; P.vy = -PHYS.wallJump; wallJumpLock = WALL_JUMP_LOCK_TIME; touching = null;
+    P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart');
+  } else if (DOUBLE_JUMP.enabled && airJumpReady) startDoubleJump();
+}
+
+/* ---------- ONE FIXED STEP ---------- */
+function tick(dt) {
+  while (pressQ.length) {   // KEY PRESSES (EDGE EVENTS) FIRST, THEN THE HELD-KEY LOGIC
+    const k = pressQ.shift();
+    if (k === 'up' || k === 'w' || k === 'space') pressJump();
+    else if (k === 'shift' || k === 'c') tryDash();
+    else if (k === 'z') playAttack();
+    else if (k === 'x') pressKick();
+    else if (k === 'r') spawnPlayer();
+    else if (k === 'f1') showHitboxes = !showHitboxes;
+  }
+  P.mx = 0;
+  if (isAttacking) {
+    wasAirborne = false; airPeakFall = 0; jumpStartTimer = 0; landTimer = 0;
+    if (attackT > 0) { attackT -= dt; if (attackT <= 0) isAttacking = false; }   // THE GROUND ATTACKS END ON A TIMER (k.wait IN THE KAPLAY BUILD)
+  } else mainUpdate(dt);
+  updateAirKick(dt); updateDoubleJump(dt);
+  if (P.grounded) coyoteT = PHYS.coyote; else if (coyoteT > 0) coyoteT -= dt;
+  physics(dt);
+  stepAnim(dt);
+  if (currentAnim === 'run') updateRun(dt);
+  spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
+  swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
+  if (P.x < LEVEL_MIN_X) P.x = LEVEL_MIN_X; if (P.x > LEVEL_MAX_X) P.x = LEVEL_MAX_X;
+  if (P.y > GROUND_Y + 300) spawnPlayer();
+}
+function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
+  let moving = false;
+  if (dashCooldown > 0) dashCooldown -= dt;
+  if (dashTimer > 0) { dashTimer -= dt; P.mx = dashDir * PHYS.dash; P.flip = dashDir === -1; if (!P.grounded) P.vy = 0; moving = true; }
+  else if (wallJumpLock > 0) { wallJumpLock -= dt; P.mx = wallJumpPushDir * PHYS.wallPush; P.flip = wallJumpPushDir === -1; moving = true; }
+  else {
+    const air = P.grounded ? 1 : PHYS.airControl;
+    if (down('left', 'a')) { P.mx -= PHYS.move * air; P.flip = true; moving = true; }
+    if (down('right', 'd')) { P.mx += PHYS.move * air; P.flip = false; moving = true; }
+  }
+  if (P.vy > PHYS.maxFall) P.vy = PHYS.maxFall;
+  const grounded = P.grounded;
+  if (grounded || touching) { airDashReady = true; airJumpReady = true; }
+  if (grounded) airKickReady = true;   // THE AIR KICK ONLY REFILLS ON THE GROUND, SO IT CANNOT BE CHAINED ALONG A WALL TO HOVER
+  let wallSliding = false;   // AIRBORNE + TOUCHING A WALL + HOLDING INTO IT (CLASSIC CLING)
+  if (!grounded && wallJumpLock <= 0 && touching && P.vy >= 0) wallSliding = (touching.dir === 1 && down('right', 'd')) || (touching.dir === -1 && down('left', 'a'));
+  if (grounded) { if (wasAirborne && airPeakFall >= JUMP_LAND_MIN_IMPACT) landTimer = moving ? JUMP_LAND_TIME_MOVING : JUMP_LAND_TIME; airPeakFall = 0; }
+  else if (wallSliding) airPeakFall = 0;
+  else airPeakFall = Math.max(airPeakFall, P.vy);
+  wasAirborne = !grounded;
+  if (wallSliding) {
+    if (P.vy > PHYS.wallSlide) P.vy = PHYS.wallSlide;
+    P.flip = touching.dir === 1;   // FACE AWAY FROM THE WALL
+    wallSlideHOffset = P.flip ? -WALL_SLIDE_VISUAL_OFFSET_X : WALL_SLIDE_VISUAL_OFFSET_X;
+    playAnim('wallSlide');
+  } else if (!grounded) {
+    wallSlideHOffset = 0; landTimer = 0;
+    if (doubleJump.t > 0) playAnim('doubleJump'); else if (P.vy > FALL_VEL_THRESHOLD) playAnim('fall'); else playAnim(jumpStartTimer > 0 ? 'jumpStart' : 'jump');
+    if (jumpStartTimer > 0) jumpStartTimer -= dt;
+  } else if (landTimer > 0) { wallSlideHOffset = 0; landTimer -= dt; playAnim('land'); }
+  else if (moving) { wallSlideHOffset = 0; playAnim('run'); }
+  else { wallSlideHOffset = 0; playAnim('idle'); }
+}
+
+/* ---------- PHYSICS (AABB, X THEN Y, KAPLAY'S STEP ORDER) ---------- */
+function physics(dt) {
+  P.px = P.x; P.py = P.y;
+  P.vy += PHYS.gravity * P.gs * dt;   // VELOCITY FIRST, THEN POSITION (SEMI-IMPLICIT EULER)
+  if (P.vy > PHYS.maxFall) P.vy = PHYS.maxFall;
+  P.x += P.mx * dt;
+  if (P.mx !== 0) for (const s of solids) {   // SIDES: ONLY SOLIDS BLOCK. ONE-WAY PLATFORMS IGNORE THE SIDES
+    if (P.y - HIT_H < s.y + s.h && P.y > s.y && P.x - HIT_W / 2 < s.x + s.w && P.x + HIT_W / 2 > s.x) P.x = P.mx > 0 ? s.x - HIT_W / 2 : s.x + s.w + HIT_W / 2;
+  }
+  const prevBottom = P.y; P.y += P.vy * dt; P.grounded = false;
+  const l = P.x - HIT_W / 2, r = P.x + HIT_W / 2;
+  for (const s of solids) {
+    if (!(l < s.x + s.w && r > s.x && P.y - HIT_H < s.y + s.h && P.y > s.y)) continue;
+    if (P.vy >= 0) { P.y = s.y; P.vy = 0; P.grounded = true; } else { P.y = s.y + s.h + HIT_H; P.vy = 0; }   // LAND ON TOP / BUMP THE UNDERSIDE
+  }
+  if (P.vy >= 0) for (const o of oneWays) {   // ONE-WAY: SOLID ONLY IF NOT RISING AND THE FEET WERE AT / ABOVE THE TOP A STEP AGO
+    if (l < o.x + o.w && r > o.x && P.y - HIT_H < o.y + o.h && P.y > o.y && prevBottom <= o.y + ONE_WAY_TOLERANCE) { P.y = o.y; P.vy = 0; P.grounded = true; }
+  }
+  touching = null;   // WALL CONTACT FOR THE NEXT STEP: THE HITBOX GROWN BY 1 px OVERLAPS A WALL
+  for (const w of walls) if (P.x - HIT_W / 2 - 1 < w.x + w.w && P.x + HIT_W / 2 + 1 > w.x && P.y - HIT_H < w.y + w.h && P.y > w.y) touching = { dir: P.x < w.x + w.w / 2 ? 1 : -1 };
+}
+
+/* ---------- RENDER ---------- */
+const cv = document.getElementById('game'), ctx = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1;
+function resize() { DPR = Math.min(window.devicePixelRatio || 1, 2); W = innerWidth; H = innerHeight; cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR); }
+addEventListener('resize', resize);
+function drawLevel(vl, vr) {
+  const g = IMG.ground;
+  for (let i = Math.max(0, Math.floor(vl / GROUND_TILE_W)); i * GROUND_TILE_W < Math.min(vr, GROUND_W); i++) ctx.drawImage(g, i * GROUND_TILE_W, GROUND_Y, GROUND_TILE_W, GROUND_H);
+  for (const o of oneWays) { if (o.x > vr || o.x + o.w + TILE_SIZE < vl) continue; o.tiles.forEach((f, i) => ctx.drawImage(IMG.tiles, f * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, o.x + i * TILE_SIZE, o.y, TILE_SIZE, TILE_SIZE)); }
+  for (const w of walls) { if (w.x > vr || w.x + w.w + COLUMN_FRAME < vl) continue; for (const p of w.pieces) ctx.drawImage(IMG.column, p.frame * COLUMN_FRAME, 0, COLUMN_FRAME, COLUMN_FRAME, w.x - COLUMN_SHAFT_INSET, w.y + p.y, COLUMN_FRAME, p.h); }
+}
+function drawPlayer(x, y) {
+  const pl = sheetPlace(P.sheet, P.frame, P.flip), im = IMG[P.sheet]; if (!im) return;
+  ctx.save(); ctx.translate(x, y); ctx.scale(SCALE, SCALE); ctx.translate(wallSlideHOffset, -visualLift);   // LOCAL SPACE: 1 unit = 1 ART PX
+  if (P.spin) { const cy = pl.oy - DOUBLE_JUMP.pivotY * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(P.spin * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
+  ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1);
+  const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[P.sheet].frames), sz = PLAYER_FRAME * pl.s;
+  ctx.drawImage(im, P.frame * cw, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
+  ctx.restore();
+}
+function drawSheetFx(arr, img, frames, fps, scale) {
+  for (const f of arr) {
+    const i = Math.min(frames - 1, Math.floor(f.t * fps)), cw = img.naturalWidth / frames, ch = img.naturalHeight;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(f.dir * scale, scale); ctx.drawImage(img, i * cw, 0, cw, ch, -cw / 2, -ch / 2, cw, ch); ctx.restore();   // CENTRE-ANCHORED
+  }
+}
+function drawSwooshes() {   // BOTTOM-ANCHORED, SAME CELL SIZE AS THE PLAYER FRAME
+  for (const f of swooshes) {
+    const i = Math.min(SWOOSH.frames - 1, Math.floor(f.t * SWOOSH.fps)), cw = IMG.swoosh.naturalWidth / SWOOSH.frames, ch = IMG.swoosh.naturalHeight, s = SCALE * SWOOSH.scale;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(f.dir * s, s); ctx.drawImage(IMG.swoosh, i * cw, 0, cw, ch, -cw / 2, -ch, cw, ch); ctx.restore();
+  }
+}
+function drawHud() {
+  ctx.font = '12px Consolas, monospace'; ctx.textBaseline = 'top';
+  const lines = [
+    'grounded: ' + P.grounded + '   anim: ' + currentAnim + '   sheet: ' + P.sheet + ' frame ' + P.frame,
+    'vel.y: ' + P.vy.toFixed(1) + '   pos: ' + P.x.toFixed(0) + ', ' + P.y.toFixed(1) + '   isAttacking: ' + isAttacking,
+    'wall: ' + (touching ? touching.dir : '-') + '   wallJumpLock: ' + wallJumpLock.toFixed(2) + '   air jump: ' + (airJumpReady ? 'ready' : 'used') + '   air kick: ' + (airKick.t > 0 ? airKick.t.toFixed(2) + 's' : airKickReady ? 'ready' : 'used') + '   dash: ' + (dashTimer > 0 ? 'ON' : dashCooldown > 0 ? 'cooldown' : 'ready'),
+    'physics: ' + physSource,
+    'move ' + PHYS.move + '  jump ' + PHYS.jump + '  gravity ' + PHYS.gravity + '  maxFall ' + PHYS.maxFall + '  wallSlide ' + PHYS.wallSlide + '  wallJump ' + PHYS.wallJump + '  airCtl ' + PHYS.airControl + '  coyote ' + Math.round(PHYS.coyote * 1000) + 'ms',
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
+  ];
+  lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
+}
+function render(alpha) {
+  const x = P.px + (P.x - P.px) * alpha, y = P.py + (P.y - P.py) * alpha;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  ctx.save(); ctx.translate(Math.round(W / 2 - cam.x), Math.round(H / 2 - cam.y));
+  drawLevel(cam.x - W / 2 - 60, cam.x + W / 2 + 60);
+  drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
+  drawPlayer(x, y);
+  drawSwooshes();                                                         // z 11: IN FRONT
+  if (showHitboxes) {
+    ctx.lineWidth = 1; ctx.strokeStyle = '#ff69b4'; solids.forEach(s => ctx.strokeRect(s.x + .5, s.y + .5, s.w, s.h));
+    ctx.strokeStyle = '#58e84c'; oneWays.forEach(o => ctx.strokeRect(o.x + .5, o.y + .5, o.w, o.h));
+    ctx.strokeStyle = '#00ffff'; ctx.strokeRect(x - HIT_W / 2 + .5, y - HIT_H + .5, HIT_W, HIT_H);
+  }
+  ctx.restore(); drawHud();
+}
+
+/* ---------- LOOP ---------- */
+let last = 0, acc = 0, paused = false;
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  if (!paused) {
+    acc += dt; let n = 0;
+    while (acc >= FIXED_DT && n++ < 8) { tick(FIXED_DT); acc -= FIXED_DT; }
+    if (n >= 8) acc = 0;   // A LONG STALL (TAB SWITCH): DROP THE BACKLOG INSTEAD OF SPIRALLING
+  }
+  const alpha = acc / FIXED_DT, tx = P.px + (P.x - P.px) * alpha, ty = P.py + (P.y - P.py) * alpha - CAM_Y_OFFSET, k = Math.min(1, dt * CAM_LERP_SPEED);
+  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+  render(alpha); requestAnimationFrame(frame);
+}
+
+/* ---------- CHARACTER PHYSICS (library/characters/<name>/character.json) ---------- */
+function applyPhysics(rows, label) {
+  Object.assign(PHYS, DEFAULT_PHYS); let n = 0;
+  for (const r of Array.isArray(rows) ? rows : []) {
+    const m = LABEL_KEYS[String(r && r.label || '').toLowerCase().replace(/[^a-z]/g, '')], v = Number(r && r.value);
+    if (!m || !isFinite(v)) continue;
+    const [key, div, lo, hi] = m, val = v / div; if (val < lo / div || val > hi / div) continue;   // OUT OF RANGE ROWS ARE IGNORED, NOT CLAMPED
+    PHYS[key] = val; n++;
+  }
+  physSource = label ? label + ' (' + n + ' sheet rows applied)' : 'defaults (Kaplay values)';
+}
+async function useCharacter(slug) {
+  if (!slug) { applyPhysics(null, ''); return; }
+  try { const c = await OSWClient.library.character.get(slug); applyPhysics(c && c.physics, slug + '/character.json'); if (!c) physSource = slug + ' has no character.json, using defaults'; }
+  catch (e) { applyPhysics(null, ''); physSource = 'defaults (library error: ' + (e.message || e) + ')'; }
+}
+async function initCharacters() {
+  if (!(window.OSWClient && OSWClient.hosted)) return;
+  const sel = document.getElementById('charSel'); let slugs = [];
+  const fill = async () => {
+    try { slugs = await OSWClient.library.character.list(); } catch (e) { slugs = []; }
+    const cur = sel.value; sel.innerHTML = '';
+    [['', 'defaults (Kaplay values)'], ...slugs.map(s => [s, s])].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; sel.appendChild(o); });
+    sel.value = slugs.includes(cur) ? cur : '';
+    sel.hidden = false; document.getElementById('uiLbl').hidden = false;
+  };
+  await fill();
+  let pref = ''; try { pref = localStorage.getItem('playChar_v1') || ''; } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ }
+  const want = slugs.includes(pref) ? pref : (slugs.includes('nova') ? 'nova' : slugs[0] || '');
+  sel.value = want; await useCharacter(want);
+  sel.onchange = async () => { sel.blur(); cv.focus(); try { localStorage.setItem('playChar_v1', sel.value); } catch (e) { /* IGNORE */ } await useCharacter(sel.value); };
+  let t = 0;   // A SAVE IN THE CHARACTER BUILDER (OR A NEW CHARACTER) UPDATES THE NUMBERS LIVE, NO RESPAWN
+  OSWClient.on('library.changed', () => { clearTimeout(t); t = setTimeout(async () => { await fill(); await useCharacter(sel.value); }, 300); });
+}
+
+/* ---------- BOOT ---------- */
+function showError(e) { const d = document.createElement('div'); d.id = 'err'; d.textContent = 'PLAY load error: ' + e.message + '. Serve the folder over http (the app does; plain file:// cannot read the sprite sheets).'; document.body.appendChild(d); }
+(async function () {
+  resize(); buildLevel();
+  try { await loadAssets(); } catch (e) { showError(e); return; }
+  spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
+  initCharacters();
+  cv.focus(); addEventListener('pointerdown', () => cv.focus());
+  window.__play = { P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  last = performance.now(); requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -28,7 +28,8 @@
  - [x] Drawing tool: export to library plus the parts menu. (tested in a headless browser against the in-memory library; needs a first look in the real app)
  - [x] Character Builder with the turnaround. (tested in a headless browser; needs a first look in the real app)
  - [x] Part import into Rig Lab, with pivot sidecars. (tested in a headless browser against the real library files in memory; needs a first look in the real app)
- - [ ] Remaining tools, then PLAY’s rewrite.
+ - [x] PLAY first pass: plain-JS Canvas 2D port of the Kaplay playground (core loop, movement, sprites, physics from character.json). (tested in a headless browser; needs a first look in the real app)
+ - [ ] Remaining tools (Static Rig, Spells, Cape, Tiles), then PLAY's FX pass (see Step 6).
 
 
 
@@ -264,7 +265,7 @@
 - **Turnaround:** views come from the library (`type: view`, this character). Order is left, left-front, front, right-front, right, right-back, back, left-back. With Mirror on, an undrawn left/right side is filled by flipping its opposite (front and back are never mirrored). Drag the figure, use the arrow keys, or Space to spin. Auto-spin skips undrawn views when Skip empty is on. Views are saved from the draw tool: Export > Save to library > Character view.
 - **Saving:** `library/characters/<character>/character.json`, autosaved 0.6 s after any edit (chip in the plaque shows SAVED / UNSAVED / NOT SAVED). Shape: `{ format: 'osw-character', version: 1, id, info{name,title,class,race,alignment,level,role,origin,notes}, physics[{label,value,unit}], items[{name,kind,note,equipped}], spells[{name,vfx:'sprite'|'vector',frames,key}], todo[{text,kind,done}], view{mirror,skipEmpty,speed}, updated }`. Outside the Wizard it falls back to localStorage.
 - **Library API additions:** `library.listCharacters()`, `readCharacter(slug)`, `saveCharacter(slug, obj)` (JSON object, max 1 MB, not in the manifest); `OSWClient.library.character.list/get/save`; bridge messages `library.character.*`; 1 new JS test (20 pass).
-- **Physics numbers are starter placeholders** (move speed 240, jump force 620, gravity 1600, ...). Match them to PLAY's constants when PLAY is rewritten; rows can be renamed, added and removed.
+- **Physics numbers** now match PLAY's Kaplay constants (Step 6): Builder defaults and Nova's `character.json` use 650 / 1000 / 1800 / 1500 / 150 / 850 / 480 / 1500 / 900 / air control 1 / coyote 0. Rows can be renamed, added and removed.
 
 ### Step 5 as built (library parts -> Rig Lab, pivot sidecars)
 - **ART menu** (Rig Lab top bar, only inside the Wizard): `Art: sheet (sideView.png)` or `Art: library · <character> (n/10)`. Characters are found from library parts with `meta.view === 'side'`, `meta.character` and a `meta.slot` that is one of the ten rig part names (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe). The choice is remembered (`rigArtSrc_v1` in localStorage, UI pref only). Outside the Wizard nothing changes: sheet art, menu hidden.
@@ -274,6 +275,15 @@
 - **Live refresh:** if another tool saves or re-slices this character's parts, Rig Lab reloads them (own saves are ignored).
 - **Re-saving keeps pivots:** the draw tool's SLICE INTO LIBRARY and EXPORT > Save to library (type part) carry an existing item's `meta.pivots` over into the new meta (`keepPivots` in `drawingTool.html`). Pivots are in the 800x800 frame, so they stay valid even if the redrawn part's `origin` changes. Check them in Rig Lab after redrawing a part's shape.
 - **Not done yet:** the bag (`nova_side_bag`) still loads from `accessories.png`, the pivot-editor ghost is still frame 0 of the sheet, the stale-prone Rig Lab fallbacks are untouched, and importing a `rig_config.json` while library art is on is not written to the sidecars.
+
+### Step 6 as built (PLAY, first pass)
+- **File:** `src/tools/play.html`, one plain-JS file, Canvas 2D, no Kaplay. Registered in `js/tools.js` as `tools/play.html`. The original `kinematics/index.html` is the reference.
+- **Loop:** fixed step 1/50 s, velocity updated before position (matches Kaplay, measured on 3001.0.19); render interpolates between steps. Hitbox 35x65 world px centred on the feet, SCALE 0.5. Collision is X then Y AABB against ground, 11 one-way platforms (tolerance 4) and 3 walls.
+- **Moves ported:** run, jump, coyote time, variable gravity/max fall, wall slide, wall jump (lock 0.18 s), dash (1500 for 0.16 s, cooldown 0.45), double jump with spin, spell, kick, air kick, camera lerp 6 with y offset 120. Sheets: run 8, idle 6, jump 5, wall_slide 1, attack 1, kick 6, airKick 8, plus spell and swoosh VFX. HUD text in cyan; F1 toggles hitboxes.
+- **Physics from the character:** the CHAR dropdown reads `character.json` physics rows and maps them by **label** (`LABEL_KEYS` in `play.html`: Move speed, Jump force, Gravity, Max fall speed, Wall slide speed, Wall jump force, Wall jump push, Dash speed, Double jump force, Air control, Coyote time). Missing labels fall back to the Kaplay defaults. Saving the sheet in Character Builder updates PLAY live (`library.changed`). Coyote time is stored in ms in the sheet and used in seconds. Outside the Wizard it runs on the defaults.
+- **Checks (headless):** run 650 px/s, jump apex 267.8 vs 267.9 in Kaplay, dash 240 px, double-jump spin, one-way pass-through and landing, wall touch/slide/jump, coyote, hosted physics load and live reload. Test hook: `window.__play` (P, PHYS, tick(dt), pause, spawnPlayer, state).
+- **Wall slide not compared to the original:** the Kaplay probe passed through the wall when teleported, so slide speed (cap 150, ~186 after a gravity step) is from the source code, not measured.
+- **Not ported yet (Kaplay-only FX):** cape, particles, afterimages, squash/stretch, hit-stop, camera shake, lighting, dissolve, torches. Planned order: cheap FX first (squash/stretch, hit-stop, shake, particles, afterimages), then cape, lighting, dissolve, torches.
 
 ### Things to watch
 - **Art sheet (updated Oct 25 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, a 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 bag, 2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm, 7 near hand, 8 far hand, 9 thigh, 10 calf, 11 shoe. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops. Accessories load from `assets/images/nova/mannequins/accessories.png`. CLAUDE.md's description of a ten-frame `mannequin_side.png` with a base64 fallback is stale.
@@ -298,5 +308,4 @@
 ### Open questions
 - Part naming/ID scheme and the pivot sidecar format.
 - Whether library items need version history or just overwrite.
-- How the character's physics settings map onto the PLAY rewrite.
 - Final character proportions, sprite resolution and game engine.
