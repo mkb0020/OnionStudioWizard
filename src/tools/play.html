@@ -102,6 +102,10 @@ const SWOOSH = { src: 'assets/images/vfx/swoosh.png', frames: 4, fps: 25, scale:
 const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
 const ONE_WAY_TOLERANCE = 4;
 const CAM_Y_OFFSET = 120, CAM_LERP_SPEED = 6;
+/* VERTICAL DEAD ZONE: THE CAMERA'S HEIGHT ONLY FOLLOWS THE PLAYER WHEN THEY LEAVE A BAND AROUND IT (up PX ABOVE, down PX BELOW),
+   OR WHEN THEY STAND ON SOMETHING (LANDING ON A HIGHER / LOWER PLATFORM RE-CENTRES IT). A NORMAL JUMP (~268 PX) THEREFORE BARELY MOVES THE CAMERA.
+   lerp = HOW QUICKLY THE CAMERA SETTLES VERTICALLY. SET up AND down TO 0 FOR THE OLD ALWAYS-FOLLOW CAMERA. */
+const CAM_DEAD = { up: 280, down: 140, lerp: 4 };
 let LEVEL_MIN_X = 0, LEVEL_MAX_X = 13500;
 
 const PLAYER_ANIMS = {
@@ -133,11 +137,13 @@ const PLATS = [
 const BG = '#030013';
 
 /* ---------- BACKDROP: STATIC BACKGROUND + SLOW-SCROLLING PARALLAX COLUMNS ----------
-   THE BACKGROUND IS PINNED TO THE SCREEN (IT NEVER MOVES). ITS HEIGHT FILLS THE CANVAS SO THE DARK BANDS STAY ON THE SAME ROWS AT ANY WINDOW SIZE
+   THE BACKGROUND IS PINNED TO THE SCREEN SIDEWAYS (IT ONLY DRIFTS UP / DOWN A LITTLE, SEE vBg). ITS HEIGHT FILLS THE CANVAS SO THE DARK BANDS STAY ON THE SAME ROWS AT ANY WINDOW SIZE
    (A WIDER WINDOW STRETCHES IT SIDEWAYS ONLY; A NARROWER ONE CROPS THE EDGES).
    topY / bottomY = THE ROWS OF background.png (IN ITS OWN 800 x 450 PX) WHERE THE TOP DARK BAND ENDS AND THE BOTTOM ONE BEGINS; THE COLUMNS RUN EXACTLY BETWEEN THEM.
-   speed = HOW MUCH OF THE CAMERA'S MOVEMENT THE COLUMNS FOLLOW (1 = LOCKED TO THE LEVEL, 0 = LOCKED TO THE SCREEN). spacing = GAP BETWEEN COLUMN CENTRES, IN COLUMN WIDTHS. */
-const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: 24, bottomY: 399, speed: 0.5, spacing: 4.5, on: true };
+   speed = HOW MUCH OF THE CAMERA'S MOVEMENT THE COLUMNS FOLLOW (1 = LOCKED TO THE LEVEL, 0 = LOCKED TO THE SCREEN). spacing = GAP BETWEEN COLUMN CENTRES, IN COLUMN WIDTHS.
+   VERTICAL: vBg / vCol = HOW MUCH THE BACKGROUND / THE COLUMNS FOLLOW THE CAMERA'S HEIGHT (FAR = SMALL, NEAR = BIGGER). refY = THE CAMERA HEIGHT WHERE THEY SIT EXACTLY AS DRAWN.
+   WHEN THE BACKGROUND SLIDES, THE GAP AT ITS TOP / BOTTOM IS FILLED BY STRETCHING ITS EDGE ROW (THE DARK BANDS), SO NO NEW ART IS NEEDED. */
+const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: 24, bottomY: 399, speed: 0.5, spacing: 4.5, vBg: 0.12, vCol: 0.2, refY: GROUND_Y - CAM_Y_OFFSET, on: true };
 let FALL_Y = GROUND_Y + 300, FLOOR_MAX = GROUND_Y, SPAWN = { x: 100, y: GROUND_Y };   // PER LEVEL: RESPAWN DEPTH, CAPE FLOOR CAP, WHERE THE PLAYER STARTS
 
 function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
@@ -278,7 +284,7 @@ let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coy
 const airKick = { t: 0, dir: 1, hit: false, ghostAcc: 0, ghostN: 0 };
 const doubleJump = { t: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };
 const spells = [], swooshes = [];
-const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET };
+const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET, fy: GROUND_Y - CAM_Y_OFFSET };   // fy = THE HEIGHT THE DEAD ZONE IS CENTRED ON (cam.y EASES TOWARD IT)
 let showHitboxes = false, physSource = 'defaults (Kaplay values)';
 
 function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
@@ -903,8 +909,12 @@ addEventListener('resize', resize);
 function drawBackdrop() {   // SCREEN SPACE (CALLED BEFORE THE WORLD TRANSFORM): BACKGROUND, THEN THE PARALLAX COLUMNS
   const B = BACKDROP, bg = IMG.backdrop, col = IMG.parallaxCol; if (!B.on || !bg || !col) return;
   const s = H / B.bgH, bgDrawW = Math.max(W, B.bgW * s);   // HEIGHT-FIT; ONLY EVER STRETCHED SIDEWAYS
-  ctx.drawImage(bg, 0, 0, B.bgW, B.bgH, Math.round((W - bgDrawW) / 2), 0, Math.ceil(bgDrawW), H);
-  const top = B.topY * s, colH = (B.bottomY - B.topY) * s, colW = colH * col.naturalWidth / col.naturalHeight, gap = colW * B.spacing;
+  const bx = Math.round((W - bgDrawW) / 2), bw = Math.ceil(bgDrawW), rise = B.refY - cam.y;   // rise > 0 = CAMERA IS HIGHER THAN AT REST
+  const bgDy = Math.round(rise * B.vBg), colDy = Math.round(rise * B.vCol);
+  if (bgDy > 0) ctx.drawImage(bg, 0, 0, B.bgW, 1, bx, 0, bw, bgDy + 1);                                  // GAP ABOVE: STRETCH THE TOP ROW
+  else if (bgDy < 0) ctx.drawImage(bg, 0, B.bgH - 1, B.bgW, 1, bx, H + bgDy - 1, bw, -bgDy + 1);       // GAP BELOW: STRETCH THE BOTTOM ROW
+  ctx.drawImage(bg, 0, 0, B.bgW, B.bgH, bx, bgDy, bw, H);
+  const top = B.topY * s + colDy, colH = (B.bottomY - B.topY) * s, colW = colH * col.naturalWidth / col.naturalHeight, gap = colW * B.spacing;
   const shift = cam.x * B.speed, first = Math.floor((shift - W / 2 - colW) / gap), last = Math.ceil((shift + W / 2 + colW) / gap);
   for (let i = first; i <= last; i++) ctx.drawImage(col, Math.round(W / 2 + i * gap - shift - colW / 2), Math.round(top), Math.ceil(colW), Math.round(colH));
 }
@@ -990,7 +1000,10 @@ function frame(now) {
   }
   stepShake(dt);
   const alpha = acc / FIXED_DT, tx = P.px + (P.x - P.px) * alpha, ty = P.py + (P.y - P.py) * alpha - CAM_Y_OFFSET, k = frozen ? 0 : Math.min(1, dt * CAM_LERP_SPEED);
-  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+  if (P.grounded || (!CAM_DEAD.up && !CAM_DEAD.down)) cam.fy = ty;   // STANDING ON SOMETHING: CENTRE ON IT
+  else if (ty < cam.fy - CAM_DEAD.up) cam.fy = ty + CAM_DEAD.up;     // CLIMBED OUT OF THE TOP OF THE BAND: DRAG IT UP
+  else if (ty > cam.fy + CAM_DEAD.down) cam.fy = ty - CAM_DEAD.down; // FELL OUT OF THE BOTTOM: DRAG IT DOWN
+  cam.x += (tx - cam.x) * k; cam.y += (cam.fy - cam.y) * (frozen ? 0 : Math.min(1, dt * CAM_DEAD.lerp));
   render(alpha); requestAnimationFrame(frame);
 }
 
@@ -1024,7 +1037,7 @@ async function initMaps() {
     try {
       if (!name) loadDefaultLevel(); else { const m = await OSWClient.library.map.get(name); if (!m) { loadDefaultLevel(); sel.value = ''; } else await loadMapLevel(m, name); }
     } catch (e) { console.warn('[play] map ' + name + ': ' + e.message); loadDefaultLevel(); sel.value = ''; }
-    spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
+    spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   };
   await fill();
   let pref = ''; try { pref = localStorage.getItem('playMap_v1') || ''; } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ }
@@ -1057,10 +1070,10 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
 (async function () {
   resize(); loadDefaultLevel();
   try { await loadAssets(); } catch (e) { showError(e); return; }
-  spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
+  spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
