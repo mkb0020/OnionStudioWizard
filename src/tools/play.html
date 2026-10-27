@@ -29,7 +29,7 @@
    WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
    DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / KICK / AIR KICK, CAMERA, LEVEL.
    CHEAP FX (F2 TOGGLES ALL): SQUASH + STRETCH, HIT-STOP, CAMERA SHAKE, RUN / AIR MOTES, LANDING PUFF, DASH + AIR KICK AFTERIMAGES.
-   CAPE: 3 MODES (V), GHOST TAIL (G). NOT YET (STILL IN THE KAPLAY FILE): DOUBLE JUMP SPIRAL, DISSOLVE SHADER ON THE BODY, LIGHTING, TORCHES.
+   CAPE: 3 MODES (V), GHOST TAIL (G). DISSOLVE (SPAWN IN, R DISSOLVES OUT AND RESPAWNS), DOUBLE JUMP SPIRAL. NOT YET (STILL IN THE KAPLAY FILE): LIGHTING, TORCHES.
    PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
    WHEN RUN INSIDE THE WIZARD; THE DEFAULTS BELOW ARE THE ORIGINAL KAPLAY VALUES.
    ====================================================================== */
@@ -92,7 +92,10 @@ const AIR_KICK = { enabled: true, holdTime: 0.32, holds: [1, 1, 1, 1, 1.4, 1.4, 
   squash: { x: 1.1, y: 0.92 }, impactFrame: 4, shakeTime: 0.14, shakeStrength: 8, hitStop: 0.06,
   ghostInterval: 0.016, ghostLife: 0.4, ghostAlpha: 0.6, ghostDrift: 160, ghostDrag: 3, ghostGrow: 0.15,
   burst: 16, burstSpeed: [200, 520], burstSpread: 70, burstLife: [0.3, 0.55], burstSize: [3, 6], burstOffset: { x: 70, y: -150 } };
-const DOUBLE_JUMP = { enabled: true, spinTime: 0.45, turns: 2, pivotY: 207, squash: { x: 0.9, y: 1.12 } };
+const DOUBLE_JUMP = { enabled: true, spinTime: 0.45, turns: 2, pivotY: 207, squash: { x: 0.9, y: 1.12 },
+  ghostInterval: 0.02, ghostLife: 0.5, ghostAlpha: 0.6, ghostSpeed: 230, ghostDrag: 2.2, ghostInherit: 0.5, ghostSpin: 0.6, ghostGrow: 0.2, ghostCell: 26,
+  arms: 3, moteInterval: 0.016, moteSpeed: [170, 340], moteLife: [0.35, 0.6], moteSize: [3, 6], moteDrag: 2.2, swirl: 0.55, startRadius: 26, burst: 22,
+  moteColors: ['#00ffff', '#dc4ce8', '#A55AFF', '#c4b5fd', '#ff69b4'] };
 const SPELL = { src: 'assets/images/vfx/spell.png', frames: 7, scale: 1, fps: 14, handHeightRatio: 1 / 2, forwardOffset: 40 };
 const SWOOSH = { src: 'assets/images/vfx/swoosh.png', frames: 4, fps: 25, scale: 1.3 };
 const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
@@ -168,7 +171,7 @@ async function loadAssets() {
     const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
-  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
+  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
@@ -196,7 +199,7 @@ let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0
 let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpReady = true, airKickReady = true;
 let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
 const airKick = { t: 0, dir: 1, hit: false, ghostAcc: 0, ghostN: 0 };
-const doubleJump = { t: 0, angle: 0 };
+const doubleJump = { t: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };
 const spells = [], swooshes = [];
 const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET };
 let showHitboxes = false, physSource = 'defaults (Kaplay values)';
@@ -205,8 +208,9 @@ function spawnPlayer(x = 100, y = GROUND_Y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
-  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape();
+  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
+  startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
 }
 
 /* ---------- ANIMATION ---------- */
@@ -275,15 +279,20 @@ function tryDash() {
 }
 function startDoubleJump() {
   airJumpReady = false; dashTimer = 0; P.vy = -PHYS.doubleJump; jumpStartTimer = 0; landTimer = 0;
-  doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.angle = 0; doubleJump.dir = P.flip ? -1 : 1;
-  playAnim('doubleJump'); kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1);
+  doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.angle = 0; doubleJump.angVel = 0; doubleJump.dir = P.flip ? -1 : 1; doubleJump.ghostAcc = doubleJump.moteAcc = doubleJump.ghostN = 0;
+  playAnim('doubleJump'); kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1); spawnDoubleJumpBurst();
 }
 function updateDoubleJump(dt) {
   const D = DOUBLE_JUMP;
   if (doubleJump.t <= 0 || currentAnim !== 'doubleJump') { doubleJump.t = 0; P.spin = 0; return; }
   doubleJump.t = Math.max(0, doubleJump.t - dt);
   const u = 1 - doubleJump.t / D.spinTime, ease = 1 - (1 - u) * (1 - u);   // easeOutQuad: FAST OUT OF THE LAUNCH, ENDS EXACTLY UPRIGHT
-  doubleJump.angle = 360 * D.turns * ease; P.spin = doubleJump.angle * doubleJump.dir;
+  const prev = doubleJump.angle; doubleJump.angle = 360 * D.turns * ease; doubleJump.angVel = (doubleJump.angle - prev) / dt;
+  const ang = doubleJump.angle * doubleJump.dir; P.spin = ang;
+  if (!FX.on) return;   // THE SPIRAL: GHOSTS + MOTES SHOT OUT ALONG THE BALL'S CURRENT SPIN ANGLE, SO SUCCESSIVE ONES FAN INTO ARMS
+  const c = doubleJumpCenter(); doubleJump.ghostAcc += dt; doubleJump.moteAcc += dt;
+  while (doubleJump.ghostAcc >= D.ghostInterval) { doubleJump.ghostAcc -= D.ghostInterval; spawnSpiralGhost(ang); }
+  while (doubleJump.moteAcc >= D.moteInterval) { doubleJump.moteAcc -= D.moteInterval; spawnSpiralMotes(c, ang); }
 }
 function pressJump() {
   if (isAttacking) return;
@@ -303,7 +312,7 @@ function tick(dt) {
     else if (k === 'shift' || k === 'c') tryDash();
     else if (k === 'z') playAttack();
     else if (k === 'x') pressKick();
-    else if (k === 'r') spawnPlayer();
+    else if (k === 'r') dissolveOutAndRespawn();
     else if (k === 'f1') showHitboxes = !showHitboxes;
     else if (k === 'f2') { FX.on = !FX.on; if (!FX.on) resetFx(); }
     else if (k === 'v') { cape.mode = (cape.mode + 1) % CAPE_MODES.length; cloth.need = true; }
@@ -319,7 +328,7 @@ function tick(dt) {
   physics(dt);
   stepAnim(dt);
   if (currentAnim === 'run') updateRun(dt);
-  stepFx(dt); stepCape(dt);
+  stepFx(dt); stepDissolve(dt); stepCape(dt);
   spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
   swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
   if (P.x < LEVEL_MIN_X) P.x = LEVEL_MIN_X; if (P.x > LEVEL_MAX_X) P.x = LEVEL_MAX_X;
@@ -428,7 +437,7 @@ function spawnTrail(x, y, vx, vy, o = {}) {
 function updateEmitters(dt) {
   const dx = P.x - P.px, hSpeed = Math.abs(dx) / dt, dir = dx !== 0 ? Math.sign(dx) : (P.flip ? -1 : 1);
   if (P.grounded) {
-    if (!fxWasGrounded) { landSquash(fxPeakFall); if (fxPeakFall >= PUFF.minImpact) puffs.push({ x: P.x, y: P.y, t: 0, s: PUFF.scale[0] + (PUFF.scale[1] - PUFF.scale[0]) * Math.min(1, fxPeakFall / PHYS.jump) }); }
+    if (!fxWasGrounded) { landSquash(fxPeakFall); if (fxPeakFall >= PUFF.minImpact) puffs.push({ img: 'puff', frames: PUFF.frames, fps: PUFF.fps, front: false, x: P.x, y: P.y, t: 0, s: PUFF.scale[0] + (PUFF.scale[1] - PUFF.scale[0]) * Math.min(1, fxPeakFall / PHYS.jump) }); }
     fxAirTime = 0; fxPeakFall = 0; fxAirAcc = 0;
     if (hSpeed > TRAIL_MIN_SPEED) { fxRunAcc += dt; while (fxRunAcc >= RUN_TRAIL_INTERVAL) { fxRunAcc -= RUN_TRAIL_INTERVAL; spawnTrail(P.x - dir * rnd(1, 5), P.y - RUN_TRAIL_HEIGHT + rnd(-20, 20), -dir * rnd(10, 50), -rnd(10, 45)); } }
     else fxRunAcc = 0;
@@ -439,7 +448,7 @@ function updateEmitters(dt) {
   fxWasGrounded = P.grounded;
 }
 function snapshotGhost(extra) {   // WHAT THE PLAYER LOOKS LIKE RIGHT NOW; LIFT / SIDEWAYS OFFSET / SQUASH ARE LOCAL-SPACE, SO THEY SCALE WITH SCALE
-  ghosts.push(Object.assign({ x: P.x + wallSlideHOffset * SCALE * squash.x, y: P.y - visualLift * SCALE * squash.y, sx: squash.x, sy: squash.y, sheet: P.sheet, frame: P.frame, flip: P.flip, ang: P.spin || 0, age: 0, life: DASH_GHOST.life, alpha: DASH_GHOST.alpha, grow: 0, vx: 0, vy: 0, drag: 0 }, extra));
+  ghosts.push(Object.assign({ x: P.x + wallSlideHOffset * SCALE * squash.x, y: P.y - visualLift * SCALE * squash.y, sx: squash.x, sy: squash.y, sheet: P.sheet, frame: P.frame, flip: P.flip, ang: P.spin || 0, angVel: 0, pivot: DOUBLE_JUMP.pivotY, age: 0, life: DASH_GHOST.life, alpha: DASH_GHOST.alpha, grow: 0, vx: 0, vy: 0, drag: 0, mode: 'tint', cell: 26 }, extra));
 }
 function updateGhosts(dt) {
   if (dashTimer > 0) { ghostAcc += dt; while (ghostAcc >= DASH_GHOST.interval) { ghostAcc -= DASH_GHOST.interval; snapshotGhost({ color: DASH_GHOST.colors[ghostColorIdx++ % DASH_GHOST.colors.length] }); } } else ghostAcc = 0;
@@ -451,18 +460,18 @@ function updateGhosts(dt) {
       for (let i = 0; i < A.burst; i++) { const th = rnd(-1, 1) * A.burstSpread * Math.PI / 180, sp = rnd(A.burstSpeed[0], A.burstSpeed[1]); spawnTrail(bx, by, airKick.dir * Math.cos(th) * sp, Math.sin(th) * sp, { color: BURST_COLORS[i % BURST_COLORS.length], life: rnd(A.burstLife[0], A.burstLife[1]), size: rnd(A.burstSize[0], A.burstSize[1]), drag: 2.2 }); }
     }
     airKick.ghostAcc += dt;
-    while (airKick.ghostAcc >= A.ghostInterval) { airKick.ghostAcc -= A.ghostInterval; snapshotGhost({ color: BURST_COLORS[ghostColorIdx++ % BURST_COLORS.length], life: A.ghostLife, alpha: A.ghostAlpha, vx: -airKick.dir * A.ghostDrift, drag: A.ghostDrag, grow: A.ghostGrow, ang: 0 }); }
+    while (airKick.ghostAcc >= A.ghostInterval) { airKick.ghostAcc -= A.ghostInterval; snapshotGhost({ color: DASH_GHOST.colors[ghostColorIdx++ % DASH_GHOST.colors.length], life: A.ghostLife, alpha: A.ghostAlpha, vx: -airKick.dir * A.ghostDrift, drag: A.ghostDrag, grow: A.ghostGrow, ang: 0, mode: airKick.ghostN++ % 2 === 1 ? 'dissolve' : 'tint', cell: 26 }); }
   }
   for (let i = ghosts.length - 1; i >= 0; i--) {
     const g = ghosts[i]; g.age += dt; if (g.age >= g.life) { ghosts.splice(i, 1); continue; }
-    if (g.drag) { const d = Math.exp(-g.drag * dt); g.vx *= d; g.vy *= d; g.x += g.vx * dt; g.y += g.vy * dt; }
+    if (g.drag) { const d = Math.exp(-g.drag * dt); g.vx *= d; g.vy *= d; g.x += g.vx * dt; g.y += g.vy * dt; g.ang += g.angVel * dt; g.angVel *= d; }
   }
 }
 function stepFx(dt) {
   if (!FX.on) { if (particles.length || ghosts.length || puffs.length) resetFx(); updateSquash(dt); return; }
   updateEmitters(dt); updateGhosts(dt); updateSquash(dt);
   for (let i = particles.length - 1; i >= 0; i--) { const p = particles[i]; p.age += dt; if (p.age >= p.life) { particles.splice(i, 1); continue; } const d = Math.exp(-p.drag * dt); p.vx *= d; p.vy *= d; p.x += p.vx * dt; p.y += p.vy * dt; }
-  for (let i = puffs.length - 1; i >= 0; i--) { puffs[i].t += dt; if (puffs[i].t * PUFF.fps >= PUFF.frames) puffs.splice(i, 1); }
+  for (let i = puffs.length - 1; i >= 0; i--) { puffs[i].t += dt; if (puffs[i].t * puffs[i].fps >= puffs[i].frames) puffs.splice(i, 1); }
 }
 function stepShake(dt) {   // REAL TIME, NOT THE FIXED STEP
   if (shake.t > 0) { shake.t -= dt; const mag = shake.str * Math.max(0, shake.t / shake.dur); shake.x = rnd(-mag, mag); shake.y = rnd(-mag, mag); } else shake.x = shake.y = 0;
@@ -481,9 +490,13 @@ function drawParticles() {
     ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(0.1, p.r0 * (1 - 0.7 * t)), 0, 6.2832); ctx.fill();
   }
   ctx.globalAlpha = 1;
-  for (const f of puffs) {   // BOTTOM-ANCHORED ONE-SHOT SPRITE
-    const i = Math.min(PUFF.frames - 1, Math.floor(f.t * PUFF.fps)), cw = IMG.puff.naturalWidth / PUFF.frames, ch = IMG.puff.naturalHeight;
-    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(f.s, f.s); ctx.drawImage(IMG.puff, i * cw, 0, cw, ch, -cw / 2, -ch, cw, ch); ctx.restore();
+  drawOneShots(false);
+}
+function drawOneShots(front) {   // BOTTOM-ANCHORED ONE-SHOT SPRITES: THE LANDING PUFF (z 8, BEHIND) AND THE SPAWN BEAM (z 11, IN FRONT)
+  for (const f of puffs) {
+    if (f.front !== front) continue;
+    const im = IMG[f.img], i = Math.min(f.frames - 1, Math.floor(f.t * f.fps)), cw = im.naturalWidth / f.frames, ch = im.naturalHeight;
+    ctx.save(); ctx.translate(f.x, f.y); ctx.scale(f.s, f.s); ctx.drawImage(im, i * cw, 0, cw, ch, -cw / 2, -ch, cw, ch); ctx.restore();
   }
 }
 function drawGhosts() {
@@ -491,10 +504,88 @@ function drawGhosts() {
     const t = g.age / g.life, pl = sheetPlace(g.sheet, g.frame, g.flip), sc = SCALE * (g.grow ? 1 + g.grow * t : 1 - 0.12 * t), im = IMG[g.sheet];
     const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[g.sheet].frames), sz = PLAYER_FRAME * pl.s;
     ctx.save(); ctx.globalAlpha = g.alpha * Math.pow(1 - t, 1.5); ctx.translate(g.x, g.y); ctx.scale(sc * g.sx, sc * g.sy);
-    if (g.ang) { const cy = pl.oy - DOUBLE_JUMP.pivotY * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(g.ang * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
+    if (g.ang) { const cy = pl.oy - g.pivot * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(g.ang * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
     ctx.translate(pl.ox, pl.oy); if (g.flip) ctx.scale(-1, 1);
-    ctx.drawImage(silhouette(g.sheet, g.frame, g.color), 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz); ctx.restore();
+    if (g.mode === 'dissolve') { ctx.globalAlpha = g.alpha * (1 - 0.5 * t); const c = dissolveDraw(im, g.frame * cw, 0, cw, im.naturalHeight, Math.min(1, 0.1 + t * 0.95), g.cell); ctx.drawImage(c, 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz); }   // STARTS ALMOST WHOLE, ENDS FULLY EATEN
+    else ctx.drawImage(silhouette(g.sheet, g.frame, g.color), 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);
+    ctx.restore();
   }
+}
+
+function doubleJumpCenter() {   // WORLD POSITION OF THE SPINNING BALL'S CENTRE (SAME PLACEMENT MATH AS THE PLAYER'S OWN DRAW)
+  const pl = sheetPlace('jump', JUMP_FRAME.flip, P.flip);
+  return { x: P.x + pl.ox * SCALE * squash.x, y: P.y + (pl.oy - DOUBLE_JUMP.pivotY * pl.s) * SCALE * squash.y };
+}
+function spawnSpiralGhost(ang) {   // ONE AFTERIMAGE OF THE BALL SHOT ALONG ITS CURRENT SPIN ANGLE; EVERY OTHER ONE IS A DISSOLVING COPY
+  const D = DOUBLE_JUMP, th = ang * Math.PI / 180, dissolve = doubleJump.ghostN++ % 2 === 1;
+  ghosts.push({ x: P.x, y: P.y, sx: squash.x, sy: squash.y, sheet: 'jump', frame: JUMP_FRAME.flip, flip: P.flip, age: 0, life: D.ghostLife, color: DASH_GHOST.colors[ghostColorIdx++ % DASH_GHOST.colors.length],
+    ang, angVel: doubleJump.angVel * doubleJump.dir * D.ghostSpin, pivot: D.pivotY, vx: Math.cos(th) * D.ghostSpeed, vy: Math.sin(th) * D.ghostSpeed + P.vy * D.ghostInherit, drag: D.ghostDrag, grow: D.ghostGrow, alpha: D.ghostAlpha, mode: dissolve ? 'dissolve' : 'tint', cell: D.ghostCell });
+}
+function spawnSpiralMotes(c, ang) {   // MOTES IN `arms` SPIRAL ARMS: OUTWARD + SIDEWAYS (IN THE SPIN'S DIRECTION) SO THEY CURL AS THEY SLOW
+  const D = DOUBLE_JUMP;
+  for (let a = 0; a < D.arms; a++) {
+    const th = (ang + 360 / D.arms * a) * Math.PI / 180, rx = Math.cos(th), ry = Math.sin(th), sp = rnd(D.moteSpeed[0], D.moteSpeed[1]), side = sp * D.swirl * doubleJump.dir;
+    spawnTrail(c.x + rx * D.startRadius, c.y + ry * D.startRadius, rx * sp - ry * side, ry * sp + rx * side + P.vy * D.ghostInherit, { color: D.moteColors[Math.floor(Math.random() * D.moteColors.length)], life: rnd(D.moteLife[0], D.moteLife[1]), size: rnd(D.moteSize[0], D.moteSize[1]), drag: D.moteDrag });
+  }
+}
+function spawnDoubleJumpBurst() {   // A SWIRLING RING OF MOTES FROM THE BALL'S CENTRE AT THE MOMENT OF LAUNCH
+  if (!FX.on) return;
+  const D = DOUBLE_JUMP, c = doubleJumpCenter();
+  for (let i = 0; i < D.burst; i++) {
+    const th = i / D.burst * Math.PI * 2, rx = Math.cos(th), ry = Math.sin(th), sp = rnd(D.moteSpeed[0], D.moteSpeed[1] * 1.3), side = sp * D.swirl * doubleJump.dir;
+    spawnTrail(c.x + rx * D.startRadius, c.y + ry * D.startRadius, rx * sp - ry * side, ry * sp + rx * side, { color: D.moteColors[i % D.moteColors.length], life: rnd(D.moteLife[0], D.moteLife[1]), size: rnd(D.moteSize[0], D.moteSize[1]), drag: D.moteDrag });
+  }
+}
+
+/* ---------- DISSOLVE (PORTED FROM THE KAPLAY SHADER) ----------
+   PIXELS WHOSE NOISE VALUE FALLS BELOW A MOVING THRESHOLD VANISH AND A THIN BAND JUST ABOVE IT GLOWS. THE NOISE IS MEASURED IN SPRITE PX FROM THE
+   CELL'S TOP-LEFT, SO IT STAYS GLUED TO THE ART AND DOES NOT DEPEND ON THE FRAME'S PIXELS. CANVAS 2D HAS NO SHADERS, SO THE NOISE IS BAKED ONCE PER
+   (CELL SIZE, CELL W x H) AND TURNED INTO TWO MASKS PER AMOUNT LEVEL (40 STEPS, HALF RESOLUTION, BUILT LAZILY): KEEP (UNTOUCHED ART) AND BURN (GLOW COLOUR).
+   A DISSOLVED DRAW IS THEN sprite x KEEP  +  BURN x sprite-alpha, TWO COMPOSITES, NO PER-PIXEL JS. */
+const DISSOLVE = { spawnTime: 0.9, outTime: 0.5, cell: 22, edge: 0.22, levels: 40 };
+const SPAWN_FX = { src: 'assets/images/vfx/spawn.png', frames: 7, fps: 14, scale: 0.9 };
+let dissolveAmount = 0, dissolveTw = null, dissolvingOut = false;
+const noiseMaps = new Map(), maskCache = new Map();
+function noiseMap(w, h, cell) {   // HALF-RES FIELD OF THE SHADER'S TWO-OCTAVE VALUE NOISE, 0..1
+  const key = w + 'x' + h + '@' + cell; let m = noiseMaps.get(key); if (m) return m;
+  const mw = Math.ceil(w / 2), mh = Math.ceil(h / 2); m = { mw, mh, n: new Float32Array(mw * mh) };
+  for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) { const px = x * 2, py = y * 2; let n = vnoise(px / cell, py / cell) * 0.65 + vnoise(px / (cell * 0.4) + 17, py / (cell * 0.4) + 17) * 0.35; m.n[y * mw + x] = clamp01((n - 0.18) / 0.64); }
+  noiseMaps.set(key, m); return m;
+}
+function dissolveMasks(w, h, cell, level) {
+  const key = w + 'x' + h + '@' + cell + '#' + level; let m = maskCache.get(key); if (m) return m;
+  const nm = noiseMap(w, h, cell), mw = nm.mw, mh = nm.mh, edge = DISSOLVE.edge, thr = level / DISSOLVE.levels * (1 + edge) - edge;
+  const mk = () => { const c = document.createElement('canvas'); c.width = mw; c.height = mh; return c; }, keep = mk(), burn = mk(), kg = keep.getContext('2d'), bg = burn.getContext('2d');
+  const ki = kg.createImageData(mw, mh), bi = bg.createImageData(mw, mh);
+  for (let i = 0; i < nm.n.length; i++) {
+    const n = nm.n[i]; if (n < thr) continue; const band = (n - thr) / edge, o = i * 4;
+    if (band < 1) { bi.data[o] = EDGE_A[0] + (EDGE_B[0] - EDGE_A[0]) * band; bi.data[o + 1] = EDGE_A[1] + (EDGE_B[1] - EDGE_A[1]) * band; bi.data[o + 2] = EDGE_A[2] + (EDGE_B[2] - EDGE_A[2]) * band; bi.data[o + 3] = 255; }
+    else { ki.data[o] = ki.data[o + 1] = ki.data[o + 2] = ki.data[o + 3] = 255; }
+  }
+  kg.putImageData(ki, 0, 0); bg.putImageData(bi, 0, 0); m = { keep, burn }; maskCache.set(key, m); return m;
+}
+const dTmpA = document.createElement('canvas'), dTmpB = document.createElement('canvas'), dA = dTmpA.getContext('2d'), dB = dTmpB.getContext('2d');
+function dissolveDraw(im, sx, sy, w, h, amount, cell) {   // -> A CANVAS (w x h, REUSED: DRAW IT AT ONCE) HOLDING THE DISSOLVED CELL
+  const level = Math.round(clamp01(amount) * DISSOLVE.levels);
+  if (dTmpA.width !== w || dTmpA.height !== h) { dTmpA.width = dTmpB.width = w; dTmpA.height = dTmpB.height = h; }
+  dA.globalCompositeOperation = 'source-over'; dA.clearRect(0, 0, w, h); dB.globalCompositeOperation = 'source-over'; dB.clearRect(0, 0, w, h);
+  dA.drawImage(im, sx, sy, w, h, 0, 0, w, h); if (level <= 0) return dTmpA; if (level >= DISSOLVE.levels) { dA.clearRect(0, 0, w, h); return dTmpA; }
+  const m = dissolveMasks(w, h, cell, level); dB.drawImage(im, sx, sy, w, h, 0, 0, w, h);
+  dA.globalCompositeOperation = 'destination-in'; dA.drawImage(m.keep, 0, 0, w, h);
+  dB.globalCompositeOperation = 'source-in'; dB.drawImage(m.burn, 0, 0, w, h);
+  dA.globalCompositeOperation = 'source-over'; dA.drawImage(dTmpB, 0, 0); return dTmpA;
+}
+const easeOutQuad = t => 1 - (1 - t) * (1 - t), easeInQuad = t => t * t;
+function startTween(from, to, dur, ease, onEnd) { dissolveTw = { from, to, dur, t: 0, ease, onEnd }; dissolveAmount = from; }
+function startSpawnDissolve() { dissolveTw = null; dissolvingOut = false; if (!FX.on) { dissolveAmount = 0; return; } startTween(1, 0, DISSOLVE.spawnTime, easeOutQuad); }
+function dissolveOutAndRespawn() {
+  if (dissolvingOut) return; if (!FX.on) { spawnPlayer(); return; }
+  dissolvingOut = true; startTween(dissolveAmount, 1, DISSOLVE.outTime, easeInQuad, () => spawnPlayer());
+}
+function stepDissolve(dt) {
+  if (!FX.on) { dissolveAmount = 0; dissolveTw = null; dissolvingOut = false; return; }
+  const w = dissolveTw; if (!w) return; w.t += dt; const u = Math.min(1, w.t / w.dur); dissolveAmount = w.from + (w.to - w.from) * w.ease(u);
+  if (u >= 1) { dissolveTw = null; if (w.onEnd) w.onEnd(); }
 }
 
 /* ---------- CAPE (PORTED FROM THE KAPLAY BUILD: V CYCLES THE 3 MODES, G TOGGLES THE GHOST-TAIL DISSOLVE) ----------
@@ -615,12 +706,13 @@ function disCell(u, v) {   // -> null (EATEN) OR { rgb | null (= KEEP BASE COLOU
 }
 function drawCloth(x, y) {
   if (!clothActive() || cloth.need || cloth.p.length < 3 || CAPE_VERLET_SKIP_ANIMS.has(currentAnim)) return;
+  const fade = 1 - dissolveAmount; if (fade <= 0.02) return;   // FADES WITH THE BODY'S DISSOLVE
   const Pn = cloth.p, r = clothRoot(x, y); Pn[0].x = r.x; Pn[0].y = r.y;   // PIN THE HEAD TO *THIS* FRAME'S FINAL COLLAR SO IT NEVER LAGS THE BODY
   const D = CAPE_DISSOLVE; capeDis.on = D.enabled;
   if (capeDis.on) { capeDis.start = Math.max(0, Math.min(0.98, D.start - D.speed * Math.min(1.5, cape.speed) * 0.5)); capeDis.len = (Pn.length - 1) * CAPE_CLOTH.segLen; capeDis.wid = (CAPE_CLOTH.w0 + CAPE_CLOTH.w1) / 2; }
   const layer = IDLE_CAPE.layered ? Math.min(1, cape.idleBlend + cape.attackBlend) : 0;   // IDLE AND CAST SHARE THE LINED LOOK
-  if (layer > 0.02) drawClothRibbon(Pn, 1.05, IDLE_CAPE.liningShift, LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB, layer, false);
-  drawClothRibbon(Pn, 1 + (IDLE_CAPE.topWidth - 1) * layer, 0, CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, 1, true);
+  if (layer > 0.02) drawClothRibbon(Pn, 1.05, IDLE_CAPE.liningShift, LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB, layer * fade, false);
+  drawClothRibbon(Pn, 1 + (IDLE_CAPE.topWidth - 1) * layer, 0, CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, fade, true);
 }
 function drawClothRibbon(Pn, wMul, shift, rgb, edgeRgb, glowRgb, alpha, folds) {
   const C = CAPE_CLOTH, n = Pn.length, dir = P.flip ? -1 : 1, L = [], R = [];
@@ -665,13 +757,14 @@ function drawCloak(which) {
   const pose = CLOAK_POSE[currentAnim] || CLOAK_POSE.run, dir = P.flip ? -1 : 1, fw = im.naturalWidth / CLOAK.frames, fh = im.naturalHeight, sx = cape.cloakFrame * fw;
   const ax = (CLOAK.anchor.x + 1) / 2 * fw, ay = (CLOAK.anchor.y + 1) / 2 * fh;   // ATTACH POINT INSIDE THE ART (THE ANCHOR IS MIRRORED WITH FACING)
   ctx.save(); ctx.translate(pose.x * dir, pose.y); ctx.scale(dir * CLOAK.scale, CLOAK.scale);
-  if (cape.mode === 0) { ctx.rotate(pose.rot * Math.PI / 180); ctx.drawImage(im, sx, 0, fw, fh, -ax, -ay, fw, fh); }
+  let src = im, srcX = sx; if (dissolveAmount > 0) { src = dissolveDraw(im, sx, 0, fw, fh, dissolveAmount, DISSOLVE.cell); srcX = 0; }
+  if (cape.mode === 0) { ctx.rotate(pose.rot * Math.PI / 180); ctx.drawImage(src, srcX, 0, fw, fh, -ax, -ay, fw, fh); }
   else {   // MODE 1: SPRING SWING + A TRAVELLING WAVE THROUGH VERTICAL STRIPS
     ctx.rotate((pose.rot + cape.spring.a) * Math.PI / 180);
     const n = CAPE_SPRING.strips, sw = fw / n, t = Math.min(1, cape.speed), amp = CAPE_SPRING.ampMin + (CAPE_SPRING.ampMax - CAPE_SPRING.ampMin) * t;
     for (let j = 0; j < n; j++) {
       const xL = j * sw, s = clamp01((ax - (xL + sw / 2)) / ax), dy = amp * Math.pow(s, 1.3) * Math.sin(cape.wave - s * CAPE_SPRING.phase);
-      ctx.drawImage(im, sx + j * sw, 0, sw, fh, xL - ax, -ay + dy, sw + 0.75, fh);   // TINY OVERLAP SO NO SEAMS SHOW
+      ctx.drawImage(src, srcX + j * sw, 0, sw, fh, xL - ax, -ay + dy, sw + 0.75, fh);   // TINY OVERLAP SO NO SEAMS SHOW
     }
   }
   ctx.restore();
@@ -695,7 +788,8 @@ function drawPlayer(x, y) {
   drawCloak('back');
   ctx.save(); ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1);
   const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[P.sheet].frames), sz = PLAYER_FRAME * pl.s;
-  ctx.drawImage(im, P.frame * cw, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
+  if (dissolveAmount > 0) ctx.drawImage(dissolveDraw(im, P.frame * cw, 0, cw, im.naturalHeight, dissolveAmount, DISSOLVE.cell), 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);
+  else ctx.drawImage(im, P.frame * cw, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
   ctx.restore();
   drawCloak('front');
   ctx.restore();
@@ -720,7 +814,7 @@ function drawHud() {
     'wall: ' + (touching ? touching.dir : '-') + '   wallJumpLock: ' + wallJumpLock.toFixed(2) + '   air jump: ' + (airJumpReady ? 'ready' : 'used') + '   air kick: ' + (airKick.t > 0 ? airKick.t.toFixed(2) + 's' : airKickReady ? 'ready' : 'used') + '   dash: ' + (dashTimer > 0 ? 'ON' : dashCooldown > 0 ? 'cooldown' : 'ready'),
     'physics: ' + physSource,
     'move ' + PHYS.move + '  jump ' + PHYS.jump + '  gravity ' + PHYS.gravity + '  maxFall ' + PHYS.maxFall + '  wallSlide ' + PHYS.wallSlide + '  wallJump ' + PHYS.wallJump + '  airCtl ' + PHYS.airControl + '  coyote ' + Math.round(PHYS.coyote * 1000) + 'ms',
-    'fx: ' + (FX.on ? 'ON' : 'OFF') + '   squash ' + squash.x.toFixed(2) + ' x ' + squash.y.toFixed(2) + '   particles ' + particles.length + '   ghosts ' + ghosts.length + '   F2 toggles',
+    'fx: ' + (FX.on ? 'ON' : 'OFF') + '   dissolve ' + dissolveAmount.toFixed(2) + '   squash ' + squash.x.toFixed(2) + ' x ' + squash.y.toFixed(2) + '   particles ' + particles.length + '   ghosts ' + ghosts.length + '   F2 toggles',
     'cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
     'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
   ];
@@ -737,6 +831,7 @@ function render(alpha) {
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
   drawCloth(x, y);                                                        // z 9.5: THE VERLET CAPE, BEHIND THE BODY
   drawPlayer(x, y);
+  drawOneShots(true);                                                     // z 11: THE SPAWN BEAM
   drawSwooshes();                                                         // z 11: IN FRONT
   if (showHitboxes) {
     ctx.lineWidth = 1; ctx.strokeStyle = '#ff69b4'; solids.forEach(s => ctx.strokeRect(s.x + .5, s.y + .5, s.w, s.h));
@@ -805,7 +900,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
   initCharacters();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
