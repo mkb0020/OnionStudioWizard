@@ -3194,41 +3194,10 @@ const Engine = (() => {
   syncAssist();
   sizeIn.addEventListener('input', () => setSize(+sizeIn.value));
 
-  const PALETTES = {
-    'Default': ['#000000', '#ffffff', '#170032', '#37025a', '#830cde',
-      '#A55AFF', '#c4b5fd', '#dc4ce8', '#ff69b4', '#c71585',
-      '#ff9a9e', '#ff6200', '#cc0000', '#fecd39', '#58e84c',
-      '#67FEBD', '#00ffff', '#667eea', '#657383', '#C4C3D0'],
-
-    'Midnight Alchemy': ['#000000', '#0A0A14', '#120A21', '#FFFFFF', '#FFC7FF', '#FF69B4', '#C71585',
-      '#E056FD', '#DC4CE8', '#830CDE', '#764BA2', '#602D93', 
-      '#4D2678', '#37025A', '#2D1A54', '#0000FF', '#1E31EF', 
-      '#2E45FD', '#4963FF', '#667EEA', '#4E6AF3', '#2B3BE3',
-      '#00FFFF', '#67FEBD', '#19E3D2', '#58E84C', '#2E8B57', '#134F2C'],
-
-    'Phantom Aurora': ['#160F38', '#35205E', '#6040A8', '#9270E8', '#073B4C', '#087E8B', '#13CFCB', 
-      '#75FFF0', '#103C3A', '#167A68', '#35D6A0', '#B0FFD1', '#142A65', '#2859C5', '#4C8DFF', '#B5D8FF'],
-
-    'Moody': ['#030817', '#09152E', '#102448', '#173A66', '#24568A', '#0B0614', '#180B2B', '#260D42', 
-     '#37145A', '#502078', '#090D14', '#171D29', '#292F3D', '#41495A', 
-     '#626B7D', '#031514', '#062B2C', '#084344', '#096362', '#138579'],
-
-    'Steel': ['#080A0F', '#11151C', '#1B2029', '#252C37', '#303846', '#3B4553', '#4A5565', '#5B6677', 
-     '#6C7889', '#7D899A', '#8D99A9', '#9DA8B7', '#ADB7C5', '#BDC6D2', 
-     '#CDD5DF', '#D8DEE7', '#E1E6ED', '#E9EDF3', '#F2F4F8', '#FAFBFF'],
-
-    'Skin Tones': ['#F8E9E8', '#EFD8DA', '#E4C5CB', '#D4AFB9', '#C49BA8', '#B48696', '#A5798B', 
-      '#906779', '#795567', '#684555', '#573747', '#422936'],
-
-    'Frostbyte Arcana': ['#000000', '#090D14' , '#151C26' , '#222C38' , '#344252' , '#4C5D6E' , 
-      '#718292' , '#A7B4C0' , '#DCE5EC' , '#123BFF' , '#2F5BFF' , '#5C7CFF' , '#00E5FF' , 
-      '#39F4E8' , '#8CFFF4' , '#FF3DAE' , '#FF69D4' , '#FFC0EB' , '#A8F7FF' , '#E5B8FF'],
-
-    'Rainbow': ['#FFC7FF', '#FF99D9', '#C71585', '#830CDE', '#A55AFF', '#B77DFF', '#D8C4FF', '#3F2A8C', 
-      '#1E31EF', '#4963FF', '#667EEA', '#9FC8FF', '#1A7FF7', '#00FFFF', '#3FD8D1', 
-      '#0A8FA7', '#58E84C', '#26A07B', '#06301F', '#FFF9C4', '#FFEB8A', '#FFC107']
-
-  };
+  /* Palettes live in json_files/palettes.json: { "Palette name": ["#rrggbb", ...], ... }. Add, rename, reorder or
+     delete entries there and reload. This tiny built-in set is only a fallback for when the file can't be read
+     (for example opened straight from disk, where the browser blocks fetch). */
+  let PALETTES = { 'Default': ['#000000', '#ffffff', '#170032', '#37025a', '#830cde', '#a55aff', '#c4b5fd', '#dc4ce8', '#ff69b4', '#c71585'] };
   
 
   /* ---------- color picker ----------
@@ -3350,7 +3319,11 @@ const Engine = (() => {
   }
 
   const swWrap = $('#swatches'), palSel = $('#palSel');
-  Object.keys(PALETTES).forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; palSel.appendChild(o); });
+  function fillPaletteList() {
+    palSel.innerHTML = '';
+    Object.keys(PALETTES).forEach(n => { const o = document.createElement('option'); o.value = o.textContent = n; palSel.appendChild(o); });
+  }
+  fillPaletteList();
   function showPalette(name) {
     if (!PALETTES[name]) name = 'Default';
     palSel.value = name; swWrap.innerHTML = '';
@@ -3374,7 +3347,22 @@ const Engine = (() => {
     cpFollow(normHex(c) || c);
   }
   setColor('#000000');
-  { let saved = 'Default'; try { saved = localStorage.getItem('dtPalette') || 'Default'; } catch (err) { /* optional */ } showPalette(saved); }
+  let savedPalette = 'Default'; try { savedPalette = localStorage.getItem('dtPalette') || 'Default'; } catch (err) { /* optional */ }
+  showPalette(savedPalette);
+  (async () => {                                   // swap in json_files/palettes.json when it can be read
+    try {
+      const res = await fetch(new URL('../json_files/palettes.json', location.href));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const raw = await res.json(), clean = {};
+      for (const [name, list] of Object.entries(raw)) {
+        if (!Array.isArray(list)) continue;
+        const cols = list.map(normHex).filter(Boolean);       // skips anything that isn't a hex color
+        if (cols.length) clean[name] = cols;
+      }
+      if (!Object.keys(clean).length) throw new Error('no usable palettes');
+      PALETTES = clean; fillPaletteList(); showPalette(savedPalette);
+    } catch (err) { console.warn('palettes.json not loaded, using the built-in palette:', err.message); }
+  })();
 
   function setPaperColor(c) { $('#paperColor').style.backgroundColor = c; paper.style.background = c; state.paperColor = c; }
   function applyPaper(c) { setPaperColor(c); project.frames.forEach((_, i) => drawThumb(i)); settingsChanged(); }
