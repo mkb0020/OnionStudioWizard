@@ -29,7 +29,7 @@
    WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
    DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / KICK / AIR KICK, CAMERA, LEVEL.
    CHEAP FX (F2 TOGGLES ALL): SQUASH + STRETCH, HIT-STOP, CAMERA SHAKE, RUN / AIR MOTES, LANDING PUFF, DASH + AIR KICK AFTERIMAGES.
-   CAPE: 3 MODES (V), GHOST TAIL (G). DISSOLVE (SPAWN IN, R DISSOLVES OUT AND RESPAWNS), DOUBLE JUMP SPIRAL. NOT YET (STILL IN THE KAPLAY FILE): LIGHTING, TORCHES.
+   CAPE: 3 MODES (V), GHOST TAIL (G). DISSOLVE (SPAWN IN, R DISSOLVES OUT AND RESPAWNS), DOUBLE JUMP SPIRAL. LIGHTING (L) + TORCHES. EVERYTHING FROM THE KAPLAY PLAYGROUND IS NOW HERE.
    PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
    WHEN RUN INSIDE THE WIZARD; THE DEFAULTS BELOW ARE THE ORIGINAL KAPLAY VALUES.
    ====================================================================== */
@@ -171,7 +171,7 @@ async function loadAssets() {
     const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
-  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
+  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
@@ -184,7 +184,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'v', 'g']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'v', 'g', 'l']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { keys.delete(keyName(e)); });
@@ -317,6 +317,7 @@ function tick(dt) {
     else if (k === 'f2') { FX.on = !FX.on; if (!FX.on) resetFx(); }
     else if (k === 'v') { cape.mode = (cape.mode + 1) % CAPE_MODES.length; cloth.need = true; }
     else if (k === 'g') CAPE_DISSOLVE.enabled = !CAPE_DISSOLVE.enabled;
+    else if (k === 'l') lighting.on = !lighting.on;
   }
   P.mx = 0;
   if (isAttacking) {
@@ -770,6 +771,52 @@ function drawCloak(which) {
   ctx.restore();
 }
 
+/* ---------- LIGHTING + TORCHES (PORTED FROM THE KAPLAY BUILD: L TOGGLES THE LIGHTING) ----------
+   KAPLAY RAN A FULL-SCREEN FRAGMENT SHADER: darkness = ambient * (1 - lit), lit = "SOFT OR" OF EVERY LIGHT'S SMOOTHSTEP FALLOFF.
+   CANVAS 2D GETS THE SAME NUMBERS WITHOUT A PER-PIXEL LOOP: FILL A HALF-RESOLUTION BUFFER WITH THE AMBIENT COLOUR (ALPHA = ambient), THEN PUNCH A
+   PRE-RENDERED SMOOTHSTEP SPRITE FOR EACH LIGHT WITH destination-out (alpha *= 1 - f, WHICH IS EXACTLY THE SOFT OR), THEN WASH THE LIGHT'S COLOUR
+   BACK IN AT `glow` STRENGTH AND STRETCH THE BUFFER OVER THE SCREEN. SLOT 0 = PLAYER, THEN UP TO 2 LIVE SPELLS, THEN THE NEAREST TORCHES (MAX 8). */
+const LIGHT = { z: 500, max: 8, ambient: 0.85, ambientColor: '#170032', glow: 0.1, player: { radius: 520, color: '#c4b5fd', height: 70 }, spell: { radius: 320, color: '#ff69b4' } };
+const LAMP = { colors: ['#ff6200', '#fecd39', '#ff9a9e', '#ff6200'], firstX: 350, spacing: 650, count: 15, radius: 400 };
+const TORCH = { src: 'assets/images/map/torch.png', w: 83, h: 310, scale: 0.6, flameSrc: 'assets/images/map/flame.png', frames: 6, fps: 9, flameScale: 0.37, baseFrac: 0.78, centerFrac: 0.5, flameY: 42 };
+const lighting = { on: true }, lamps = Array.from({ length: LAMP.count }, (_, i) => ({ x: LAMP.firstX + i * LAMP.spacing, color: LAMP.colors[i % LAMP.colors.length], phase: i * 1.7 }));
+const torchTopY = GROUND_Y - TORCH.h * TORCH.scale, flameBaseY = torchTopY + TORCH.flameY * TORCH.scale, flameLightY = flameBaseY - (TORCH.baseFrac - TORCH.centerFrac) * 400 * TORCH.flameScale;
+let clockT = 0;   // REAL SECONDS (FLICKER AND FLAMES KEEP MOVING THROUGH HIT-STOP)
+const lampFlicker = l => 1 + 0.04 * Math.sin(clockT * 2.1 + l.phase) + 0.035 * Math.sin(clockT * 11 + l.phase * 2.3) + 0.02 * Math.sin(clockT * 27 + l.phase * 5.1);   // SLOW SWELL + TWO FASTER WOBBLES
+const LIGHT_DIV = 4, lightSprites = new Map();   // THE BUFFER IS 1/4 SCREEN RESOLUTION: THE LIGHT IS SOFT ANYWAY AND THE FILL / STRETCH IS THE COST
+function lightSprite(hex) {   // 128 px: COLOUR hex, ALPHA = SMOOTHSTEP FALLOFF (1 AT THE CENTRE, 0 AT THE RADIUS)
+  let c = lightSprites.get(hex); if (c) return c; const n = 128, rgb = hexRgb(hex); c = document.createElement('canvas'); c.width = c.height = n;
+  const g = c.getContext('2d'), im = g.createImageData(n, n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const d = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2), f0 = 1 - Math.min(1, d), f = f0 * f0 * (3 - 2 * f0), o = (y * n + x) * 4; im.data[o] = rgb[0]; im.data[o + 1] = rgb[1]; im.data[o + 2] = rgb[2]; im.data[o + 3] = f * 255; }
+  g.putImageData(im, 0, 0); lightSprites.set(hex, c); return c;
+}
+const lightBuf = document.createElement('canvas'), lb = lightBuf.getContext('2d'), AMBIENT_RGB = hexRgb(LIGHT.ambientColor);
+function collectLights(px, py, cx) {   // { x, y, r, color } IN WORLD PX
+  const L = [{ x: px, y: py - LIGHT.player.height, r: LIGHT.player.radius * (1 + 0.015 * Math.sin(clockT * 3)), color: LIGHT.player.color }];
+  for (let i = 0; i < Math.min(2, spells.length); i++) L.push({ x: spells[i].x, y: spells[i].y, r: LIGHT.spell.radius * (1 + 0.06 * Math.sin(clockT * 40)), color: LIGHT.spell.color });
+  const near = lamps.filter(l => Math.abs(l.x - cx) < W / 2 + LAMP.radius).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx)).slice(0, LIGHT.max - L.length);
+  for (const l of near) L.push({ x: l.x, y: flameLightY, r: LAMP.radius * lampFlicker(l), color: l.color });
+  return L;
+}
+function drawTorches(vl, vr) {   // TORCH STAFF + ANIMATED FLAME, BEHIND THE PLAYER, IN FRONT OF THE LEVEL ART
+  for (const l of lamps) {
+    if (l.x < vl - 60 || l.x > vr + 60) continue;
+    ctx.drawImage(IMG.torch, l.x - TORCH.w * TORCH.scale / 2, GROUND_Y - TORCH.h * TORCH.scale, TORCH.w * TORCH.scale, TORCH.h * TORCH.scale);
+    const frame = Math.floor(clockT * TORCH.fps + l.phase * 2) % TORCH.frames, f = lampFlicker(l), sc = TORCH.flameScale * (0.97 + 0.06 * (f - 0.9)), fw = IMG.flame.naturalWidth / TORCH.frames, fh = IMG.flame.naturalHeight;
+    ctx.drawImage(IMG.flame, frame * fw, 0, fw, fh, l.x - fw * sc / 2, flameBaseY - TORCH.baseFrac * fh * sc, fw * sc, fh * sc);   // THE FLAME'S BASE (78% DOWN THE FRAME) LANDS ON THE TORCH HEAD
+  }
+}
+function drawLighting(px, py, cx, cy) {   // OVER THE WORLD, UNDER THE HUD
+  if (!lighting.on) return;
+  const bw = Math.ceil(W / LIGHT_DIV), bh = Math.ceil(H / LIGHT_DIV); if (lightBuf.width !== bw || lightBuf.height !== bh) { lightBuf.width = bw; lightBuf.height = bh; }
+  const L = collectLights(px, py, cx);
+  lb.globalCompositeOperation = 'source-over'; lb.globalAlpha = 1; lb.clearRect(0, 0, bw, bh); lb.fillStyle = rgbCss(AMBIENT_RGB, LIGHT.ambient); lb.fillRect(0, 0, bw, bh);
+  const at = l => [(W / 2 + l.x - cx - l.r) / LIGHT_DIV, (H / 2 + l.y - cy - l.r) / LIGHT_DIV, l.r * 2 / LIGHT_DIV, l.r * 2 / LIGHT_DIV];
+  lb.globalCompositeOperation = 'destination-out'; for (const l of L) { const [x, y, w, h] = at(l); lb.drawImage(lightSprite('#ffffff'), x, y, w, h); }
+  lb.globalCompositeOperation = 'source-over'; lb.globalAlpha = LIGHT.glow; for (const l of L) { const [x, y, w, h] = at(l); lb.drawImage(lightSprite(l.color), x, y, w, h); }
+  ctx.imageSmoothingQuality = 'low'; ctx.drawImage(lightBuf, 0, 0, W, H); ctx.imageSmoothingQuality = 'high';   // 'high' RESAMPLING OF A FULL-SCREEN STRETCH IS THE EXPENSIVE PART
+}
+
 /* ---------- RENDER ---------- */
 const cv = document.getElementById('game'), ctx = cv.getContext('2d');
 let W = 0, H = 0, DPR = 1;
@@ -815,7 +862,7 @@ function drawHud() {
     'physics: ' + physSource,
     'move ' + PHYS.move + '  jump ' + PHYS.jump + '  gravity ' + PHYS.gravity + '  maxFall ' + PHYS.maxFall + '  wallSlide ' + PHYS.wallSlide + '  wallJump ' + PHYS.wallJump + '  airCtl ' + PHYS.airControl + '  coyote ' + Math.round(PHYS.coyote * 1000) + 'ms',
     'fx: ' + (FX.on ? 'ON' : 'OFF') + '   dissolve ' + dissolveAmount.toFixed(2) + '   squash ' + squash.x.toFixed(2) + ' x ' + squash.y.toFixed(2) + '   particles ' + particles.length + '   ghosts ' + ghosts.length + '   F2 toggles',
-    'cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
+    'light (L): ' + (lighting.on ? 'on' : 'off') + '   cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
     'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
@@ -826,6 +873,7 @@ function render(alpha) {
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   ctx.save(); ctx.translate(Math.round(W / 2 - cam.x - shake.x), Math.round(H / 2 - cam.y - shake.y));
   drawLevel(cam.x - W / 2 - 60, cam.x + W / 2 + 60);
+  drawTorches(cam.x - W / 2, cam.x + W / 2);                              // z 3
   drawParticles();                                                        // z 8
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
@@ -838,13 +886,14 @@ function render(alpha) {
     ctx.strokeStyle = '#58e84c'; oneWays.forEach(o => ctx.strokeRect(o.x + .5, o.y + .5, o.w, o.h));
     ctx.strokeStyle = '#00ffff'; ctx.strokeRect(x - HIT_W / 2 + .5, y - HIT_H + .5, HIT_W, HIT_H);
   }
-  ctx.restore(); drawHud();
+  ctx.restore(); drawLighting(x, y, cam.x + shake.x, cam.y + shake.y); drawHud();
 }
 
 /* ---------- LOOP ---------- */
 let last = 0, acc = 0, paused = false;
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  clockT = now / 1000;
   const frozen = hitStopT > 0; if (frozen) { hitStopT -= dt; acc = 0; }   // HIT-STOP: THE SIMULATION AND THE CAMERA FOLLOW STAND STILL, THE SHAKE KEEPS GOING
   if (!paused && !frozen) {
     acc += dt; let n = 0;
@@ -900,7 +949,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = P.y - CAM_Y_OFFSET;
   initCharacters();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
