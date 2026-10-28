@@ -27,7 +27,7 @@
     {
       "label": "Gravity",
       "value": 1800,
-      "unit": "px/s²"
+      "unit": "px/s\u00b2"
     },
     {
       "label": "Max fall speed",
@@ -62,7 +62,7 @@
     {
       "label": "Air control",
       "value": 1,
-      "unit": "×"
+      "unit": "\u00d7"
     },
     {
       "label": "Coyote time",
@@ -111,9 +111,9 @@
     },
     "colliders": [
       {
-        "x": 397,
-        "y": 266,
-        "r": 44
+        "x": 392,
+        "y": 265,
+        "r": 60
       },
       {
         "x": 403,

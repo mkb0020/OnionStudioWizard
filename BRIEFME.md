@@ -343,7 +343,7 @@
 - `sideView.png` is now 9600x800 (12 frames). Frame 11 is a blue disc meant to sit under all body parts and fill gaps behind the cape in PLAY (experiment).
 - Rig Lab and the draw tool's SLICE INTO LIBRARY accept 9600x800. The head crop `ART_BOX.head` was widened to `[319,196,140,167]` to include the hood. Check the head pivots in the pivot editor.
 - Rig Lab draws the disc FIRST (under every part), centred on chest point `FILLER_C` (395,359) via `chestPt`, so it follows the chest. Body panel: "Blue filler disc (under body)" toggle and "Filler disc size". Export the sprite from Rig Lab with it on to test it baked in.
-- SLICE INTO LIBRARY also saves frame 11 as "nova side filler disc" (slot `filler`). After re-slicing, Nova's cape pins, circles and `play.ref` still need re-seeding for the new view.
+- SLICE INTO LIBRARY also saves frame 11 as "nova side filler disc" (slot `filler`). Re-sliced Oct 28 2026: Nova's `right` view is now 592 px tall (hood ears included), cape pins were retuned in Cape Lab (A 381,340 / B 388,347, defaults scale .55), and the head collider was enlarged to (392,265,r60) for the hood. `play.ref` was left alone on purpose (the hand-tuned PLAY roots still belong to the old pin midpoint).
 
 ### Things to watch
 - **Art sheet (updated Oct 28 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, an 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm, 6 near hand, 7 far hand, 8 thigh, 9 calf, 10 shoe. The bag frame is gone; the bag comes from `accessories.png`. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops (bbox + 4px).
