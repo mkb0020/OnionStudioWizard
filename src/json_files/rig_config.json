@@ -2,7 +2,7 @@
   "meta": {
     "name": "mannequin",
     "description": "Rig Lab slider defaults for one character.",
-    "exported": "2026-10-25T22:17:24.342Z"
+    "exported": "2026-10-28T13:06:55.173Z"
   },
   "shared": {
     "body": {
@@ -11,12 +11,12 @@
       "headR": 27,
       "neckW": 22,
       "neckTrim": 20,
-      "waistTrim": 0,
+      "waistTrim": 14,
       "pelvisTilt": 0.9,
-      "headFollow": 0.3,
+      "headFollow": 0.2,
       "stomach": true,
-      "stomachWChest": 42,
-      "stomachWPelvis": 42,
+      "stomachWChest": 44,
+      "stomachWPelvis": 31,
       "stomachColor": "#1c0142"
     },
     "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
@@ -37,9 +37,9 @@
       "tint": true
     },
     "bag": {
-      "bag": false,
+      "bag": true,
       "bagOverArm": false,
-      "bagScale": 0.24,
+      "bagScale": 0.26,
       "bagSwing": 0.35,
       "bagSurge": 0.25,
       "bagLean": 1,
@@ -47,26 +47,26 @@
       "bagLen": 2.5,
       "bagZ": 1,
       "charmZ": 0.51,
-      "strap": false,
-      "strapW": 8.5,
-      "strapSlack": 0.34,
-      "strapColor": "#37025a",
+      "strap": true,
+      "strapW": 5,
+      "strapSlack": 0.29,
+      "strapColor": "#003b42",
       "strapEdge": "#170032"
     }
   },
   "cycles": {
     "run": {
       "params": {
-        "spineAngle": 47,
-        "chestAngle": 54,
+        "spineAngle": 53,
+        "chestAngle": 47,
         "neckAngle": 50,
-        "cycleSec": 1.02,
+        "cycleSec": 2,
         "airtime": 14,
-        "twist": 16,
-        "hipTwist": 7,
+        "twist": 10,
+        "hipTwist": 4,
         "headBob": 0.5,
         "headJut": 1,
-        "ssAmt": 1.15
+        "ssAmt": 1.4
       },
       "stride": 1183,
       "strideBoot": 1628,
@@ -141,20 +141,20 @@
     }
   },
   "pivots": {
-    "hip": [398, 472],
-    "knee": [391.5, 598],
+    "hip": [399, 465],
+    "knee": [394.5, 588],
     "ankle": [385.5, 730],
-    "shoulder": [395.5, 338],
-    "elbow": [402, 413],
+    "shoulder": [392, 332],
+    "elbow": [404.5, 411],
     "wrist": [419.5, 473.5],
-    "rib": [397, 411],
-    "neck": [395.5, 326],
-    "headPivot": [397, 289],
-    "neckFrom": [393, 328],
-    "neckTo": [397, 282],
-    "stomachFrom": [403.5, 424],
-    "stomachTo": [406, 385],
-    "bagHip": [388.5, 438.5],
-    "strapTop": [417, 342]
+    "rib": [404, 399.5],
+    "neck": [387.5, 324.5],
+    "headPivot": [395, 288],
+    "neckFrom": [392, 332],
+    "neckTo": [394, 284],
+    "stomachFrom": [403, 434.5],
+    "stomachTo": [407.5, 371.5],
+    "bagHip": [387.5, 449],
+    "strapTop": [417, 342.5]
   }
 }
