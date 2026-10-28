@@ -51,6 +51,7 @@ const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=9600;   //
 const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
 const ART_FRAME={"head": 1, "chest": 2, "pelvis": 3, "upperArm": 4, "forearm": 5, "handR": 6, "handL": 7, "thigh": 8, "calf": 9, "shoe": 10};   // frame index of each part in the sheet
 const ART_BOX={"head": [319, 196, 140, 167], "chest": [370, 315, 68, 101], "pelvis": [360, 394, 72, 106], "upperArm": [377, 320, 39, 107], "forearm": [389, 400, 43, 86], "handR": [402, 451, 47, 56], "handL": [403, 462, 45, 47], "thigh": [368, 441, 61, 166], "calf": [362, 578, 50, 166], "shoe": [360, 717, 92, 79]};   // [x,y,w,h] crop of each frame (bbox + 4px margin)
+const FILLER_BOX=[342,305,106,108], FILLER_C=[395,359];   // frame 11 of the sheet: blue disc (bbox + 4px) and its centre; drawn UNDER every part, anchored to the chest, so the PLAY cape never shows a gap
 const ART_PIV={
   hip:[398,472], knee:[391.5,598], ankle:[385.5,730],        // hip = centre of the thigh's top cap; knee = centre of the calf's top cap (thigh bottom ends at it); ankle = boot pivot, mid-cuff above the boot dome (sole 61px below, heel 22px behind; redrawn art, Oct 28 2026)
   shoulder:[395.5,338], elbow:[402,413], wrist:[419.5,473.5],    // shoulder / elbow / wrist = centres of the round caps at the ends of the arm parts
@@ -98,7 +99,7 @@ async function loadData(){
 const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
   spPassing:1, spTakeoff:.7, spUp:.1, spContact:.35, spDown:.4,
   guides:false, joints:true, floor:true, scroll:1, zoom:1, lineW:6, tint:true,
-  stomach:true, stomachWChest:44, stomachWPelvis:50, stomachColor:'#210250',
+  filler:true, fillerScale:1, stomach:true, stomachWChest:44, stomachWPelvis:50, stomachColor:'#210250',
   bag:true, bagOverArm:false, bagScale:.5, bagSwing:1, bagSurge:.1, bagLean:.6, bagHold:1.2, bagLen:1, bagZ:.25, charmZ:.12,
   strap:true, strapW:10, strapSlack:.08, strapColor:'#37025a', strapEdge:'#170032' };
 /* Measured from the shoe frame of sideView.png (redrawn Oct 28 2026): sole 61px below the ankle pivot, heel back corner 22px behind it,
@@ -161,7 +162,7 @@ const fv=(t,k)=>((FGRIDS[footMode()][S.cycle][t]||{})[k])||0;
    used when the file is missing. "Export config" writes the live slider values in this format;
    "Import config" loads one without needing a server. Missing or invalid keys are skipped, so partial configs are fine. */
 const CFG_GROUPS={
-  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','stomach','stomachWChest','stomachWPelvis','stomachColor'],
+  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','filler','fillerScale','stomach','stomachWChest','stomachWPelvis','stomachColor'],
   motion:['range','lag','footLag'],
   poseSpeed:['spPassing','spTakeoff','spUp','spContact','spDown'],
   feet:['bootOn','soleOff','footLen','heelFrac'],
@@ -495,6 +496,7 @@ function buildParts(img,label){
   ART_NAMES.forEach((n,i)=>{
     const [bx,by,bw,bh]=ART_BOX[n]; PARTS[n]={i:ART_FRAME[n],bx,by,bw,bh};
   });
+  {const [bx,by,bw,bh]=FILLER_BOX; PARTS.filler=(img.naturalWidth>=9600)?{i:11,bx,by,bw,bh}:null;}
   PARTS._img=img; artLabel=label; partsReady=true; rebuildTints();
 }
 function rebuildTints(){   // far-side copies: darkened toward the background violet; alpha is preserved by source-atop
@@ -792,6 +794,9 @@ function drawCharacter(r){
     limbPart('calf',V.knee,V.ankle,l.knee,l.ankle,far);
     limbPart('thigh',V.hip,V.knee,l.hip,l.knee,far);
   };
+  if(P.filler&&PARTS.filler){   // blue filler disc: first thing drawn, centred on a chest point so it follows the chest's rotation and stretch
+    const f=PARTS.filler, c=chestPt(r,FILLER_C), rot=limbRot(V.rib,V.shoulder,r.rib,add(r.shTop,[Math.cos(P.chestAngle*R2D),-Math.sin(P.chestAngle*R2D)],-12)), [im,sx,sy]=partSrc(f);
+    ctx.save();ctx.translate(c[0],c[1]);ctx.rotate(rot);ctx.scale(P.fillerScale,P.fillerScale);ctx.translate(-FILLER_C[0],-FILLER_C[1]);ctx.imageSmoothingEnabled=true;ctx.drawImage(im,sx,sy,f.bw,f.bh,f.bx,f.by,f.bw,f.bh);ctx.restore();}
   /* far arm (hand, forearm, upper arm) */
   {const a=A.L; const fr=Math.atan2(V.wrist[0]-V.elbow[0],V.wrist[1]-V.elbow[1])-Math.atan2(a.wrist[0]-a.elbow[0],a.wrist[1]-a.elbow[1]);
    placePart('handL',V.wrist,a.wrist,fr,1,null,false);
@@ -959,6 +964,8 @@ const MENUS={
   {k:'neckLen',l:'Neck length',min:8,max:50,step:1},
   {k:'headR',l:'Head radius',min:16,max:42,step:1},
   {head:'STOMACH'},
+  {k:'filler',l:'Blue filler disc (under body)',check:1},
+  {k:'fillerScale',l:'Filler disc size',min:.5,max:1.6,step:.01},
   {k:'stomach',l:'Stomach fill',check:1},
   {k:'stomachWChest',l:'Width at chest',min:10,max:90,step:1},
   {k:'stomachWPelvis',l:'Width at pelvis',min:10,max:90,step:1},
