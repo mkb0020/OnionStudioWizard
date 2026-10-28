@@ -568,7 +568,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <div class="libhr"></div>
         <h2>Side-view sheet <span class="sub">assets/images/nova/mannequins/sideView.png</span></h2>
         <div class="onion-row"><span class="lbl4">CHAR</span><input type="text" id="pmChar" class="libtxt" maxlength="40" value="nova">
-          <button class="btn sm" id="pmSheetBtn" title="Slice the 12-frame sheet into library parts, the bag accessory and the full right-facing view">SLICE INTO LIBRARY</button></div>
+          <button class="btn sm" id="pmSheetBtn" title="Slice the 11-frame sheet into library parts and the full right-facing view">SLICE INTO LIBRARY</button></div>
         <p class="note">Saves each part cropped, with its position on the 800&times;800 canvas, so it lands where it was drawn. Running it again overwrites the same items.</p>
       </div>
   </div>
@@ -4099,18 +4099,17 @@ const Engine = (() => {
   // Frame order of sideView.png (see BRIEFME.md). `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
   const SHEET_FRAMES = [
     { i: 0, type: 'view', view: 'right' },            // the full mannequin; it faces right (toe toward +x), like the rig
-    { i: 1, type: 'accessory', label: 'bag', slot: 'bag' },
-    { i: 2, type: 'part', label: 'head', slot: 'head' },
-    { i: 3, type: 'part', label: 'chest', slot: 'chest' },
-    { i: 4, type: 'part', label: 'pelvis', slot: 'pelvis' },
-    { i: 5, type: 'part', label: 'upper arm', slot: 'upperArm' },
-    { i: 6, type: 'part', label: 'lower arm', slot: 'forearm' },
-    { i: 7, type: 'part', label: 'near hand', slot: 'handR' },
-    { i: 8, type: 'part', label: 'far hand', slot: 'handL' },
-    { i: 9, type: 'part', label: 'thigh', slot: 'thigh' },
-    { i: 10, type: 'part', label: 'calf', slot: 'calf' },
-    { i: 11, type: 'part', label: 'shoe', slot: 'shoe' }
-  ];
+    { i: 1, type: 'part', label: 'head', slot: 'head' },
+    { i: 2, type: 'part', label: 'chest', slot: 'chest' },
+    { i: 3, type: 'part', label: 'pelvis', slot: 'pelvis' },
+    { i: 4, type: 'part', label: 'upper arm', slot: 'upperArm' },
+    { i: 5, type: 'part', label: 'lower arm', slot: 'forearm' },
+    { i: 6, type: 'part', label: 'near hand', slot: 'handR' },
+    { i: 7, type: 'part', label: 'far hand', slot: 'handL' },
+    { i: 8, type: 'part', label: 'thigh', slot: 'thigh' },
+    { i: 9, type: 'part', label: 'calf', slot: 'calf' },
+    { i: 10, type: 'part', label: 'shoe', slot: 'shoe' }
+  ];   // THE BAG FRAME WAS REMOVED OCT 28 2026: THE BAG COMES FROM accessories.png
   // RE-SAVING A PART REPLACES ITS META, SO CARRY OVER THE PIVOT SIDECAR RIG LAB WROTE (meta.pivots) OR IT WOULD BE LOST
   const keepPivots = async (meta, id) => { try { const ex = await OSWClient.library.get(id); if (ex && ex.meta && ex.meta.pivots) meta.pivots = ex.meta.pivots; } catch (e) { /* NEW ITEM */ } return meta; };
   const loadImg = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + url)); im.src = url; });
@@ -4122,7 +4121,7 @@ const Engine = (() => {
     let saved = 0;
     try {
       const sheet = await loadImg(SHEET_URL);
-      if (sheet.naturalWidth !== 9600 || sheet.naturalHeight !== 800) throw new Error(SHEET_URL + ' must be 9600×800 (twelve 800×800 frames), got ' + sheet.naturalWidth + '×' + sheet.naturalHeight);
+      if (sheet.naturalWidth !== 8800 || sheet.naturalHeight !== 800) throw new Error(SHEET_URL + ' must be 8800×800 (eleven 800×800 frames), got ' + sheet.naturalWidth + '×' + sheet.naturalHeight);
       for (const f of SHEET_FRAMES) {
         setBusyMsg(`Slicing… ${++saved} / ${SHEET_FRAMES.length}`);
         let cv = mkCv(800, 800); cv.getContext('2d').drawImage(sheet, f.i * 800, 0, 800, 800, 0, 0, 800, 800);

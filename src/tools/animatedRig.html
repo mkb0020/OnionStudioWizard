@@ -41,24 +41,25 @@
    ====================================================================== */
 const R2D = Math.PI / 180, FPS = 24;
 /* ======================= CHARACTER ART =======================
-   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of twelve 800x800 frames (9600x800): 0 full mannequin (ghost), 1 bag, then each part drawn IN PLACE on the mannequin:
-   2 head, 3 chest, 4 pelvis, 5 upperArm, 6 lowerArm (forearm), 7 near hand (handR), 8 far hand (handL), 9 thigh, 10 calf, 11 shoe. ART_FRAME maps each part name to its frame.
+   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of eleven 800x800 frames (8800x800): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
+   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe. ART_FRAME maps each part name to its frame.
+   (The bag frame was removed Oct 28 2026: the bag comes from accessories.png.)
    The page loads that file on start (so redrawing the sheet updates the rig); it must be served over http.
    Pivots are positions inside the 800x800 frame, measured from the mannequin's gray joint circles; the rig maps each
    part's own pivot-to-pivot axis onto the matching skeleton bone (rotating and stretching it along the bone). */
-const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=9600;   // frame 0 of this sheet is the full mannequin
+const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=8800;   // frame 0 of this sheet is the full mannequin
 const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
-const ART_FRAME={"head": 2, "chest": 3, "pelvis": 4, "upperArm": 5, "forearm": 6, "handR": 7, "handL": 8, "thigh": 9, "calf": 10, "shoe": 11};   // frame index of each part in the sheet
-const ART_BOX={"head": [358, 222, 78, 86], "chest": [363, 306, 85, 96], "pelvis": [361, 398, 71, 90], "upperArm": [362, 308, 36, 116], "forearm": [367, 388, 45, 98], "handR": [382, 449, 48, 52], "handL": [381, 449, 49, 53], "thigh": [361, 416, 68, 176], "calf": [364, 562, 60, 180], "shoe": [362, 708, 103, 93]};   // [x,y,w,h] crop of each frame (bbox + margin)
+const ART_FRAME={"head": 1, "chest": 2, "pelvis": 3, "upperArm": 4, "forearm": 5, "handR": 6, "handL": 7, "thigh": 8, "calf": 9, "shoe": 10};   // frame index of each part in the sheet
+const ART_BOX={"head": [361, 216, 79, 94], "chest": [370, 315, 68, 101], "pelvis": [360, 394, 72, 106], "upperArm": [377, 320, 39, 107], "forearm": [389, 400, 43, 86], "handR": [402, 451, 47, 56], "handL": [403, 462, 45, 47], "thigh": [368, 441, 61, 166], "calf": [362, 578, 50, 166], "shoe": [360, 717, 92, 79]};   // [x,y,w,h] crop of each frame (bbox + 4px margin)
 const ART_PIV={
-  hip:[395,450], knee:[402,574], ankle:[393,730],            // hip = centre of the thigh's top cap / pelvis round; knee = where thigh bottom meets calf top; ankle = boot pivot (sole 66px below, heel 27px behind; redrawn art, Oct 25 2026)
-  shoulder:[380,326], elbow:[380,404], wrist:[398,468],          // shoulder = centre of the arm cap; elbow / wrist = joint ends of the arm parts
-  rib:[388,398],                                                 // waist joint: on the hip->shoulder line, at the chest bottom
-  neck:[382,314], headPivot:[396,292],                           // neck = 12px above the shoulder along the chest; head turns about the skull base
-  neckFrom:[388,319], neckTo:[395,290],                            // neck line: inside the chest top / inside the hood
-  stomachFrom:[400,422], stomachTo:[404,376],                      // stomach fill: just inside the pelvis top / just inside the chest bottom
-  bagHip:[370,436],                                                // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
-  strapTop:[392,315]                                               // crossbody strap: the apex over the far shoulder (chest art)
+  hip:[398,472], knee:[391.5,598], ankle:[385.5,730],        // hip = centre of the thigh's top cap; knee = centre of the calf's top cap (thigh bottom ends at it); ankle = boot pivot, mid-cuff above the boot dome (sole 61px below, heel 22px behind; redrawn art, Oct 28 2026)
+  shoulder:[395.5,338], elbow:[402,413], wrist:[419.5,473.5],    // shoulder / elbow / wrist = centres of the round caps at the ends of the arm parts
+  rib:[397,411],                                                 // waist joint: on the hip->shoulder line, at the chest bottom
+  neck:[395.5,326], headPivot:[397,289],                         // neck = 12px above the shoulder along the chest; head turns about the skull base
+  neckFrom:[393,328], neckTo:[397,282],                          // neck line: inside the chest top / inside the skull
+  stomachFrom:[403.5,424], stomachTo:[406,385],                  // stomach fill: just inside the pelvis top / just inside the chest bottom (on the torso's centre line)
+  bagHip:[388.5,438.5],                                          // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
+  strapTop:[417,342]                                             // crossbody strap: the apex over the far shoulder (chest art)
 };
 /* Pivot edits made in the Pivots menu are remembered in this browser (localStorage). They are discarded automatically if the
    defaults change. The defaults come from json_files/rig_config.json ("pivots"); the block above holds the built-in defaults. */
@@ -100,9 +101,9 @@ const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, g
   stomach:true, stomachWChest:44, stomachWPelvis:50, stomachColor:'#210250',
   bag:true, bagOverArm:false, bagScale:.5, bagSwing:1, bagSurge:.1, bagLean:.6, bagHold:1.2, bagLen:1, bagZ:.25, charmZ:.12,
   strap:true, strapW:10, strapSlack:.08, strapColor:'#37025a', strapEdge:'#170032' };
-/* Measured from the shoe frame of sideView.png (redrawn Oct 25 2026): sole 66px below the ankle pivot, heel back corner 27px behind it,
-   toe front corner 67px ahead (contact length 95, heel fraction .28). Bare mannequin foot: sole 39px below, 90px long, heel .22. */
-const FOOT_PRESET={ boot:{soleOff:66,footLen:95,heelFrac:.28}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
+/* Measured from the shoe frame of sideView.png (redrawn Oct 28 2026): sole 61px below the ankle pivot, heel back corner 22px behind it,
+   toe front corner 62px ahead (contact length 84, heel fraction .26). Bare mannequin foot (not re-measured, no bare foot in the sheet): sole 39px below, 90px long, heel .22. */
+const FOOT_PRESET={ boot:{soleOff:61,footLen:84,heelFrac:.26}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
 const CYCLE_DEFAULTS = {
   run: { spineAngle:45, chestAngle:47, cycleSec:2,  airtime:15, twist:14, hipTwist:10, headBob:2,   headJut:3, neckAngle:44, ssAmt:1 },
   walk:{ spineAngle:84, chestAngle:86, cycleSec:1.1, airtime:0,  twist:8,  hipTwist:6,  headBob:1.5, headJut:1, neckAngle:6,  ssAmt:1 }
@@ -509,7 +510,7 @@ function loadArt(){
   return new Promise(res=>{
     const fail=m=>{ artLabel='not found'; showLoadError(new Error(m)); res(); };
     const im=new Image();
-    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 9600x800 (twelve 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
+    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 8800x800 (eleven 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
     im.onerror=()=>fail('could not load '+SHEET_URL);
     im.src=SHEET_URL;
   });

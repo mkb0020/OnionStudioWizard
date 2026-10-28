@@ -15,8 +15,8 @@
       "pelvisTilt": 0.9,
       "headFollow": 0.3,
       "stomach": true,
-      "stomachWChest": 61,
-      "stomachWPelvis": 36,
+      "stomachWChest": 42,
+      "stomachWPelvis": 42,
       "stomachColor": "#1c0142"
     },
     "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
@@ -93,7 +93,7 @@
     }
   },
   "footPresets": {
-    "boot": { "soleOff": 66, "footLen": 95, "heelFrac": 0.28 },
+    "boot": { "soleOff": 61, "footLen": 84, "heelFrac": 0.26 },
     "bare": { "soleOff": 39, "footLen": 90, "heelFrac": 0.22 }
   },
   "squashStretch": {
@@ -141,20 +141,20 @@
     }
   },
   "pivots": {
-    "hip": [395, 452],
-    "knee": [402, 574],
-    "ankle": [393, 730],
-    "shoulder": [380.5, 324],
-    "elbow": [387, 405],
-    "wrist": [397, 467],
-    "rib": [395.5, 381],
-    "neck": [389.5, 321],
-    "headPivot": [381, 287.5],
-    "neckFrom": [384, 317.5],
-    "neckTo": [393.5, 283.5],
-    "stomachFrom": [403.5, 421],
-    "stomachTo": [409.5, 363.5],
-    "bagHip": [385.5, 418.5],
-    "strapTop": [419, 336]
+    "hip": [398, 472],
+    "knee": [391.5, 598],
+    "ankle": [385.5, 730],
+    "shoulder": [395.5, 338],
+    "elbow": [402, 413],
+    "wrist": [419.5, 473.5],
+    "rib": [397, 411],
+    "neck": [395.5, 326],
+    "headPivot": [397, 289],
+    "neckFrom": [393, 328],
+    "neckTo": [397, 282],
+    "stomachFrom": [403.5, 424],
+    "stomachTo": [406, 385],
+    "bagHip": [388.5, 438.5],
+    "strapTop": [417, 342]
   }
 }
