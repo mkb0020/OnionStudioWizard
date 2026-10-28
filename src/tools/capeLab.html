@@ -50,7 +50,7 @@ button:hover{border-color:var(--cyan);color:var(--cyan)}
 <body>
 <canvas id="c"></canvas>
 <div id="hud">
-  <h1>CAPE LAB <span>//</span> BLOB</h1>
+  <h1>CAPE LAB <span>//</span> <span id="bodyName" style="color:var(--cyan)">BLOB</span></h1>
   <div class="keys"><b>A/D</b> or <b>&larr;/&rarr;</b> move &nbsp; <b>W/&uarr;/Space</b> jump &nbsp; <b>Shift</b> dash &nbsp; <b>drag</b> the blob with the mouse<br>
   <b>T</b> autopilot stress test &nbsp; <b>R</b> reset &nbsp; <b>G</b> debug overlay &nbsp; <b>F</b> slow-mo &nbsp; <b>P</b> pause &nbsp; <b>X</b> clear peaks &nbsp; <b>H</b> hide panel</div>
   <div id="meter"></div>
@@ -65,7 +65,7 @@ button:hover{border-color:var(--cyan);color:var(--cyan)}
    CONFIG - ART + COLLIDERS (ALL IN 800x800 ART PIXELS OF assets/images/blob.png)
    ===================================================================== */
 const BLOB_SRC = "assets/images/misc/blob.png";
-const ART = { w: 800, h: 800, px: 500, py: 624 };           // PIVOT = FEET CENTER OF THE BLOB (BBOX IS x333-666, y194-624)
+const ART = { w: 800, h: 800, px: 500, py: 624, box: [333, 194, 666, 624] };           // PIVOT = FEET CENTER OF THE BLOB (BBOX IS x333-666, y194-624)
 const COLLIDERS_ART = [                                      // CIRCLES THE CAPE CAN'T SINK INTO (EDIT IF THE ART CHANGES; G SHOWS THEM)
   { x: 545, y: 335, r: 112 },                                // HEAD + HOOD MASS
   { x: 548, y: 548, r: 76 },                                 // BELLY
@@ -113,6 +113,9 @@ const PRESETS = {
   },
 };
 const DEFAULTS = JSON.parse(JSON.stringify({ B, C, L, PIN }));
+// BODIES: THE BLOB IS THE BUILT-IN TEST BODY. A CHARACTER BODY COMES FROM THE LIBRARY (ITS side VIEW PNG) + ITS character.json "cape" BLOCK (PINS, COLLIDERS, DEFAULTS), ALL IN THAT VIEW'S PIXELS.
+const BLOB_BODY = JSON.parse(JSON.stringify({ id: "blob", name: "BLOB", src: BLOB_SRC, art: { w: ART.w, h: ART.h, px: ART.px, py: ART.py }, box: ART.box, colliders: COLLIDERS_ART, pins: PIN, defaults: null }));
+let bodyId = "blob", bodyPins = { ...PIN }, bodyObjUrl = null, bodySel = null;
 
 /* =====================================================================
    SIM (ENGINE-AGNOSTIC: NO CANVAS, NO DOM. PORTS TO GDSCRIPT / KAPLAY AS-IS)
@@ -289,7 +292,7 @@ function capeMetrics(cape) { // CURL READOUTS: WORST JOINT BEND, TOTAL TURNING, 
 const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 let W = 0, H = 0, DPR = 1, groundY = 0;
 const img = new Image(); let imgOK = false;
-img.onload = () => { imgOK = true; }; img.onerror = () => { imgOK = false; flash("COULD NOT LOAD " + BLOB_SRC + " - USING PLACEHOLDER. SERVE src/ OVER HTTP."); };
+img.onload = () => { imgOK = true; }; img.onerror = () => { imgOK = false; flash("COULD NOT LOAD THE BODY ART - USING PLACEHOLDER. SERVE src/ OVER HTTP."); };
 img.src = BLOB_SRC;
 
 const blob = { x: 0, y: 0, vx: 0, vy: 0, facing: 1, faceS: 1, turnFrom: 1, grounded: true, sq: 0, sqv: 0, turnT: 1, dragging: false };
@@ -376,19 +379,28 @@ window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
 window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
 
 // MOUSE: GRAB THE BLOB AND THROW IT; IN DEBUG MODE (G) DRAG A PIN DOT TO MOVE THAT ATTACH POINT
-const mouse = { x: 0, y: 0, lx: 0, ly: 0, vx: 0, vy: 0, grab: null, pin: null };
+const mouse = { x: 0, y: 0, lx: 0, ly: 0, vx: 0, vy: 0, grab: null, pin: null, col: null };
 const toWorld = (e) => ({ x: e.clientX + cam.x, y: e.clientY });
 cv.addEventListener("mousedown", (e) => {
   const m = toWorld(e); mouse.x = mouse.lx = m.x; mouse.y = mouse.ly = m.y;
-  if (ui.debug) { const A = pinAW(), Bw = pinBW(); if (Math.hypot(m.x - A.x, m.y - A.y) < 16) { mouse.pin = "a"; return; } if (Math.hypot(m.x - Bw.x, m.y - Bw.y) < 16) { mouse.pin = "b"; return; } }
-  const a = worldToArt(m.x, m.y);
-  if (a.x > 320 && a.x < 680 && a.y > 180 && a.y < 640) { blob.dragging = true; mouse.grab = { x: blob.x - m.x, y: blob.y - m.y }; cv.classList.add("drag"); }
+  if (ui.debug) { const A = pinAW(), Bw = pinBW(); if (Math.hypot(m.x - A.x, m.y - A.y) < 16) { mouse.pin = "a"; return; } if (Math.hypot(m.x - Bw.x, m.y - Bw.y) < 16) { mouse.pin = "b"; return; }
+    const ac = worldToArt(m.x, m.y);                         // BODY COLLIDER CIRCLES: GRAB BY THE CENTRE DOT
+    for (let i = 0; i < COLLIDERS_ART.length; i++) { const c = COLLIDERS_ART[i]; if (Math.hypot(ac.x - c.x, ac.y - c.y) * B.scale < 14) { mouse.col = i; return; } } }
+  const a = worldToArt(m.x, m.y), bx = ART.box;
+  if (a.x > bx[0] - 12 && a.x < bx[2] + 12 && a.y > bx[1] - 12 && a.y < bx[3] + 12) { blob.dragging = true; mouse.grab = { x: blob.x - m.x, y: blob.y - m.y }; cv.classList.add("drag"); }
 });
 window.addEventListener("mousemove", (e) => { const m = toWorld(e); mouse.x = m.x; mouse.y = m.y; });
 window.addEventListener("mouseup", () => {
   if (blob.dragging) { blob.vx = clamp(mouse.vx, -2200, 2200); blob.vy = clamp(mouse.vy, -2200, 2200); blob.grounded = false; }
-  blob.dragging = false; mouse.pin = null; mouse.grab = null; cv.classList.remove("drag");
+  blob.dragging = false; mouse.pin = null; mouse.col = null; mouse.grab = null; cv.classList.remove("drag");
 });
+cv.addEventListener("wheel", (e) => {                         // DEBUG MODE: WHEEL OVER A COLLIDER CIRCLE RESIZES IT
+  if (!ui.debug) return;
+  const m = toWorld(e), a = worldToArt(m.x, m.y); let best = -1, bd = 1e9;
+  COLLIDERS_ART.forEach((c, i) => { const d = Math.hypot(a.x - c.x, a.y - c.y); if (d < c.r && d < bd) { bd = d; best = i; } });
+  if (best < 0) return; e.preventDefault();
+  const c = COLLIDERS_ART[best]; c.r = Math.max(4, Math.min(300, c.r + (e.deltaY < 0 ? 2 : -2)));
+}, { passive: false });
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -405,7 +417,8 @@ function flipFacing(newF) {
 }
 
 function update(dt) {
-  if (mouse.pin) { const a = worldToArt(mouse.x, mouse.y); PIN[mouse.pin + "x"] = Math.round(clamp(a.x, 250, 620) * 2) / 2; PIN[mouse.pin + "y"] = Math.round(clamp(a.y, 380, 660) * 2) / 2; syncUI(); }
+  if (mouse.pin) { const a = worldToArt(mouse.x, mouse.y); PIN[mouse.pin + "x"] = Math.round(clamp(a.x, 0, ART.w) * 2) / 2; PIN[mouse.pin + "y"] = Math.round(clamp(a.y, 0, ART.h) * 2) / 2; syncUI(); }
+  if (mouse.col !== null && COLLIDERS_ART[mouse.col]) { const a = worldToArt(mouse.x, mouse.y), c = COLLIDERS_ART[mouse.col]; c.x = Math.round(clamp(a.x, 0, ART.w)); c.y = Math.round(clamp(a.y, 0, ART.h)); }
   const inp = getInput(dt);
 
   if (blob.dragging) {
@@ -751,8 +764,8 @@ function drawBlob() {
 
 function drawDebug() {
   ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "#dc4ce8"; for (const c of collidersWorld()) { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.stroke(); }
-  ctx.strokeStyle = "rgba(255,199,255,.6)"; ctx.strokeRect(...(() => { const a = artToWorld(333, 194), b = artToWorld(666, 624); return [Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y]; })());
+  ctx.strokeStyle = "#dc4ce8"; for (const c of collidersWorld()) { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.stroke(); ctx.fillStyle = "#dc4ce8"; ctx.beginPath(); ctx.arc(c.x, c.y, 3.5, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = "rgba(255,199,255,.6)"; ctx.strokeRect(...(() => { const a = artToWorld(ART.box[0], ART.box[1]), b = artToWorld(ART.box[2], ART.box[3]); return [Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y]; })());
   const pins = pinsWorld(), cols = ["#00ffff", "#ff69b4"];
   cape.chains.forEach((c, k) => {                                                                                              // EDGE CHAINS
     ctx.strokeStyle = cols[k % 2]; ctx.globalAlpha = 0.6; ctx.beginPath(); c.p.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.globalAlpha = 1;
@@ -779,7 +792,7 @@ function draw() {
   ctx.restore();
   if (ui.debug) drawDebug();
   ctx.restore();
-  if (!imgOK) { ctx.fillStyle = "#ff6200"; ctx.fillText("blob.png not loaded", 20, H - 20); }
+  if (!imgOK) { ctx.fillStyle = "#ff6200"; ctx.fillText("body art not loaded", 20, H - 20); }
 }
 
 /* =====================================================================
@@ -838,7 +851,7 @@ const reseed = () => capeReset(cape, C, pinsWorld(), blob.facing);
 
 function applyPreset(name) {
   const p = PRESETS[name]; if (!p) return;
-  Object.assign(B, DEFAULTS.B); Object.assign(C, DEFAULTS.C); Object.assign(L, DEFAULTS.L); Object.assign(PIN, DEFAULTS.PIN);
+  Object.assign(B, DEFAULTS.B); Object.assign(C, DEFAULTS.C); Object.assign(L, DEFAULTS.L); Object.assign(PIN, bodyPins);
   if (p.C) Object.assign(C, p.C); if (p.B) Object.assign(B, p.B); if (p.L) Object.assign(L, p.L);
   syncUI(); reseed(); clearPeaks(); flash("PRESET: " + name);
 }
@@ -856,22 +869,88 @@ function dialog(title, text, onOk) {
 
 // SETTINGS PERSISTENCE: localStorage IS A UI CONVENIENCE ONLY (IT CAN BE WIPED); THE LIBRARY IS THE REAL SAVE (library/capes/<name>.json)
 const SAVE_KEY = "oswCapeLab_v1";
-function settingsObject() { return { format: "osw-cape", version: 1, B, C, L, PIN }; }
+function settingsObject() { return { format: "osw-cape", version: 1, body: bodyId, B, C, L, PIN }; }
 function applySettings(o) { // ACCEPTS osw-cape FILES AND THE OLD COPY SETTINGS JSON ({B,C,L,PIN})
   if (!o || typeof o !== "object") return false;
   if (o.format && o.format !== "osw-cape") return false;
   if (!(o.B || o.C || o.L || o.PIN)) return false;
+  o = JSON.parse(JSON.stringify(o));
+  if ((o.body || "blob") !== bodyId) { delete o.PIN; if (o.B) delete o.B.scale; }   // PINS AND SCALE BELONG TO THE BODY THEY WERE MADE ON
   importJSON(JSON.stringify(o)); clearPeaks(); return true;
 }
 let saveT = 0, lastSaved = "";
 function saveSoon() { clearTimeout(saveT); saveT = setTimeout(() => { try { const t = JSON.stringify(settingsObject()); if (t !== lastSaved) { lastSaved = t; localStorage.setItem(SAVE_KEY, t); } } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ } }, 500); }
-function restoreSaved() { try { const t = localStorage.getItem(SAVE_KEY); if (t) applySettings(JSON.parse(t)); } catch (e) { /* IGNORE A BAD SAVE */ } }
+function restoreSaved() {
+  try {
+    const t = localStorage.getItem(SAVE_KEY); if (!t) return; const o = JSON.parse(t);
+    if (o.body && o.body !== "blob" && window.OSWClient && OSWClient.hosted) loadBody(o.body).then(() => applySettings(o)); else applySettings(o);
+  } catch (e) { /* IGNORE A BAD SAVE */ }
+}
+
+// BODY LOADING. A CHARACTER BODY = library view image + character.json "cape" block (SEE BRIEFME STEP 10).
+function applyBody(b) {
+  bodyId = b.id; Object.assign(ART, b.art); ART.box = b.box.slice();
+  COLLIDERS_ART.length = 0; for (const c of b.colliders) COLLIDERS_ART.push({ x: c.x, y: c.y, r: c.r });
+  Object.assign(PIN, b.pins); bodyPins = { ...b.pins };
+  imgOK = false; img.src = b.src;
+  const d = b.defaults || (b.id === "blob" ? { scale: DEFAULTS.B.scale, segLen: DEFAULTS.C.segLen, segments: DEFAULTS.C.segments, w1: DEFAULTS.L.w1, hangDeg: DEFAULTS.C.hangDeg } : null);
+  if (d) { if (d.scale) B.scale = d.scale; if (d.segLen) C.segLen = d.segLen; if (d.segments) C.segments = d.segments; if (d.w1) L.w1 = d.w1; if (d.hangDeg != null) C.hangDeg = d.hangDeg; }
+  document.getElementById("bodyName").textContent = String(b.name || b.id).toUpperCase();
+  if (bodySel) bodySel.value = b.id;
+  syncUI(); resetAll();
+}
+function measureArt(url) { // SIZE, OPAQUE BOUNDING BOX AND FEET PIVOT (CENTRE OF THE LOWEST 30 ROWS) OF A VIEW PNG
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => {
+      const w = im.naturalWidth, h = im.naturalHeight, c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0);
+      const d = g.getImageData(0, 0, w, h).data; let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 16) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+      if (x1 < 0) { rej(new Error("EMPTY_IMAGE: the view has no visible pixels")); return; }
+      let f0 = w, f1 = -1; for (let y = Math.max(y0, y1 - 30); y <= y1; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 16) { if (x < f0) f0 = x; if (x > f1) f1 = x; }
+      res({ w, h, box: [x0, y0, x1, y1], px: Math.round((f0 + f1) / 2), py: y1 });
+    };
+    im.onerror = () => rej(new Error("BAD_IMAGE")); im.src = url;
+  });
+}
+async function loadBody(id) {
+  if (id === "blob") { applyBody(BLOB_BODY); return true; }
+  try {
+    const sheet = await OSWClient.library.character.get(id), cp = (sheet && sheet.cape) || {}, view = cp.view || "right";
+    const png = await OSWClient.library.readImage(id + "." + view), url = URL.createObjectURL(png), m = await measureArt(url);
+    const bw = m.box[2] - m.box[0], bh = m.box[3] - m.box[1], cx = (m.box[0] + m.box[2]) / 2;
+    const pins = cp.pins || { ax: Math.round(m.box[0] + bw * 0.04), ay: Math.round(m.box[1] + bh * 0.16), bx: Math.round(m.box[0] + bw * 0.06), by: Math.round(m.box[1] + bh * 0.34) };
+    const cols = (cp.colliders && cp.colliders.length) ? cp.colliders : [{ x: Math.round(cx), y: Math.round(m.box[1] + bh * 0.11), r: Math.round(bh * 0.08) }, { x: Math.round(cx), y: Math.round(m.box[1] + bh * 0.37), r: Math.round(bh * 0.07) }];
+    const old = bodyObjUrl; bodyObjUrl = url;
+    applyBody({ id, name: (sheet && sheet.info && sheet.info.name) || id, src: url, art: { w: m.w, h: m.h, px: m.px, py: m.py }, box: m.box, colliders: cols, pins, defaults: cp.defaults || null });
+    if (old) URL.revokeObjectURL(old);
+    flash(cp.pins ? "BODY: " + id.toUpperCase() : "NO CAPE PINS SAVED FOR " + id.toUpperCase() + " YET - PRESS G AND DRAG THEM, THEN SAVE PINS");
+    return true;
+  } catch (e) { flash("COULD NOT LOAD BODY " + id + ": " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); if (bodySel) bodySel.value = bodyId; return false; }
+}
+async function savePinsToCharacter() {
+  if (bodyId === "blob") { flash("THE BLOB HAS NO CHARACTER SHEET - PICK A CHARACTER BODY"); return; }
+  try {
+    const sheet = await OSWClient.library.character.get(bodyId); if (!sheet) { flash("NO CHARACTER SHEET FOR " + bodyId); return; }
+    const prev = sheet.cape || {};
+    sheet.cape = { version: 1, view: prev.view || "right", pins: { ax: PIN.ax, ay: PIN.ay, bx: PIN.bx, by: PIN.by }, colliders: COLLIDERS_ART.map((c) => ({ x: c.x, y: c.y, r: c.r })),
+      defaults: { scale: B.scale, segLen: C.segLen, segments: C.segments, w1: L.w1, hangDeg: C.hangDeg } };
+    await OSWClient.library.character.save(bodyId, sheet); bodyPins = { ...sheet.cape.pins }; flash("PINS SAVED TO " + bodyId.toUpperCase());
+  } catch (e) { flash("SAVE FAILED: " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); }
+}
 
 function buildLibrary() { // ONLY WHEN HOSTED IN THE WIZARD
   if (!(window.OSWClient && OSWClient.hosted)) return;
   const s = section("Library (Wizard)", true); s.id = "lib";
   panel.insertBefore(s, panel.children[1] || null);   // RIGHT UNDER PRESETS, NOT BURIED AT THE BOTTOM
   hint(s, "SAVES THE CAPE SETTINGS TO library/capes/<name>.json SO PLAY AND THE CHARACTER CAN USE THEM LATER.");
+  hint(s, "BODY: WHICH CHARACTER'S SIDE VIEW THE CAPE HANGS OFF. SAVE PINS WRITES THE PINS, BODY COLLIDERS AND CAPE SIZE INTO THAT CHARACTER'S SHEET (character.json).");
+  bodySel = document.createElement("select"); bodySel.id = "bodySel"; s.appendChild(bodySel);
+  OSWClient.library.character.list().then((names) => { bodySel.innerHTML = ""; for (const n of ["blob", ...names]) { const o = document.createElement("option"); o.value = o.textContent = n; bodySel.appendChild(o); } bodySel.value = bodyId; }).catch(() => {});
+  bodySel.addEventListener("change", () => loadBody(bodySel.value));
+  const bb = document.createElement("div"); bb.className = "btns"; s.appendChild(bb);
+  button(bb, "SAVE PINS TO CHARACTER", savePinsToCharacter);
   const nm = document.createElement("input"); nm.type = "text"; nm.id = "libName"; nm.maxLength = 40; nm.placeholder = "cape name (a-z 0-9 - _)"; s.appendChild(nm);
   const sel = document.createElement("select"); sel.id = "libSel";
   const fill = async (keep) => {
@@ -939,12 +1018,12 @@ function buildPanel() {
   slider(s, C, "groundFric", "floor friction", 0, 1, 0.01);
 
   s = section("Attach / look", true);
-  hint(s, "2 PINS (RECOMMENDED): THE CAPE IS A CLOTH STRIP PINNED AT BOTH ENDS OF THE CLOAK'S BACK EDGE (THE PINK MARKERS), SO ITS ROOT EDGE CAN'T TILT OR GAP. 1 PIN: A RIBBON HUNG FROM THE MIDPOINT. PRESS G, THEN DRAG THE CYAN (A) AND PINK (B) DOTS ON THE BLOB. THE CAPE DRAWS BEHIND THE BLOB SO THE PINS HIDE UNDER THE ART.");
+  hint(s, "2 PINS (RECOMMENDED): THE CAPE IS A CLOTH STRIP PINNED AT BOTH ENDS OF THE CLOAK'S BACK EDGE (THE PINK MARKERS), SO ITS ROOT EDGE CAN'T TILT OR GAP. 1 PIN: A RIBBON HUNG FROM THE MIDPOINT. PRESS G, THEN DRAG THE CYAN (A) AND PINK (B) DOTS ON THE BODY. DRAG A MAGENTA CIRCLE'S CENTRE DOT TO MOVE A BODY COLLIDER, AND USE THE MOUSE WHEEL INSIDE IT TO RESIZE IT. THE CAPE DRAWS BEHIND THE BLOB SO THE PINS HIDE UNDER THE ART.");
   select(s, C, "attach", "attach", [["two", "2 pins (strip)"], ["one", "1 pin (ribbon)"]], () => { reseed(); clearPeaks(); });
-  slider(s, PIN, "ax", "pin A x (art)", 250, 620, 0.5, reseed);
-  slider(s, PIN, "ay", "pin A y (art)", 380, 660, 0.5, reseed);
-  slider(s, PIN, "bx", "pin B x (art)", 250, 620, 0.5, reseed);
-  slider(s, PIN, "by", "pin B y (art)", 380, 660, 0.5, reseed);
+  slider(s, PIN, "ax", "pin A x (art)", 0, 1000, 0.5, reseed);
+  slider(s, PIN, "ay", "pin A y (art)", 0, 1000, 0.5, reseed);
+  slider(s, PIN, "bx", "pin B x (art)", 0, 1000, 0.5, reseed);
+  slider(s, PIN, "by", "pin B y (art)", 0, 1000, 0.5, reseed);
   slider(s, L, "w1", "width at hem", 10, 280, 1);
   slider(s, L, "taper", "width curve", 0.3, 2.5, 0.05);
   slider(s, L, "split", "two-tone split", 0.1, 0.9, 0.01);

@@ -645,6 +645,8 @@ $('#newChar').addEventListener('keydown', e => {
   const raw = e.target.value.trim(), s = slugOf(raw); if (!s) return;
   e.target.value = ''; e.target.hidden = true; loadCharacter(s, raw);
 });
+// ANOTHER TOOL (CAPE LAB) OWNS sheet.cape: PICK IT UP SO THE NEXT AUTOSAVE DOESN'T OVERWRITE IT WITH A STALE COPY
+if (hosted) OSWClient.on('library.changed', c => { if (c && c.kind === 'character' && c.id === slug && !saving) OSWClient.library.character.get(slug).then(d => { if (d && d.cape) sheet.cape = d.cape; else if (d) delete sheet.cape; }).catch(() => {}); });
 if (hosted) OSWClient.on('library.changed', c => { if (c && (c.kind === 'root' || (c.id && String(c.id).startsWith(slug + '.')) || c.kind === 'adopted' || c.kind === 'removed')) refreshViews(); });
 
 setChip('local', 'LOADING');
