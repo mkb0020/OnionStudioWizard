@@ -291,3 +291,22 @@ test('maps: save, read back, list, and bad input is refused', async () => {
   await assert.rejects(lib.saveMap('cave', { big: 'x'.repeat(1100000) }), /1 MB/);
   assert.deepEqual((await lib.scan()).untracked, []);
 });
+
+test('capes: save, read back, list, and bad input is refused', async () => {
+  const { storage, lib } = fresh();
+  assert.deepEqual(await lib.listCapes(), []);
+  assert.equal(await lib.readCape('cloak'), null);
+  const seen = [];
+  lib.onChange((c) => seen.push(c));
+  const m = { format: 'osw-cape', version: 1, C: { segments: 14 } };
+  await lib.saveCape('cloak', m);
+  await lib.saveCape('ghost-2', m);
+  assert.deepEqual(await lib.listCapes(), ['cloak', 'ghost-2']);
+  assert.deepEqual(await lib.readCape('cloak'), m);
+  assert.ok(storage.files.has('capes/cloak.json'));
+  assert.deepEqual(seen[0], { kind: 'cape', id: 'cloak' });
+  await assert.rejects(lib.saveCape('Bad Name', {}), /BAD_CAPE/);
+  await assert.rejects(lib.saveCape('cloak', [1]), /BAD_DATA/);
+  await assert.rejects(lib.saveCape('cloak', { big: 'x'.repeat(1100000) }), /1 MB/);
+  assert.deepEqual((await lib.scan()).untracked, []);
+});

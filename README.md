@@ -32,7 +32,7 @@ src/
   js/bridge.js        shell side of the postMessage bridge; js/oswClient.js is the tool side
   js/libraryPanel.js  Library drawer (folder setting, PNG import, browse/rename/delete)
 src-tauri/            Rust side: window commands for PrettyKit's buttons + the library file commands (library.rs)
-library/              created on first run: manifest.json + parts/, accessories/, characters/ (git-tracked art)
+library/              created on first run: manifest.json + parts/, accessories/, characters/, maps/, capes/ (git-tracked)
 tests/                node tests for the library
 ```
 

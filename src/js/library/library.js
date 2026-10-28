@@ -312,6 +312,37 @@ export function createLibrary(storage) {
       });
     },
 
+    // CAPES: capes/<cape>.json IS A CAPE LAB SETTINGS FILE (osw-cape). FREE-FORM JSON OBJECT, NOT IN THE MANIFEST.
+    listCapes() {
+      return serial(async () => {
+        let entries = [];
+        try { entries = await storage.list('capes', false); } catch (e) { entries = []; }
+        return entries.filter((e) => !e.isDir).map((e) => e.path.split('/').pop()).filter((n) => /\.json$/.test(n)).map((n) => n.replace(/\.json$/, '')).filter((n) => SLUG_RE.test(n)).sort();
+      });
+    },
+
+    readCape(cape) {
+      return serial(async () => {
+        if (!SLUG_RE.test(cape || '')) throw new Error('BAD_CAPE: cape must be lowercase letters, numbers, _ or - (max 40)');
+        const raw = await storage.read('capes/' + cape + '.json');
+        if (!raw) return null;
+        try { return JSON.parse(new TextDecoder().decode(raw)); }
+        catch (e) { throw new Error('BAD_DATA: capes/' + cape + '.json is not valid JSON (' + e.message + '). Nothing was changed.'); }
+      });
+    },
+
+    saveCape(cape, data) {
+      return serial(async () => {
+        if (!SLUG_RE.test(cape || '')) throw new Error('BAD_CAPE: cape must be lowercase letters, numbers, _ or - (max 40)');
+        if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('BAD_DATA: a cape must be a JSON object');
+        const bytes = new TextEncoder().encode(JSON.stringify(data) + '\n');
+        if (bytes.length > 1024 * 1024) throw new Error('BAD_DATA: the cape is larger than 1 MB');
+        await storage.write('capes/' + cape + '.json', bytes);
+        emit({ kind: 'cape', id: cape });
+        return { cape, bytes: bytes.length };
+      });
+    },
+
     // FORGET ENTRIES WHOSE IMAGE FILE IS GONE
     dropMissing() {
       return serial(async () => {

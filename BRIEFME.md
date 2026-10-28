@@ -20,6 +20,7 @@
   - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` (11 frames) into the library
   - Step 5: Rig Lab ART menu imports a character's parts from the library; pivots are saved as sidecars in each part's `meta.pivots`
+  - Step 9: Cape Lab tool (CAPE//BLOB verlet cloth + ghost-tail dissolve), settings save to `library/capes/<name>.json`
   - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
@@ -32,7 +33,8 @@
  - [x] PLAY first pass: plain-JS Canvas 2D port of the Kaplay playground (core loop, movement, sprites, physics from character.json). (tested in a headless browser; needs a first look in the real app)
  - [x] Tile Lab (TILE//LAB) as a Wizard tool, first pass. (tested in a headless browser; needs a first look in the real app)
  - [x] Maps drive PLAY: save a Tile Lab map to the library, pick it in PLAY (Step 8).
- - [ ] Remaining tools (Static Rig, Spells, Cape), then PLAY's polish (see Step 6).
+ - [x] Cape Lab as a Wizard tool, first pass (Step 9). (tested in a headless browser; needs a first look in the real app)
+- [ ] Remaining tools (Static Rig, Spells), then PLAY's polish (see Step 6).
 
 
 
@@ -152,6 +154,7 @@
       - animatedRig.html
       - characterBuilder.html
       - drawingTool.html
+      - capeLab.html
     - index.html
   - src-tauri/
     - capabilities/
@@ -307,6 +310,13 @@
 - **Tile Lab:** inside the Wizard a library box appears: type a name and SAVE TO LIBRARY, or pick one and LOAD FROM LIBRARY. (Outside the Wizard the box is hidden; map files still work.)
 - **PLAY:** a MAP dropdown next to the CHARACTER one (default "test level", the choice is remembered). A map becomes the level at 64 px per cell: `#` cells merge into solid rects (all of them can be clung to), `=` runs become one-way platforms, air gets the tileset's air + back-wall tiles, the map's edges are walls, falling below the map respawns. Torches are placed automatically about every 8 columns on floors with headroom, and the cape no longer assumes one ground height. Re-saving the map you are playing from Tile Lab reloads it live.
 - **Not done yet:** hand-placed torches and decor in maps, background layers, doors/transitions between maps, enemies, and a first look in the real app (all testing was headless).
+
+### Step 9 as built (Cape Lab)
+- **File:** `src/tools/capeLab.html`, registered as the FX > Cape rail button (`tools/capeLab.html`). A port of `kinematics/capeLab.html` ("CAPE LAB // BLOB"): the sim (`SIM:BEGIN`..`SIM:END`, plain functions, no DOM, ports to GDScript as-is), the 2-pin cloth strip, tendrils, WebGL ghost-tail dissolve, sparks, anti-curl meters, autopilot stress test and every slider are unchanged.
+- **Wizard changes only:** `<base href="../">`; blob art path is `assets/images/misc/blob.png`; `window.prompt` (unreliable in a Tauri webview) replaced by a small text dialog for COPY / PASTE SETTINGS; TEXTAREA added to the keys the tool ignores.
+- **Settings persistence:** edits autosave to localStorage (`oswCapeLab_v1`, a UI convenience) and come back after a restart. The real save is the library: a LIBRARY (WIZARD) box under Presets (only shown inside the Wizard) saves `library/capes/<name>.json`, format `osw-cape` v1: `{ format, version, B, C, L, PIN }` (blob body, cape sim, look, pin positions in 800x800 art px). It also loads the old COPY SETTINGS JSON (`{B,C,L,PIN}`).
+- **Library API:** `library.listCapes()`, `readCape(slug)`, `saveCape(slug, obj)` (free-form JSON object, max 1 MB, not in the manifest, same idea as maps); bridge `library.cape.list/get/save`; `OSWClient.library.cape.*`; `library.changed` fires `{kind:'cape', id}`. 1 new JS test (22 pass).
+- **Not done yet:** the cape still hangs off the blob, not Nova (PIN and COLLIDERS_ART are in blob.png art px, so Nova needs her own pins and collider circles in her 800x800 frame); PLAY does not read `library/capes/` yet (its verlet cape uses the `CAPE_*` constants); Rig Lab has no cape. Likely next: a CAPE dropdown in PLAY plus Nova pins in her character sheet.
 
 ### Things to watch
 - **Art sheet (updated Oct 28 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, an 8800x800 sheet of eleven 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm, 6 near hand, 7 far hand, 8 thigh, 9 calf, 10 shoe. The bag frame is gone; the bag comes from `accessories.png`. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops (bbox + 4px).

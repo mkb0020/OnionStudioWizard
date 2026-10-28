@@ -1,0 +1,1016 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">  <!-- OSW: RESOLVES assets/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CAPE LAB // BLOB</title>
+<style>
+/* ---------- THEME: DEEP VIOLET + NEON (PALETTE FROM colorPalette/) ---------- */
+:root{--bg:#0c001f;--panel:rgba(23,0,50,.88);--line:#37025a;--ink:#C4C3D0;--dim:#9090C0;--cyan:#00ffff;--mag:#dc4ce8;--vio:#A55AFF;--mint:#67FEBD;--warn:#ff6200}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:12px/1.35 ui-monospace,Menlo,Consolas,monospace;overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+canvas.drag{cursor:grabbing}
+#hud{position:fixed;left:12px;top:10px;pointer-events:none;text-shadow:0 0 6px #000}
+#hud h1{margin:0 0 4px;font-size:15px;letter-spacing:.22em;color:var(--cyan);font-weight:700}
+#hud h1 span{color:var(--mag)}
+#hud .keys{color:var(--dim);max-width:420px}
+#hud .keys b{color:var(--vio);font-weight:600}
+#meter{margin-top:8px;padding:6px 8px;border:1px solid var(--line);background:rgba(12,0,31,.7);width:250px}
+#meter div{display:flex;justify-content:space-between}
+#meter .v{color:var(--mint)}
+#meter .bad{color:var(--warn)}
+#meter small{color:var(--dim)}
+#panel{position:fixed;right:0;top:0;bottom:0;width:310px;overflow-y:auto;background:var(--panel);border-left:1px solid var(--line);padding:8px 10px 24px;backdrop-filter:blur(3px)}
+#panel.hide{display:none}
+#panel details{border-bottom:1px solid var(--line);padding:4px 0}
+#panel summary{cursor:pointer;color:var(--cyan);letter-spacing:.12em;font-weight:700;padding:3px 0;text-transform:uppercase;font-size:11px}
+.row{display:grid;grid-template-columns:104px 1fr 44px;gap:6px;align-items:center;margin:3px 0}
+.row label{color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row output{text-align:right;color:var(--mint)}
+.row2{display:grid;grid-template-columns:104px 1fr;gap:6px;align-items:center;margin:3px 0}
+input[type=range]{width:100%;accent-color:var(--vio);height:14px;margin:0}
+select,button,input[type=color]{background:#170032;color:var(--ink);border:1px solid var(--line);font:inherit;padding:3px 6px}
+input[type=color]{padding:0;height:22px;width:60px}
+button{cursor:pointer}
+button:hover{border-color:var(--cyan);color:var(--cyan)}
+.btns{display:flex;flex-wrap:wrap;gap:5px;margin:5px 0}
+.hint{color:var(--dim);font-size:11px;margin:2px 0 4px}
+#dlg{position:fixed;inset:0;background:rgba(12,0,31,.82);display:none;align-items:center;justify-content:center;z-index:5}
+#dlg.on{display:flex}
+#dlg div{width:min(560px,90vw);background:#170032;border:1px solid var(--vio);padding:12px;box-shadow:0 0 24px rgba(165,90,255,.35)}
+#dlg h3{margin:0 0 6px;font-size:12px;letter-spacing:.16em;color:var(--cyan)}
+#dlg textarea{width:100%;height:240px;box-sizing:border-box;background:#0c001f;color:var(--ink);border:1px solid var(--line);font:11px/1.35 ui-monospace,Consolas,monospace;resize:vertical}
+#lib input[type=text]{width:100%;background:#170032;color:var(--ink);border:1px solid var(--line);font:inherit;padding:3px 6px}
+#lib select{width:100%}
+#msg{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);padding:5px 12px;background:rgba(12,0,31,.9);border:1px solid var(--mag);color:var(--mag);display:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <h1>CAPE LAB <span>//</span> BLOB</h1>
+  <div class="keys"><b>A/D</b> or <b>&larr;/&rarr;</b> move &nbsp; <b>W/&uarr;/Space</b> jump &nbsp; <b>Shift</b> dash &nbsp; <b>drag</b> the blob with the mouse<br>
+  <b>T</b> autopilot stress test &nbsp; <b>R</b> reset &nbsp; <b>G</b> debug overlay &nbsp; <b>F</b> slow-mo &nbsp; <b>P</b> pause &nbsp; <b>X</b> clear peaks &nbsp; <b>H</b> hide panel</div>
+  <div id="meter"></div>
+</div>
+<div id="panel"></div>
+<div id="msg"></div>
+<div id="dlg"><div><h3 id="dlgT"></h3><textarea id="dlgTa" spellcheck="false"></textarea><div class="btns" style="margin:6px 0 0;padding:0;border:0;background:none;width:auto;box-shadow:none"><button id="dlgOk">OK</button><button id="dlgNo">CLOSE</button></div></div></div>
+
+<script src="js/oswClient.js"></script>
+<script>
+/* =====================================================================
+   CONFIG - ART + COLLIDERS (ALL IN 800x800 ART PIXELS OF assets/images/blob.png)
+   ===================================================================== */
+const BLOB_SRC = "assets/images/misc/blob.png";
+const ART = { w: 800, h: 800, px: 500, py: 624 };           // PIVOT = FEET CENTER OF THE BLOB (BBOX IS x333-666, y194-624)
+const COLLIDERS_ART = [                                      // CIRCLES THE CAPE CAN'T SINK INTO (EDIT IF THE ART CHANGES; G SHOWS THEM)
+  { x: 545, y: 335, r: 112 },                                // HEAD + HOOD MASS
+  { x: 548, y: 548, r: 76 },                                 // BELLY
+];
+
+/* =====================================================================
+   SETTINGS - EVERY SLIDER LIVES IN ONE OF THESE OBJECTS (COPY SETTINGS EXPORTS THEM)
+   ===================================================================== */
+const B = {            // BLOB BODY
+  scale: 0.55, maxSpeed: 560, accel: 3200, friction: 3000, airCtl: 0.8,
+  jumpV: 1000, gravity: 2800, dashMul: 1.7,
+};
+const C = {            // CAPE SIM (WORLD PX; SEE ALSO anti-curl BLOCK)
+  segments: 14, segLen: 14, gravity: 1800, drag: 1.2, nDrag: 9, tDrag: 0.4,
+  lift: 0.55, flutter: 260, backBias: 0, wind: 0,
+  hangDeg: 55, sag: 0.55, vRef: 500, restPull: 45,
+  iterations: 8, bend: 0.35, step: 1 / 120, maxSteps: 6,
+  // ANTI-CURL
+  spanMin: 0.5, maxBendDeg: 28, collide: true, thick: 6,
+  turnMode: "slide", turnTime: 0.16,
+  // GROUND
+  groundPad: 14, groundFric: 0.35,
+  // ATTACH
+  attach: "two", shear: 1.0, rung: 0.3,
+};
+const L = {            // LOOK
+  w1: 54, taper: 1.0, ripple: 0.06, split: 0.55,
+  top: "#1d54ed", bottom: "#1a4fda", rim: "#1078f0", dark: "#1040b8",
+  rimW: 3, folds: true, layer: "behind",
+  // GHOST TAIL (DISSOLVE). disStart: 0 = ROOT, 1 = HEM. disAmt: HOW GONE THE HEM GETS (1 = FULLY).
+  dis: true, disStart: 0.62, disAmt: 0.9, disCell: 14, disEdge: 0.22, disFlow: 70, disSpeed: 0.5, disFade: 0.3, disGlow: 1.0,
+  mode: "tendrils", tCount: 5, tSplit: 0.4, tAmp: 28, tSpeed: 5, tSpread: 0.45, tTaper: 0.8, tOverlap: 0.35, tLenVar: 0.3, tWaves: 1.25, tIdle: 0.45, tGain: 0.9,
+  disSparks: 0.3, disColA: "#c8fcff", disColB: "#dc4ce8",
+};
+const PIN = { ax: 389.5, ay: 461.5, bx: 459.5, by: 608.5 };   // THE TWO PINK MARKERS: TOP + BOTTOM OF THE CLOAK'S BACK EDGE (ART PX). 1-PIN MODE USES THEIR MIDPOINT. IN DEBUG MODE (G) DRAG THE DOTS.
+
+const PRESETS = {
+  STABLE: {},
+  OLD: { // INDEX.HTML MODE 2 RECIPE: NO RELATIVE-WIND DRAG, NO REST SHAPE, NO ANGLE LIMITS, NAIVE FLIP
+    C: { segments: 12, segLen: 11, gravity: 2000, drag: 3.6, nDrag: 0, tDrag: 0, lift: 0.8, flutter: 1400, backBias: 2000,
+         restPull: 0, iterations: 6, bend: 0.32, spanMin: 0, maxBendDeg: 180, collide: false, turnMode: "snap", turnTime: 0, sag: 0.55, attach: "one" },
+  },
+  LOOSE: { // STABLE BUT FLOPPY: SEE HOW MUCH THE LIMITS ARE DOING
+    C: { restPull: 0, spanMin: 0.3, maxBendDeg: 50, nDrag: 5 },
+  },
+};
+const DEFAULTS = JSON.parse(JSON.stringify({ B, C, L, PIN }));
+
+/* =====================================================================
+   SIM (ENGINE-AGNOSTIC: NO CANVAS, NO DOM. PORTS TO GDSCRIPT / KAPLAY AS-IS)
+   ===================================================================== */
+/* SIM:BEGIN */
+const TAU = Math.PI * 2;
+const SPANS = [3, 5, 8, 12];
+const wrapA = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
+
+// THE CAPE IS ONE CHAIN PER PIN. 1 PIN = A SINGLE SPINE (DRAWN AS A RIBBON). 2 PINS = TWO EDGE CHAINS LINKED BY RUNGS + DIAGONALS = A CLOTH STRIP WHOSE ROOT EDGE IS PINNED AT BOTH ENDS.
+function capeReset(cape, P, pins, facing) { // HANG EACH CHAIN DOWN-AND-BACK FROM ITS PIN
+  const h = P.hangDeg * Math.PI / 180;
+  cape.chains = pins.map((root) => {
+    const p = [];
+    for (let i = 0; i < P.segments; i++) {
+      const x = root.x - facing * Math.sin(h) * i * P.segLen, y = root.y + Math.cos(h) * i * P.segLen;
+      p.push({ x, y, px: x, py: y });
+    }
+    return { p };
+  });
+  cape.p = cape.chains[0].p;
+  cape.last = pins.map((r) => ({ x: r.x, y: r.y }));
+  cape.acc = 0;
+}
+
+function capeMirror(cape, axisX) { // FLIP EVERY CHAIN (POSITION AND VELOCITY) ACROSS A VERTICAL AXIS - CLEAN TURN-AROUND
+  for (const c of cape.chains) for (const q of c.p) { q.x = 2 * axisX - q.x; q.px = 2 * axisX - q.px; }
+}
+
+// WHERE THE CAPE "WANTS" TO POINT: DOWN-AND-BACK AT REST, STREAMING OPPOSITE THE TRAVEL DIRECTION WHEN MOVING.
+function capeRefDir(P, vel, facing) {
+  const h = P.hangDeg * Math.PI / 180;
+  const x = -facing * Math.sin(h) * P.sag - vel.x / P.vRef;
+  const y = Math.cos(h) * P.sag - vel.y / P.vRef;
+  const l = Math.hypot(x, y) || 1;
+  return { x: x / l, y: y / l };
+}
+
+// env = { pins:[{x,y}...], widths:[n], facing, vel:{x,y}, groundY, colliders:[{x,y,r}] }
+function capeStep(cape, P, env, dt) {
+  const K = env.pins.length, n = P.segments;
+  if (!cape.chains || cape.chains.length !== K || cape.chains[0].p.length !== n) capeReset(cape, P, env.pins, env.facing);
+  if (dt <= 0) return;
+  cape.acc = Math.min(cape.acc + dt, P.maxSteps * P.step);
+  const steps = Math.floor(cape.acc / P.step);
+  if (steps === 0) return;
+  cape.acc -= steps * P.step;
+
+  const h = P.step, damp = Math.max(0, 1 - P.drag * h);
+  const speed01 = Math.min(1, Math.abs(env.vel.x) / P.vRef);
+  const ref = capeRefDir(P, env.vel, env.facing);
+  const chordMin = 2 * P.segLen * Math.cos(P.maxBendDeg * Math.PI / 360), useBend = P.maxBendDeg < 179.5;
+
+  for (let st = 1; st <= steps; st++) {
+    const f = st / steps;
+    // 1) PINS + FORCES + VERLET INTEGRATION, ONE CHAIN AT A TIME
+    for (let k = 0; k < K; k++) {
+      const Pt = cape.chains[k].p, a0 = cape.last[k], b0 = env.pins[k];
+      Pt[0].x = a0.x + (b0.x - a0.x) * f;                   // SLIDE THE PIN ALONG THE FRAME'S TRAVEL SO FAST MOVES DON'T JERK THE CHAIN
+      Pt[0].y = a0.y + (b0.y - a0.y) * f;
+      Pt[0].px = Pt[0].x; Pt[0].py = Pt[0].y;
+      for (let i = 1; i < n; i++) {
+        const q = Pt[i], a = Pt[i - 1], b = Pt[Math.min(n - 1, i + 1)];
+        let tx = b.x - a.x, ty = b.y - a.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        const nx = -ty, ny = tx;                            // SEGMENT NORMAL
+        const vx = (q.x - q.px) / h - P.wind, vy = (q.y - q.py) / h; // VELOCITY RELATIVE TO THE AIR (PX/S)
+        const vn = vx * nx + vy * ny, vt = vx * tx + vy * ty;
+        const tip = i / (n - 1);
+        // CLOTH-STYLE AIR DRAG: THE COMPONENT ACROSS THE CLOTH IS RESISTED HARD, ALONG IT LIGHTLY. THIS IS WHAT MAKES IT STREAM AND NOT TUMBLE.
+        let ax = -P.nDrag * vn * nx - P.tDrag * vt * tx;
+        let ay = -P.nDrag * vn * ny - P.tDrag * vt * ty;
+        ay += P.gravity * (1 - P.lift * speed01);
+        ax += -env.facing * P.backBias * tip;
+        const fl = P.flutter * speed01 * tip;               // SMOOTH TURBULENCE (GROWS TOWARD THE HEM AND WITH SPEED); EDGES GET A SLIGHT PHASE OFFSET
+        ax += Math.sin(cape.t * 9 + i * 0.8 + k * 0.7) * fl;
+        ay += Math.cos(cape.t * 7.3 + i * 1.1 + k * 0.7) * fl;
+        if (P.restPull > 0) {                               // SOFT PULL TOWARD THE "WANTS TO POINT" SHAPE
+          ax += (Pt[0].x + ref.x * i * P.segLen - q.x) * P.restPull;
+          ay += (Pt[0].y + ref.y * i * P.segLen - q.y) * P.restPull;
+        }
+        const mx = (q.x - q.px) * damp, my = (q.y - q.py) * damp;
+        q.px = q.x; q.py = q.y;
+        q.x += mx + ax * h * h; q.y += my + ay * h * h;
+      }
+    }
+
+    // 2) CONSTRAINTS (REPEATED)
+    for (let it = 0; it < P.iterations; it++) {
+      for (let k = 0; k < K; k++) {
+        const Pt = cape.chains[k].p;
+        for (let i = 0; i < n - 1; i++) link(Pt[i], Pt[i + 1], P.segLen, i === 0 ? 0 : 1, 1, 1);
+        if (P.bend > 0) for (let i = 0; i < n - 2; i++) link(Pt[i], Pt[i + 2], P.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, P.bend);
+        if (useBend) for (let i = 0; i < n - 2; i++) { const d = Math.hypot(Pt[i + 2].x - Pt[i].x, Pt[i + 2].y - Pt[i].y); if (d < chordMin) link(Pt[i], Pt[i + 2], chordMin, i === 0 ? 0 : 1, 1, 1); } // NO SHARP FOLDS: ONE-SIDED DISTANCE LIMIT BETWEEN POINTS TWO APART (CHORD = 2L*cos(bend/2))
+        if (P.spanMin > 0) for (const s of SPANS) {         // NO LOOPS / HAIRPINS: POINTS s APART MAY NOT GET CLOSER THAN spanMin * (STRAIGHT LENGTH)
+          if (s >= n) break;
+          const dmin = P.spanMin * s * P.segLen;
+          for (let i = 0; i + s < n; i++) { const a = Pt[i], b = Pt[i + s]; if (Math.hypot(b.x - a.x, b.y - a.y) < dmin) link(a, b, dmin, i === 0 ? 0 : 1, 1, 1); }
+        }
+      }
+      if (K === 2) {                                        // CLOTH ACROSS THE WIDTH. THE STRIP MAY NARROW (HANG / FOLD FLAT) BUT NEVER STRETCH WIDER THAN ITS WIDTH, AND CAN'T SHEAR
+        const A = cape.chains[0].p, Bp = cape.chains[1].p;
+        for (let i = 1; i < n; i++) {
+          const d = Math.hypot(Bp[i].x - A[i].x, Bp[i].y - A[i].y);
+          link(A[i], Bp[i], env.widths[i], 1, 1, d > env.widths[i] ? 1 : P.rung);   // HARD ABOVE THE WIDTH, SOFT (P.rung) BELOW IT
+        }
+        if (P.shear > 0) for (let i = 1; i < n - 1; i++) {   // DIAGONALS: MAX-ONLY, SO THE STRIP CAN'T SLIDE SIDEWAYS BUT CAN STILL NARROW. SKIPPED AT THE ROOT QUAD (ITS RUNG IS SLANTED BY THE PINS)
+          const dmax = Math.hypot(P.segLen, (env.widths[i] + env.widths[i + 1]) / 2);
+          if (Math.hypot(Bp[i + 1].x - A[i].x, Bp[i + 1].y - A[i].y) > dmax) link(A[i], Bp[i + 1], dmax, 1, 1, P.shear);
+          if (Math.hypot(A[i + 1].x - Bp[i].x, A[i + 1].y - Bp[i].y) > dmax) link(Bp[i], A[i + 1], dmax, 1, 1, P.shear);
+        }
+      }
+      for (let k = 0; k < K; k++) {
+        const Pt = cape.chains[k].p;
+        if (P.collide) for (let i = 1; i < n; i++) for (const c of env.colliders) push(Pt[i], c, P.thick);
+        for (let i = 1; i < n; i++) {                       // FLOOR
+          const q = Pt[i], gy = env.groundY - P.groundPad;
+          if (q.y > gy) { q.y = gy; q.py = gy; q.px += (q.x - q.px) * P.groundFric; }   // ON THE FLOOR: ZERO VERTICAL VELOCITY (LEFT IN, IT PILES UP AGAINST THE CONSTRAINTS AND BLOWS UP) + FRICTION
+        }
+      }
+    }
+    cape.t += h;
+  }
+  cape.last = env.pins.map((r) => ({ x: r.x, y: r.y }));
+}
+
+function link(a, b, rest, wA, wB, stiff) { // MOVE TWO POINTS TOWARD/AWAY UNTIL `rest` APART (w = HOW MUCH EACH MOVES, 0 = PINNED)
+  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1e-4, w = wA + wB;
+  if (w === 0) return;
+  const k = ((d - rest) / d) * stiff;
+  a.x += dx * k * (wA / w); a.y += dy * k * (wA / w);
+  b.x -= dx * k * (wB / w); b.y -= dy * k * (wB / w);
+}
+
+function push(q, c, pad) { // KEEP A POINT OUTSIDE A CIRCLE
+  const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy), m = c.r + pad;
+  if (d < m) {
+    if (d < 1e-4) { q.x = c.x - m; return; }
+    q.x = c.x + (dx / d) * m; q.y = c.y + (dy / d) * m;
+  }
+}
+
+function segX(a, b, c, d) { // DO SEGMENTS ab AND cd CROSS?
+  const o = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  return (o(a, b, c) > 0) !== (o(a, b, d) > 0) && (o(c, d, a) > 0) !== (o(c, d, b) > 0);
+}
+
+const quadArea = (A, Bp, i) => (A[i + 1].x - A[i].x) * (Bp[i].y - A[i].y) - (A[i + 1].y - A[i].y) * (Bp[i].x - A[i].x); // SIGNED: FLIPS WHEN A STRIP QUAD IS TWISTED INSIDE OUT
+
+function capeMetrics(cape) { // CURL READOUTS: WORST JOINT BEND, TOTAL TURNING, SELF-CROSSINGS, (2 PINS) INVERTED QUADS
+  let worst = 0, total = 0, cross = 0, twist = 0;
+  for (const c of cape.chains) {
+    const Pt = c.p, n = Pt.length; let tot = 0, prev = null;
+    for (let i = 0; i < n - 1; i++) {
+      const a = Math.atan2(Pt[i + 1].y - Pt[i].y, Pt[i + 1].x - Pt[i].x);
+      if (prev !== null) { const d = Math.abs(wrapA(a - prev)); worst = Math.max(worst, d); tot += d; }
+      prev = a;
+    }
+    total = Math.max(total, tot);
+    for (let i = 0; i < n - 1; i++) for (let j = i + 2; j < n - 1; j++) if (segX(Pt[i], Pt[i + 1], Pt[j], Pt[j + 1])) cross++;
+  }
+  if (cape.chains.length === 2) {
+    const A = cape.chains[0].p, Bp = cape.chains[1].p, n = A.length;
+    for (let i = 0; i < n - 1; i++) for (let j = 0; j < n - 1; j++) if (segX(A[i], A[i + 1], Bp[j], Bp[j + 1])) cross++;   // THE TWO EDGES SHOULD NEVER CROSS
+    let pos = 0, neg = 0; for (let i = 0; i < n - 1; i++) { if (quadArea(A, Bp, i) > 0) pos++; else neg++; }
+    twist = Math.min(pos, neg);                             // QUADS FACING THE MINORITY WAY = A TWIST IN THE STRIP
+  }
+  return { worst: worst * 180 / Math.PI, total: total * 180 / Math.PI, cross, twist };
+}
+/* SIM:END */
+
+/* =====================================================================
+   BLOB + WORLD STATE
+   ===================================================================== */
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+let W = 0, H = 0, DPR = 1, groundY = 0;
+const img = new Image(); let imgOK = false;
+img.onload = () => { imgOK = true; }; img.onerror = () => { imgOK = false; flash("COULD NOT LOAD " + BLOB_SRC + " - USING PLACEHOLDER. SERVE src/ OVER HTTP."); };
+img.src = BLOB_SRC;
+
+const blob = { x: 0, y: 0, vx: 0, vy: 0, facing: 1, faceS: 1, turnFrom: 1, grounded: true, sq: 0, sqv: 0, turnT: 1, dragging: false };
+const cape = { p: [], t: 0, acc: 0, last: null, vel: { x: 0, y: 0 } };
+const cam = { x: 0 };
+const peak = { worst: 0, total: 0, cross: 0, twist: 0, crossFrames: 0, frames: 0 };
+const ui = { debug: false, paused: false, slow: false, auto: false, panel: true, timeScale: 1, fps: 60 };
+const keys = {}; let jumpPressed = false, autoT = 0, autoI = 0, autoJumped = false;
+
+function resize() {
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  groundY = Math.round(H * 0.8);
+  if (blob.grounded) blob.y = groundY;
+}
+window.addEventListener("resize", resize);
+
+// ART PX -> WORLD PX. ONE FUNCTION USED BY THE DRAWING *AND* THE CAPE ROOT, SO THE PIN CAN'T DRIFT OFF THE ART.
+function artToWorld(ax, ay) {
+  const k = B.scale, sx = 1 - blob.sq * 0.6, sy = 1 + blob.sq;
+  return { x: blob.x + (ax - ART.px) * k * sx * blob.faceS, y: blob.y + (ay - ART.py) * k * sy };
+}
+function worldToArt(wx, wy) {
+  const k = B.scale, sx = 1 - blob.sq * 0.6, sy = 1 + blob.sq;
+  return { x: ART.px + (wx - blob.x) / (k * sx * blob.facing), y: ART.py + (wy - blob.y) / (k * sy) };
+}
+const pinAW = () => artToWorld(PIN.ax, PIN.ay), pinBW = () => artToWorld(PIN.bx, PIN.by);
+function pinsWorld() { // ONE PIN (MIDPOINT) OR TWO PINS (THE ENDS OF THE CLOAK'S BACK EDGE)
+  const a = pinAW(), b = pinBW();
+  return C.attach === "one" ? [{ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }] : [a, b];
+}
+function widthsWorld() { // CAPE WIDTH ALONG ITS LENGTH: STARTS AS THE DISTANCE BETWEEN THE PINS, TAPERS TO THE HEM WIDTH
+  const a = pinAW(), b = pinBW(), w0 = Math.hypot(b.x - a.x, b.y - a.y), n = C.segments, out = [];
+  for (let i = 0; i < n; i++) out.push(lerp(w0, L.w1, Math.pow(i / (n - 1), L.taper)));
+  return out;
+}
+const collidersWorld = () => COLLIDERS_ART.map((c) => { const p = artToWorld(c.x, c.y); return { x: p.x, y: p.y, r: c.r * B.scale }; });
+
+function resetAll() {
+  blob.x = 0; blob.y = groundY; blob.vx = blob.vy = 0; blob.facing = blob.faceS = blob.turnFrom = 1; blob.grounded = true; blob.sq = blob.sqv = 0; blob.turnT = 1;
+  cam.x = blob.x - viewW() / 2;
+  cape.vel = { x: 0, y: 0 };
+  capeReset(cape, C, pinsWorld(), blob.facing);
+  clearPeaks();
+}
+const viewW = () => W - (ui.panel ? 310 : 0);
+function clearPeaks() { peak.worst = peak.total = peak.cross = peak.twist = peak.twistFrames = peak.crossFrames = peak.frames = 0; }
+
+/* =====================================================================
+   INPUT
+   ===================================================================== */
+const AUTO = [ // STRESS SCRIPT: LONG RUNS, HARD REVERSALS, TAP-TAP-TAP, JUMPS MID-RUN, DASHES. d = DIRECTION, t = SECONDS
+  { d: 1, t: 1.3 }, { d: -1, t: 1.3 }, { d: 1, t: 0.9, j: 1 }, { d: -1, t: 0.22 }, { d: 1, t: 0.22 }, { d: -1, t: 0.22 }, { d: 1, t: 0.22 },
+  { d: 0, t: 0.8 }, { d: 1, t: 0.9, dash: 1 }, { d: -1, t: 0.9, dash: 1 }, { d: 0, t: 0.5, j: 1 }, { d: -1, t: 1.0, j: 1 }, { d: 1, t: 0.15 }, { d: -1, t: 0.7, j: 1 }, { d: 0, t: 0.9 },
+];
+function getInput(dt) {
+  if (ui.auto) {
+    autoT += dt; let s = AUTO[autoI];
+    while (autoT >= s.t) { autoT -= s.t; autoI = (autoI + 1) % AUTO.length; s = AUTO[autoI]; autoJumped = false; }
+    const jp = !!s.j && !autoJumped; if (jp) autoJumped = true;
+    return { dir: s.d, dash: !!s.dash, jumpPressed: jp, jumpHeld: !!s.j && autoT < 0.4 };
+  }
+  const dir = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0);
+  const jp = jumpPressed; jumpPressed = false;
+  return { dir, dash: !!keys.shift, jumpPressed: jp, jumpHeld: !!(keys.w || keys.arrowup || keys[" "]) };
+}
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+  if (!keys[k] && (k === "w" || k === "arrowup" || k === " ")) jumpPressed = true;
+  keys[k] = true;
+  if (e.repeat) return;
+  if (k === "r") resetAll();
+  else if (k === "g") ui.debug = !ui.debug;
+  else if (k === "p") ui.paused = !ui.paused;
+  else if (k === "f") { ui.slow = !ui.slow; ui.timeScale = ui.slow ? 0.25 : 1; flash(ui.slow ? "SLOW-MO 0.25x" : "NORMAL SPEED"); }
+  else if (k === "t") { ui.auto = !ui.auto; autoT = 0; autoI = 0; autoJumped = false; clearPeaks(); flash(ui.auto ? "AUTOPILOT ON (T TO STOP)" : "AUTOPILOT OFF"); }
+  else if (k === "x") clearPeaks();
+  else if (k === "h") { ui.panel = !ui.panel; document.getElementById("panel").classList.toggle("hide", !ui.panel); }
+});
+window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+window.addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
+
+// MOUSE: GRAB THE BLOB AND THROW IT; IN DEBUG MODE (G) DRAG A PIN DOT TO MOVE THAT ATTACH POINT
+const mouse = { x: 0, y: 0, lx: 0, ly: 0, vx: 0, vy: 0, grab: null, pin: null };
+const toWorld = (e) => ({ x: e.clientX + cam.x, y: e.clientY });
+cv.addEventListener("mousedown", (e) => {
+  const m = toWorld(e); mouse.x = mouse.lx = m.x; mouse.y = mouse.ly = m.y;
+  if (ui.debug) { const A = pinAW(), Bw = pinBW(); if (Math.hypot(m.x - A.x, m.y - A.y) < 16) { mouse.pin = "a"; return; } if (Math.hypot(m.x - Bw.x, m.y - Bw.y) < 16) { mouse.pin = "b"; return; } }
+  const a = worldToArt(m.x, m.y);
+  if (a.x > 320 && a.x < 680 && a.y > 180 && a.y < 640) { blob.dragging = true; mouse.grab = { x: blob.x - m.x, y: blob.y - m.y }; cv.classList.add("drag"); }
+});
+window.addEventListener("mousemove", (e) => { const m = toWorld(e); mouse.x = m.x; mouse.y = m.y; });
+window.addEventListener("mouseup", () => {
+  if (blob.dragging) { blob.vx = clamp(mouse.vx, -2200, 2200); blob.vy = clamp(mouse.vy, -2200, 2200); blob.grounded = false; }
+  blob.dragging = false; mouse.pin = null; mouse.grab = null; cv.classList.remove("drag");
+});
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+
+/* =====================================================================
+   UPDATE
+   ===================================================================== */
+function flipFacing(newF) {
+  if (blob.facing === newF) return;
+  const axis = blob.x;
+  blob.facing = newF;
+  if (C.turnMode === "mirror") { blob.faceS = newF; capeMirror(cape, axis); cape.last = pinsWorld(); blob.turnT = C.turnTime > 0 ? 0 : 1; } // WHOLE CHAIN FLIPS WITH THE ART
+  else if (C.turnMode === "slide" && C.turnTime > 0) { blob.turnFrom = blob.faceS; blob.turnT = 0; }                                     // faceS GLIDES -1..1, SO THE PIN SLIDES THROUGH THE BODY
+  else { blob.faceS = newF; blob.turnT = 1; }                                                                                          // SNAP
+}
+
+function update(dt) {
+  if (mouse.pin) { const a = worldToArt(mouse.x, mouse.y); PIN[mouse.pin + "x"] = Math.round(clamp(a.x, 250, 620) * 2) / 2; PIN[mouse.pin + "y"] = Math.round(clamp(a.y, 380, 660) * 2) / 2; syncUI(); }
+  const inp = getInput(dt);
+
+  if (blob.dragging) {
+    const tx = mouse.x + mouse.grab.x, ty = mouse.y + mouse.grab.y;
+    const nvx = (tx - blob.x) / Math.max(dt, 1e-3), nvy = (ty - blob.y) / Math.max(dt, 1e-3);
+    mouse.vx = lerp(mouse.vx, nvx, 0.35); mouse.vy = lerp(mouse.vy, nvy, 0.35);
+    blob.x = tx; blob.y = Math.min(ty, groundY); blob.vx = mouse.vx; blob.vy = mouse.vy; blob.grounded = false;
+    if (Math.abs(mouse.vx) > 120) flipFacing(mouse.vx > 0 ? 1 : -1);
+  } else {
+    const top = B.maxSpeed * (inp.dash ? B.dashMul : 1), ctl = blob.grounded ? 1 : B.airCtl;
+    if (inp.dir) {
+      flipFacing(inp.dir);
+      if (Math.abs(blob.vx) > top && Math.sign(blob.vx) === inp.dir) blob.vx -= Math.sign(blob.vx) * Math.min(Math.abs(blob.vx) - top, B.friction * dt);   // THROWN FASTER THAN TOP SPEED: EASE DOWN TO IT
+      else { blob.vx += inp.dir * B.accel * ctl * dt; if (inp.dir * blob.vx > top) blob.vx = inp.dir * top; }
+    } else if (blob.grounded) {
+      const f = B.friction * dt; blob.vx = Math.abs(blob.vx) <= f ? 0 : blob.vx - Math.sign(blob.vx) * f;
+    } else blob.vx *= Math.max(0, 1 - 0.4 * dt);
+    if (inp.jumpPressed && blob.grounded) { blob.vy = -B.jumpV; blob.grounded = false; blob.sq = 0.26; }
+    if (!inp.jumpHeld && blob.vy < -300) blob.vy *= Math.max(0, 1 - 9 * dt); // RELEASE EARLY = SHORT HOP
+    blob.vy += B.gravity * dt;
+    blob.x += blob.vx * dt; blob.y += blob.vy * dt;
+    if (blob.y >= groundY) {
+      if (!blob.grounded && blob.vy > 250) blob.sq = -Math.min(0.34, blob.vy / 3400);
+      blob.y = groundY; blob.vy = 0; blob.grounded = true;
+    }
+  }
+  blob.sqv += (-260 * blob.sq - 16 * blob.sqv) * dt; blob.sq += blob.sqv * dt;   // SQUASH SPRING
+  if (blob.turnT < 1) blob.turnT = C.turnTime > 0 ? Math.min(1, blob.turnT + dt / C.turnTime) : 1;
+  if (C.turnMode === "slide" && blob.turnT < 1) { const e = blob.turnT * blob.turnT * (3 - 2 * blob.turnT); blob.faceS = lerp(blob.turnFrom, blob.facing, e); }
+  else if (C.turnMode !== "mirror") blob.faceS = blob.facing;
+
+  const pins = pinsWorld(), widths = widthsWorld(); cape.widths = widths;
+  const kv = Math.min(1, dt * 14); cape.vel.x = lerp(cape.vel.x, blob.vx, kv); cape.vel.y = lerp(cape.vel.y, blob.vy, kv); // "WIND" COMES FROM THE BODY'S TRAVEL, NOT FROM THE PIN SLIDING DURING A TURN
+  capeStep(cape, C, { pins, widths, facing: blob.facing, vel: cape.vel, groundY, colliders: collidersWorld() }, dt);
+
+  const m = capeMetrics(cape); peak.frames++;
+  if (m.cross > 0) peak.crossFrames++;
+  peak.worst = Math.max(peak.worst, m.worst); peak.total = Math.max(peak.total, m.total); peak.cross = Math.max(peak.cross, m.cross); peak.twist = Math.max(peak.twist, m.twist);
+  if (m.twist > 0) peak.twistFrames = (peak.twistFrames || 0) + 1;
+  update.m = m;
+
+  cam.x = lerp(cam.x, blob.x - viewW() * 0.5, Math.min(1, dt * 6));
+}
+
+/* =====================================================================
+   DRAW
+   ===================================================================== */
+const hexRGB = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const mixA = (A, Bc, t) => A.map((v, i) => lerp(v, Bc[i], t));                // MIX TWO [r,g,b] ARRAYS
+const css = (A) => `rgb(${A.map(Math.round).join(",")})`;
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, groundY);
+  g.addColorStop(0, "#0c001f"); g.addColorStop(1, "#2a0a52");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, groundY);
+  ctx.fillStyle = "#12002b"; ctx.fillRect(0, groundY, W, H - groundY);
+  const sp = 0.25;                                           // FAR DOTS (PARALLAX)
+  ctx.fillStyle = "rgba(165,90,255,.45)";
+  for (let i = 0; i < 70; i++) {
+    const x = (((i * 197 + 41) % 1400) - cam.x * sp) % 1400, y = (i * 83 + 17) % (groundY - 40);
+    ctx.fillRect((x + 1400) % 1400 - 100, y, 2, 2);
+  }
+  ctx.strokeStyle = "rgba(131,12,222,.5)"; ctx.lineWidth = 1; ctx.beginPath();
+  const step = 80, x0 = Math.floor(cam.x / step) * step;
+  for (let x = x0; x < cam.x + W + step; x += step) { const sx = x - cam.x; ctx.moveTo(sx, groundY); ctx.lineTo(sx + (sx - viewW() * 0.5) * 0.9, H); }
+  for (let k = 1; k < 7; k++) { const y = groundY + k * k * (H - groundY) / 40; ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+  ctx.strokeStyle = "rgba(0,255,255,.18)"; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+  ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = "#9090C0"; ctx.font = "10px ui-monospace,monospace";   // DISTANCE TICKS SO SPEED IS READABLE
+  for (let x = Math.floor(cam.x / 400) * 400; x < cam.x + W; x += 400) ctx.fillText(Math.round(x / 100) + "m", x - cam.x + 3, groundY + 14);
+}
+
+/* ---------- GHOST TAIL: WEBGL CAPE STRIP + DISSOLVE (PORT OF index.html's DISSOLVE_FRAG) ----------
+   THE CAPE STRIP IS DRAWN AS A TEXTURED-STYLE MESH (UV: u ACROSS 0..1 TOP->BOTTOM EDGE, v ALONG 0..1 ROOT->HEM) INTO AN
+   OFFSCREEN WEBGL CANVAS, THEN COMPOSITED ONTO THE 2D CANVAS SO THE "BEHIND / IN FRONT OF BLOB" LAYERING STILL WORKS.
+   THE DISSOLVE THRESHOLD IS A FUNCTION OF v: NOTHING GONE ABOVE disStart, EVERYTHING GONE AT THE HEM (x disAmt).
+   THE NOISE IS ANCHORED TO THE CLOTH (px ALONG / ACROSS IT) AND SCROLLS TOWARD THE HEM, SO THE BURN FRONT LICKS OFF THE TAIL. */
+const GHOST_VERT = `
+attribute vec2 a_pos; attribute vec2 a_uv; attribute vec2 a_sh; attribute vec2 a_ed;
+uniform vec2 u_res; varying vec2 v_uv; varying vec2 v_sh; varying vec2 v_ed;
+void main(){ v_uv=a_uv; v_sh=a_sh; v_ed=a_ed; gl_Position=vec4(a_pos/u_res*2.0-1.0, 0.0, 1.0)*vec4(1.0,-1.0,1.0,1.0); }`;
+const GHOST_FRAG = `
+precision highp float;
+varying vec2 v_uv; varying vec2 v_sh; varying vec2 v_ed;
+uniform vec3 u_top, u_bot, u_rim, u_dark, u_edgeA, u_edgeB;
+uniform float u_split, u_rimW, u_folds, u_wid, u_len, u_time, u_endRim;
+uniform float u_on, u_start, u_amt, u_cell, u_edge, u_flow, u_fade, u_glow;
+float hash21(vec2 p){ p=fract(p*vec2(123.34,456.21)); p+=dot(p,p+45.32); return fract(p.x*p.y); }
+float vnoise(vec2 p){ vec2 i=floor(p), f=fract(p); vec2 u=f*f*(3.0-2.0*f);
+  return mix(mix(hash21(i),hash21(i+vec2(1.0,0.0)),u.x), mix(hash21(i+vec2(0.0,1.0)),hash21(i+vec2(1.0,1.0)),u.x), u.y); }
+void main(){
+  float u=v_uv.x, v=v_uv.y;
+  float sp=smoothstep(u_split-0.01,u_split+0.01,u);
+  vec3 col=mix(mix(u_top,u_dark,v*0.25), mix(u_bot,u_dark,v*0.45), sp);
+  col=mix(col,u_dark,clamp(v_sh.x,0.0,1.0)*0.55);
+  col=mix(col,u_dark,v_sh.y*0.6);
+  if(u_folds>0.5){ float f=min(abs(u-0.3),abs(u-0.8))*u_wid; col=mix(col,u_dark*0.35,(1.0-smoothstep(0.4,1.1,f))*0.22); }
+  float dA=v_ed.x*v_ed.y, dB=(1.0-v_ed.x)*v_ed.y, dE=u_endRim>0.5?(1.0-v)*u_len:1e4;   // v_ed = (LOCAL ACROSS 0..1, LOCAL WIDTH PX): TENDRILS GET THEIR OWN SIDE RIMS
+  float rA=1.0-smoothstep(u_rimW*0.5-0.5,u_rimW*0.5+0.5,dA);
+  float rB=max(1.0-smoothstep(u_rimW*0.5-0.5,u_rimW*0.5+0.5,dB), 1.0-smoothstep(u_rimW*0.5-0.5,u_rimW*0.5+0.5,dE));
+  col=mix(col,u_rim,rA); col=mix(col,u_dark,rB);
+  float a=1.0;
+  if(u_on>0.5){
+    float t=clamp((v-u_start)/max(1.0-u_start,0.001),0.0,1.0);
+    vec2 px=vec2(v*u_len - u_time*u_flow, u*u_wid);
+    float n=vnoise(px/u_cell)*0.65+vnoise(px/(u_cell*0.4)+17.0)*0.35;
+    n=clamp((n-0.18)/0.64,0.0,1.0);
+    float amount=t*u_amt;
+    float thr=amount*(1.0+u_edge)-u_edge;
+    if(n<thr) discard;
+    float band=(n-thr)/u_edge;
+    if(band<1.0 && t>0.0){ col=mix(u_edgeA,u_edgeB,band)*(1.0+0.6*u_glow*(1.0-band)); }
+    a*=1.0-u_fade*t;
+  }
+  gl_FragColor=vec4(col*a,a);
+}`;
+const ghost = { gl: null, tried: false, n: 0, K: 9 };
+function ghostInit() {
+  ghost.tried = true;
+  try {
+    const cv = document.createElement("canvas"), gl = cv.getContext("webgl", { premultipliedAlpha: true, alpha: true, antialias: true });
+    if (!gl) return;
+    const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o)); return o; };
+    const pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, GHOST_VERT)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, GHOST_FRAG)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+    ghost.cv = cv; ghost.gl = gl; ghost.pr = pr; ghost.vb = gl.createBuffer(); ghost.ib = gl.createBuffer(); ghost.U = {};
+    ghost.loc = { pos: gl.getAttribLocation(pr, "a_pos"), uv: gl.getAttribLocation(pr, "a_uv"), sh: gl.getAttribLocation(pr, "a_sh"), ed: gl.getAttribLocation(pr, "a_ed") };
+  } catch (e) { console.warn("ghost tail disabled:", e.message); ghost.gl = null; }
+}
+const ghostU = (name) => { if (!(name in ghost.U)) ghost.U[name] = ghost.gl.getUniformLocation(ghost.pr, name); return ghost.U[name]; };
+const speedNorm = () => Math.min(1.5, Math.hypot(cape.vel.x, cape.vel.y) / C.vRef);
+function ghostStart() { return clamp(L.disStart - L.disSpeed * speedNorm() * 0.5, 0, 0.98); }   // FASTER = THE DISSOLVE CREEPS UP THE CAPE
+
+function drawStripGL() {   // RETURNS false IF WEBGL ISN'T AVAILABLE (CALLER FALLS BACK TO THE FLAT CANVAS-2D STRIP)
+  if (!ghost.tried) ghostInit();
+  const gl = ghost.gl; if (!gl) return false;
+  const A = cape.chains[0].p, Bp = cape.chains[1].p, n = A.length, K = ghost.K;
+  if (n < 3) return true;
+  const cw = Math.round(W * DPR), ch = Math.round(H * DPR);
+  if (ghost.cv.width !== cw || ghost.cv.height !== ch) { ghost.cv.width = cw; ghost.cv.height = ch; }
+  gl.viewport(0, 0, cw, ch); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+  let sg = 0; for (let i = 0; i < n - 1; i++) sg += Math.sign(quadArea(A, Bp, i)); const s0 = sg >= 0 ? 1 : -1;
+  // WORLD -> SCREEN: SAME TRANSFORM THE 2D PATH GETS (CAMERA SCROLL + OPTIONAL MIRROR SQUASH ON TURNS)
+  const camX = Math.round(cam.x);
+  let mir = 1; if (C.turnMode === "mirror" && blob.turnT < 1) { const e = blob.turnT * blob.turnT * (3 - 2 * blob.turnT); mir = lerp(-1, 1, e); }
+  const tend = L.mode === "tendrils";
+  const T = clamp(Math.round(L.tCount), 2, 9), M = 18, KT = 3;
+  const iS = tend ? clamp(Math.round(L.tSplit * (n - 1)), 2, n - 2) : n - 1;          // LAST ROW OF THE SOLID CLOTH BODY (TENDRILS TAKE OVER FROM HERE)
+  const nBody = n * K, nVert = nBody + (tend ? T * M * KT : 0);
+  const data = new Float32Array(nVert * 8); let o = 0, wsum = 0;
+  const put = (x, y, u, v, sh, bk, lu, lw) => { data[o++] = (blob.x + mir * (x - blob.x) - camX) * DPR; data[o++] = y * DPR; data[o++] = u; data[o++] = v; data[o++] = sh; data[o++] = bk; data[o++] = lu; data[o++] = lw; };
+  for (let i = 0; i < n; i++) {
+    const fold = clamp((foldAt(A, i) + foldAt(Bp, i)) / 2 / 0.7, 0, 1);
+    const back = i < n - 1 ? (quadArea(A, Bp, i) * s0 < 0 ? 1 : 0) : (quadArea(A, Bp, i - 1) * s0 < 0 ? 1 : 0);
+    const wr = Math.hypot(A[i].x - Bp[i].x, A[i].y - Bp[i].y); wsum += wr;
+    for (let j = 0; j < K; j++) {
+      const u = j / (K - 1);
+      put(lerp(A[i].x, Bp[i].x, u), lerp(A[i].y, Bp[i].y, u), u, i / (n - 1), fold, back, u, wr);
+    }
+  }
+  if (tend) {   // TENDRILS: EACH ONE FOLLOWS THE CLOTH SPINE AT ITS SLICE OF THE WIDTH, WITH A TRAVELLING SINE OFFSET THAT GROWS ROOT -> TIP, AND TAPERS TO A POINT
+    const rowPt = (r, u) => { const i = Math.min(n - 2, Math.floor(r)), f = r - i; const ax = lerp(A[i].x, A[i + 1].x, f), ay = lerp(A[i].y, A[i + 1].y, f), bx = lerp(Bp[i].x, Bp[i + 1].x, f), by = lerp(Bp[i].y, Bp[i + 1].y, f); return { x: lerp(ax, bx, u), y: lerp(ay, by, u), cx: bx - ax, cy: by - ay }; };
+    const ampScale = Math.min(1.8, L.tIdle + L.tGain * speedNorm());
+    const rootW = Math.hypot(A[iS].x - Bp[iS].x, A[iS].y - Bp[iS].y);
+    for (let j = 0; j < T; j++) {
+      const tp = tendrilParams(j, T), uj = (j + 0.5) / T, span = (1 + L.tOverlap) / T;
+      const rootHalf = Math.max(1, rootW * span * 0.5), lf = tp.len, rows = (n - 1 - iS) * lf;
+      let pt = null;
+      for (let m = 0; m < M; m++) {
+        const t = m / (M - 1), r = iS + t * rows;
+        const c = rowPt(r, uj), c2 = rowPt(Math.min(n - 1.001, r + 0.5), uj), c0 = rowPt(Math.max(iS, r - 0.5), uj);
+        let tx = c2.x - c0.x, ty = c2.y - c0.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        const off = L.tAmp * tp.amp * ampScale * Math.pow(t, 1.25) * Math.sin(TAU * tp.waves * t - tendril.phase[j]);
+        const px = c.x - ty * off, py = c.y + tx * off;
+        const cl = Math.hypot(c.cx, c.cy) || 1, cxn = c.cx / cl, cyn = c.cy / cl;
+        const hw = rootHalf * Math.pow(Math.max(0, 1 - t), L.tTaper);
+        const gv = r / (n - 1), shade = tp.shade;
+        for (let q = 0; q < KT; q++) {
+          const lu = q / (KT - 1), side = (lu - 0.5) * 2 * hw;
+          put(px + cxn * side, py + cyn * side, clamp(uj + (lu - 0.5) * span, 0, 1), gv, shade, 0, lu, Math.max(0.01, hw * 2));
+        }
+      }
+    }
+  }
+  const key = n + "_" + (tend ? T : 0) + "_" + M;
+  if (ghost.key !== key) {
+    const idx = []; for (let i = 0; i < n - 1; i++) for (let j = 0; j < K - 1; j++) { const a = i * K + j, b = a + 1, c = a + K, d = c + 1; idx.push(a, b, c, b, d, c); }
+    ghost.bodyAll = idx.length;
+    if (tend) for (let j = 0; j < T; j++) for (let m = 0; m < M - 1; m++) for (let q = 0; q < KT - 1; q++) { const a = nBody + (j * M + m) * KT + q, b = a + 1, c = a + KT, d = c + 1; idx.push(a, b, c, b, d, c); }
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ghost.ib); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(idx), gl.STATIC_DRAW); ghost.key = key; ghost.count = idx.length;
+  }
+  gl.useProgram(ghost.pr);
+  gl.bindBuffer(gl.ARRAY_BUFFER, ghost.vb); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_DRAW);
+  const st = 32, lc = ghost.loc;
+  gl.enableVertexAttribArray(lc.pos); gl.vertexAttribPointer(lc.pos, 2, gl.FLOAT, false, st, 0);
+  gl.enableVertexAttribArray(lc.uv); gl.vertexAttribPointer(lc.uv, 2, gl.FLOAT, false, st, 8);
+  gl.enableVertexAttribArray(lc.sh); gl.vertexAttribPointer(lc.sh, 2, gl.FLOAT, false, st, 16);
+  gl.enableVertexAttribArray(lc.ed); gl.vertexAttribPointer(lc.ed, 2, gl.FLOAT, false, st, 24);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ghost.ib);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);                      // PREMULTIPLIED OUTPUT
+  const c3 = (h) => hexRGB(h).map((v) => v / 255), e3 = (h) => hexRGB(h).map((v) => v / 255);
+  gl.uniform2f(ghostU("u_res"), cw, ch);
+  gl.uniform3fv(ghostU("u_top"), c3(L.top)); gl.uniform3fv(ghostU("u_bot"), c3(L.bottom)); gl.uniform3fv(ghostU("u_rim"), c3(L.rim)); gl.uniform3fv(ghostU("u_dark"), c3(L.dark));
+  gl.uniform3fv(ghostU("u_edgeA"), e3(L.disColA)); gl.uniform3fv(ghostU("u_edgeB"), e3(L.disColB));
+  gl.uniform1f(ghostU("u_split"), L.split); gl.uniform1f(ghostU("u_rimW"), L.rimW); gl.uniform1f(ghostU("u_folds"), L.folds ? 1 : 0);
+  gl.uniform1f(ghostU("u_wid"), Math.max(1, (wsum / n) * DPR / DPR)); gl.uniform1f(ghostU("u_len"), (n - 1) * C.segLen);
+  gl.uniform1f(ghostU("u_time"), cape.t || 0); gl.uniform1f(ghostU("u_endRim"), tend ? 0 : 1);
+  gl.uniform1f(ghostU("u_on"), L.dis ? 1 : 0); gl.uniform1f(ghostU("u_start"), ghostStart()); gl.uniform1f(ghostU("u_amt"), L.disAmt);
+  gl.uniform1f(ghostU("u_cell"), Math.max(2, L.disCell)); gl.uniform1f(ghostU("u_edge"), Math.max(0.01, L.disEdge));
+  gl.uniform1f(ghostU("u_flow"), L.disFlow); gl.uniform1f(ghostU("u_fade"), L.disFade); gl.uniform1f(ghostU("u_glow"), L.disGlow);
+  const bodyIdx = tend ? iS * (K - 1) * 6 : ghost.bodyAll;
+  gl.drawElements(gl.TRIANGLES, bodyIdx, gl.UNSIGNED_SHORT, 0);
+  if (tend) gl.drawElements(gl.TRIANGLES, ghost.count - ghost.bodyAll, gl.UNSIGNED_SHORT, ghost.bodyAll * 2);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(ghost.cv, 0, 0); ctx.restore();   // 1:1 DEVICE PIXELS
+  return true;
+}
+
+/* ---------- TENDRILS: PER-BLADE RANDOM-BUT-FIXED PARAMS + ACCUMULATED PHASE (SO SPEED CHANGES NEVER JUMP THE WAVE) ---------- */
+const tendril = { phase: new Array(12).fill(0) };
+const hsh = (j, s) => { const x = Math.sin(j * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+function tendrilParams(j, T) {
+  const mid = 1 - Math.abs((j + 0.5) / T - 0.5) * 2;                                       // CENTRE BLADES RUN A BIT LONGER, EDGES SHORTER
+  return {
+    amp: 0.7 + 0.6 * hsh(j, 1), waves: L.tWaves * (0.8 + 0.5 * hsh(j, 2)),
+    len: clamp(1 - L.tLenVar * (0.6 * hsh(j, 3) + 0.4 * (1 - mid)), 0.3, 1),
+    shade: 0.1 + 0.55 * hsh(j, 4),                                                          // DARKER BLADES READ AS FURTHER BACK
+    speed: L.tSpeed * (1 + L.tSpread * (hsh(j, 5) * 2 - 1)),
+  };
+}
+function tendrilStep(dt) { const T = clamp(Math.round(L.tCount), 2, 9), boost = 1 + 0.8 * speedNorm(); for (let j = 0; j < T; j++) tendril.phase[j] += dt * tendrilParams(j, T).speed * boost; }
+
+/* ---------- SPARKS: TINY EMBERS SHED FROM THE DISSOLVING TAIL (2D, ADDITIVE) ---------- */
+const sparks = [];
+function sparksStep(dt) {
+  if (!L.dis || !cape.chains || cape.chains.length !== 2 || dt <= 0) { sparks.length = 0; return; }
+  const A = cape.chains[0].p, Bp = cape.chains[1].p, n = A.length, st = ghostStart();
+  let spawn = L.disSparks * 60 * dt * (0.4 + speedNorm());
+  while (spawn > 0 && sparks.length < 160) {
+    if (Math.random() > spawn) break; spawn -= 1;
+    const v = lerp(st, 1, Math.pow(Math.random(), 0.6)) * (n - 1), i = Math.min(n - 2, Math.floor(v)), f = v - i, u = Math.random();
+    const ax = lerp(A[i].x, A[i + 1].x, f), ay = lerp(A[i].y, A[i + 1].y, f), bx = lerp(Bp[i].x, Bp[i + 1].x, f), by = lerp(Bp[i].y, Bp[i + 1].y, f);
+    sparks.push({ x: lerp(ax, bx, u), y: lerp(ay, by, u), vx: cape.vel.x * 0.25 + (Math.random() - 0.5) * 50, vy: -20 - Math.random() * 70, life: 0.5 + Math.random() * 0.6, age: 0, hot: Math.random() });
+  }
+  for (let i = sparks.length - 1; i >= 0; i--) { const s = sparks[i]; s.age += dt; if (s.age >= s.life) { sparks.splice(i, 1); continue; } s.x += s.vx * dt; s.y += s.vy * dt; s.vx *= 1 - 1.5 * dt; s.vy -= 20 * dt; }
+}
+function drawSparks() {
+  if (!sparks.length) return;
+  ctx.save(); ctx.globalCompositeOperation = "lighter";
+  for (const s of sparks) { const t = s.age / s.life, r = 2.2 * (1 - t) + 0.6; ctx.globalAlpha = (1 - t) * 0.9; ctx.fillStyle = s.hot > 0.5 ? L.disColA : L.disColB; ctx.fillRect(s.x - r, s.y - r, r * 2, r * 2); }
+  ctx.restore();
+}
+
+function drawCape() {
+  if (cape.chains && cape.chains.length === 2) { if (!drawStripGL()) drawStrip(); drawSparks(); }
+  else drawRibbon();
+}
+
+function drawRibbon() { // 1 PIN: THE SPINE GETS A WIDTH PERPENDICULAR TO ITS OWN DIRECTION
+  const Pt = cape.p, n = Pt.length;
+  if (n < 3) return;
+  const edgeA = [], edgeB = [], mid = [];
+  let dxm = 0; for (let i = 1; i < n; i++) dxm += Pt[i].x - Pt[0].x; dxm /= n - 1;
+  if (drawCape.side === undefined) drawCape.side = blob.facing;
+  if (Math.abs(dxm) > 14) drawCape.side = dxm < 0 ? 1 : -1;       // CHAIN STREAMING LEFT -> "UP" SIDE IS THE +normal; HOLDS WHEN IT HANGS STRAIGHT DOWN
+  const side = drawCape.side;
+  for (let i = 0; i < n; i++) {
+    const a = Pt[Math.max(0, i - 1)], b = Pt[Math.min(n - 1, i + 1)];
+    let tx = b.x - a.x, ty = b.y - a.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+    const nx = -ty * side, ny = tx * side;                   // "UP" SIDE OF THE RIBBON
+    const s = i / (n - 1);
+    let w = cape.widths ? cape.widths[i] : 60;
+    w *= 1 + L.ripple * Math.min(1, Math.abs(cape.vel.x) / C.vRef + 0.3) * Math.sin(cape.t * 8 - s * 7) * s;
+    const sp = Pt[i], up = w * L.split, dn = w * (1 - L.split);
+    edgeA.push({ x: sp.x + nx * up, y: sp.y + ny * up });    // TOP EDGE (RIM)
+    mid.push({ x: sp.x - nx * 0 , y: sp.y });                // SPLIT LINE (THE SPINE)
+    edgeB.push({ x: sp.x - nx * dn, y: sp.y - ny * dn });    // BOTTOM EDGE
+  }
+  ctx.lineJoin = "round";
+  const quad = (p0, p1, q1, q0, col) => { ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(q1.x, q1.y); ctx.lineTo(q0.x, q0.y); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+  const cT = hexRGB(L.top), cB = hexRGB(L.bottom), cD = hexRGB(L.dark);
+  for (let i = 0; i < n - 1; i++) {
+    const s = i / (n - 2);
+    const fold = clamp(foldAt(cape.p, i) / 0.7, 0, 1);       // DARKEN WHERE THE CLOTH BENDS HARD
+    const cTop = css(mixA(mixA(cT, cD, s * 0.25), cD, fold * 0.55));
+    const cBot = css(mixA(mixA(cB, cD, s * 0.45), cD, fold * 0.55));
+    quad(edgeA[i], edgeA[i + 1], mid[i + 1], mid[i], cTop);
+    quad(mid[i], mid[i + 1], edgeB[i + 1], edgeB[i], cBot);
+  }
+  if (L.folds) {
+    ctx.strokeStyle = "rgba(10,0,40,.22)"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (const f of [0.3, 0.8]) for (let i = 0; i < n; i++) { const x = lerp(edgeA[i].x, edgeB[i].x, f), y = lerp(edgeA[i].y, edgeB[i].y, f); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  }
+  if (L.rimW > 0) {
+    ctx.strokeStyle = L.rim; ctx.lineWidth = L.rimW; ctx.lineCap = "round"; ctx.beginPath();
+    edgeA.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.strokeStyle = L.dark; ctx.beginPath();
+    edgeB.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(edgeA[n - 1].x, edgeA[n - 1].y); ctx.lineTo(edgeB[n - 1].x, edgeB[n - 1].y); ctx.stroke();
+  }
+}
+function foldAt(P, i) { if (i < 1 || i >= P.length - 1) return 0; return Math.abs(wrapA(Math.atan2(P[i + 1].y - P[i].y, P[i + 1].x - P[i].x) - Math.atan2(P[i].y - P[i - 1].y, P[i].x - P[i - 1].x))); }
+
+function drawStrip() { // 2 PINS: THE CAPE IS THE CLOTH BETWEEN TWO EDGE CHAINS, SO ITS ROOT EDGE IS EXACTLY THE PINK-MARKER EDGE OF THE CLOAK
+  const A = cape.chains[0].p, Bp = cape.chains[1].p, n = A.length;
+  if (n < 3) return;
+  const mid = A.map((a, i) => ({ x: lerp(a.x, Bp[i].x, L.split), y: lerp(a.y, Bp[i].y, L.split) }));
+  let sg = 0; for (let i = 0; i < n - 1; i++) sg += Math.sign(quadArea(A, Bp, i)); const s0 = sg >= 0 ? 1 : -1;   // MAJORITY ORIENTATION
+  ctx.lineJoin = "round";
+  const quad = (p0, p1, q1, q0, col) => { ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.lineTo(q1.x, q1.y); ctx.lineTo(q0.x, q0.y); ctx.closePath(); ctx.fill(); ctx.stroke(); };
+  const cT = hexRGB(L.top), cB = hexRGB(L.bottom), cD = hexRGB(L.dark);
+  for (let i = 0; i < n - 1; i++) {
+    const s = i / (n - 2);
+    const fold = clamp((foldAt(A, i) + foldAt(Bp, i)) / 2 / 0.7, 0, 1);
+    const back = quadArea(A, Bp, i) * s0 < 0 ? 0.6 : 0;      // A TWISTED-OVER QUAD SHOWS ITS BACK SIDE (DARKER) INSTEAD OF POPPING
+    const cTop = css(mixA(mixA(mixA(cT, cD, s * 0.25), cD, fold * 0.55), cD, back));
+    const cBot = css(mixA(mixA(mixA(cB, cD, s * 0.45), cD, fold * 0.55), cD, back));
+    quad(A[i], A[i + 1], mid[i + 1], mid[i], cTop);
+    quad(mid[i], mid[i + 1], Bp[i + 1], Bp[i], cBot);
+  }
+  if (L.folds) {
+    ctx.strokeStyle = "rgba(10,0,40,.22)"; ctx.lineWidth = 1.5; ctx.beginPath();
+    for (const fr of [0.3, 0.8]) for (let i = 0; i < n; i++) { const x = lerp(A[i].x, Bp[i].x, fr), y = lerp(A[i].y, Bp[i].y, fr); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    ctx.stroke();
+  }
+  if (L.rimW > 0) {
+    ctx.lineCap = "round"; ctx.strokeStyle = L.rim; ctx.lineWidth = L.rimW; ctx.beginPath();
+    A.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.strokeStyle = L.dark; ctx.beginPath();
+    Bp.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(A[n - 1].x, A[n - 1].y); ctx.lineTo(Bp[n - 1].x, Bp[n - 1].y); ctx.stroke();
+  }
+}
+
+function drawBlob() {
+  const k = B.scale, sx = 1 - blob.sq * 0.6, sy = 1 + blob.sq;
+  ctx.save(); ctx.translate(blob.x, blob.y); ctx.scale((Math.abs(blob.faceS) < 0.03 ? 0.03 : blob.faceS) * sx, sy);
+  if (imgOK) ctx.drawImage(img, -ART.px * k, -ART.py * k, ART.w * k, ART.h * k);
+  else { ctx.fillStyle = "#7030f8"; ctx.beginPath(); ctx.arc(0, -90 * k * 2, 80 * k * 2, 0, TAU); ctx.fill(); ctx.fillStyle = "#1d54ed"; ctx.fillRect(-100 * k, -300 * k, 120 * k, 200 * k); }
+  ctx.restore();
+}
+
+function drawDebug() {
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "#dc4ce8"; for (const c of collidersWorld()) { ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, TAU); ctx.stroke(); }
+  ctx.strokeStyle = "rgba(255,199,255,.6)"; ctx.strokeRect(...(() => { const a = artToWorld(333, 194), b = artToWorld(666, 624); return [Math.min(a.x, b.x), a.y, Math.abs(b.x - a.x), b.y - a.y]; })());
+  const pins = pinsWorld(), cols = ["#00ffff", "#ff69b4"];
+  cape.chains.forEach((c, k) => {                                                                                              // EDGE CHAINS
+    ctx.strokeStyle = cols[k % 2]; ctx.globalAlpha = 0.6; ctx.beginPath(); c.p.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke(); ctx.globalAlpha = 1;
+    ctx.fillStyle = "#fecd39"; for (const p of c.p) { ctx.beginPath(); ctx.arc(p.x, p.y, 2.2, 0, TAU); ctx.fill(); }
+  });
+  if (cape.chains.length === 2) { ctx.strokeStyle = "rgba(254,205,57,.35)"; ctx.beginPath(); cape.chains[0].p.forEach((p, i) => { const q = cape.chains[1].p[i]; ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); }); ctx.stroke(); } // RUNGS
+  const mx = pins.reduce((a, p) => a + p.x, 0) / pins.length, my = pins.reduce((a, p) => a + p.y, 0) / pins.length, ref = capeRefDir(C, cape.vel, blob.facing);
+  ctx.strokeStyle = "#fecd39"; ctx.beginPath(); ctx.moveTo(mx, my); ctx.lineTo(mx + ref.x * 70, my + ref.y * 70); ctx.stroke();                 // REF DIRECTION
+  ctx.font = "11px ui-monospace,monospace";
+  [["A", pinAW(), "#00ffff", PIN.ax, PIN.ay], ["B", pinBW(), "#ff69b4", PIN.bx, PIN.by]].forEach(([nm, p, col, ax, ay]) => {
+    ctx.fillStyle = col; ctx.beginPath(); ctx.arc(p.x, p.y, 6, 0, TAU); ctx.fill(); ctx.strokeStyle = "#fff"; ctx.stroke();
+    ctx.fillText(`pin ${nm} ${ax},${ay}`, p.x + 10, p.y - 8);
+  });
+}
+
+function draw() {
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  drawBackground();                                          // SCREEN SPACE (IT DOES ITS OWN SCROLLING FROM cam.x)
+  ctx.save(); ctx.translate(-Math.round(cam.x), 0);
+  ctx.save();
+  if (C.turnMode === "mirror" && blob.turnT < 1) { const e = blob.turnT * blob.turnT * (3 - 2 * blob.turnT), s = lerp(-1, 1, e); ctx.translate(blob.x, 0); ctx.scale(s, 1); ctx.translate(-blob.x, 0); } // TURN SQUASH: OLD FACING -> THIN -> NEW FACING
+  if (L.layer === "behind") { drawCape(); drawBlob(); } else { drawBlob(); drawCape(); }
+  ctx.restore();
+  if (ui.debug) drawDebug();
+  ctx.restore();
+  if (!imgOK) { ctx.fillStyle = "#ff6200"; ctx.fillText("blob.png not loaded", 20, H - 20); }
+}
+
+/* =====================================================================
+   HUD / PANEL
+   ===================================================================== */
+let msgT = 0;
+function flash(t) { const m = document.getElementById("msg"); m.textContent = t; m.style.display = "block"; clearTimeout(msgT); msgT = setTimeout(() => { m.style.display = "none"; }, 1800); }
+
+const meter = document.getElementById("meter");
+function updateHUD() {
+  const m = update.m || { worst: 0, total: 0, cross: 0 };
+  const lim = C.maxBendDeg < 179.5 ? C.maxBendDeg : 180;
+  meter.innerHTML =
+    `<div><span>FPS</span><span class="v">${ui.fps.toFixed(0)}${ui.slow ? " &middot; SLOW-MO" : ""}${ui.paused ? " &middot; PAUSED" : ""}${ui.auto ? " &middot; AUTO" : ""}</span></div>` +
+    `<div><span>WORST BEND</span><span class="${m.worst > 90 ? "bad" : "v"}">${m.worst.toFixed(0)}&deg; <small>pk ${peak.worst.toFixed(0)}&deg;</small></span></div>` +
+    `<div><span>TOTAL TURN</span><span class="${m.total > 270 ? "bad" : "v"}">${m.total.toFixed(0)}&deg; <small>pk ${peak.total.toFixed(0)}&deg;</small></span></div>` +
+    `<div><span>SELF-CROSSINGS</span><span class="${m.cross ? "bad" : "v"}">${m.cross} <small>pk ${peak.cross}</small></span></div>` +
+    (cape.chains && cape.chains.length === 2 ? `<div><span>INVERTED QUADS</span><span class="${m.twist ? "bad" : "v"}">${m.twist || 0} <small>pk ${peak.twist}</small></span></div>` : "") +
+    `<div><span>FRAMES CURLED</span><span class="${peak.crossFrames ? "bad" : "v"}">${peak.crossFrames}/${peak.frames}</span></div>`;
+}
+
+const panel = document.getElementById("panel");
+const sync = [];
+function section(title, open) { const d = document.createElement("details"); if (open) d.open = true; d.innerHTML = `<summary>${title}</summary>`; panel.appendChild(d); return d; }
+function slider(parent, obj, key, label, min, max, step, onChange) {
+  const r = document.createElement("div"); r.className = "row";
+  const id = "s_" + Math.random().toString(36).slice(2);
+  r.innerHTML = `<label for="${id}" title="${label}">${label}</label><input id="${id}" type="range" min="${min}" max="${max}" step="${step}"><output></output>`;
+  const inp = r.querySelector("input"), out = r.querySelector("output");
+  const show = () => { inp.value = obj[key]; out.textContent = Number(obj[key]).toFixed(step < 0.01 ? 3 : step < 1 ? 2 : 0); };
+  inp.addEventListener("input", () => { obj[key] = parseFloat(inp.value); show(); if (onChange) onChange(); });
+  show(); sync.push(show); parent.appendChild(r);
+}
+function select(parent, obj, key, label, opts, onChange) {
+  const r = document.createElement("div"); r.className = "row2";
+  r.innerHTML = `<label>${label}</label><select>${opts.map(([v, t]) => `<option value="${v}">${t}</option>`).join("")}</select>`;
+  const s = r.querySelector("select"); const show = () => { s.value = obj[key]; };
+  s.addEventListener("change", () => { obj[key] = s.value; if (onChange) onChange(); }); show(); sync.push(show); parent.appendChild(r);
+}
+function check(parent, obj, key, label, onChange) {
+  const r = document.createElement("div"); r.className = "row2";
+  r.innerHTML = `<label>${label}</label><input type="checkbox">`;
+  const c = r.querySelector("input"); const show = () => { c.checked = !!obj[key]; };
+  c.addEventListener("change", () => { obj[key] = c.checked; if (onChange) onChange(); }); show(); sync.push(show); parent.appendChild(r);
+}
+function color(parent, obj, key, label) {
+  const r = document.createElement("div"); r.className = "row2";
+  r.innerHTML = `<label>${label}</label><input type="color">`;
+  const c = r.querySelector("input"); const show = () => { c.value = obj[key]; };
+  c.addEventListener("input", () => { obj[key] = c.value; }); show(); sync.push(show); parent.appendChild(r);
+}
+function hint(parent, t) { const h = document.createElement("div"); h.className = "hint"; h.textContent = t; parent.appendChild(h); }
+function button(parent, label, fn) { const b = document.createElement("button"); b.textContent = label; b.addEventListener("click", fn); parent.appendChild(b); return b; }
+function syncUI() { sync.forEach((f) => f()); }
+const reseed = () => capeReset(cape, C, pinsWorld(), blob.facing);
+
+function applyPreset(name) {
+  const p = PRESETS[name]; if (!p) return;
+  Object.assign(B, DEFAULTS.B); Object.assign(C, DEFAULTS.C); Object.assign(L, DEFAULTS.L); Object.assign(PIN, DEFAULTS.PIN);
+  if (p.C) Object.assign(C, p.C); if (p.B) Object.assign(B, p.B); if (p.L) Object.assign(L, p.L);
+  syncUI(); reseed(); clearPeaks(); flash("PRESET: " + name);
+}
+function exportJSON() { return JSON.stringify({ B, C, L, PIN }, null, 2); }
+function importJSON(t) { const o = JSON.parse(t); if (o.B) Object.assign(B, o.B); if (o.C) Object.assign(C, o.C); if (o.L) Object.assign(L, o.L); if (o.PIN) Object.assign(PIN, o.PIN); syncUI(); reseed(); }
+
+// TEXT DIALOG (window.prompt IS NOT RELIABLE IN A TAURI WEBVIEW). onOk(text) RETURNS true TO CLOSE.
+function dialog(title, text, onOk) {
+  const d = document.getElementById("dlg"), ta = document.getElementById("dlgTa"), ok = document.getElementById("dlgOk");
+  document.getElementById("dlgT").textContent = title; ta.value = text; ta.readOnly = !onOk; ok.style.display = onOk ? "" : "none";
+  d.classList.add("on"); ta.focus(); if (!onOk) ta.select();
+  ok.onclick = () => { if (onOk(ta.value) !== false) d.classList.remove("on"); };
+  document.getElementById("dlgNo").onclick = () => d.classList.remove("on");
+}
+
+// SETTINGS PERSISTENCE: localStorage IS A UI CONVENIENCE ONLY (IT CAN BE WIPED); THE LIBRARY IS THE REAL SAVE (library/capes/<name>.json)
+const SAVE_KEY = "oswCapeLab_v1";
+function settingsObject() { return { format: "osw-cape", version: 1, B, C, L, PIN }; }
+function applySettings(o) { // ACCEPTS osw-cape FILES AND THE OLD COPY SETTINGS JSON ({B,C,L,PIN})
+  if (!o || typeof o !== "object") return false;
+  if (o.format && o.format !== "osw-cape") return false;
+  if (!(o.B || o.C || o.L || o.PIN)) return false;
+  importJSON(JSON.stringify(o)); clearPeaks(); return true;
+}
+let saveT = 0, lastSaved = "";
+function saveSoon() { clearTimeout(saveT); saveT = setTimeout(() => { try { const t = JSON.stringify(settingsObject()); if (t !== lastSaved) { lastSaved = t; localStorage.setItem(SAVE_KEY, t); } } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ } }, 500); }
+function restoreSaved() { try { const t = localStorage.getItem(SAVE_KEY); if (t) applySettings(JSON.parse(t)); } catch (e) { /* IGNORE A BAD SAVE */ } }
+
+function buildLibrary() { // ONLY WHEN HOSTED IN THE WIZARD
+  if (!(window.OSWClient && OSWClient.hosted)) return;
+  const s = section("Library (Wizard)", true); s.id = "lib";
+  panel.insertBefore(s, panel.children[1] || null);   // RIGHT UNDER PRESETS, NOT BURIED AT THE BOTTOM
+  hint(s, "SAVES THE CAPE SETTINGS TO library/capes/<name>.json SO PLAY AND THE CHARACTER CAN USE THEM LATER.");
+  const nm = document.createElement("input"); nm.type = "text"; nm.id = "libName"; nm.maxLength = 40; nm.placeholder = "cape name (a-z 0-9 - _)"; s.appendChild(nm);
+  const sel = document.createElement("select"); sel.id = "libSel";
+  const fill = async (keep) => {
+    let names = []; try { names = await OSWClient.library.cape.list(); } catch (e) { /* EMPTY LIST */ }
+    sel.innerHTML = ""; for (const n of names) { const o = document.createElement("option"); o.value = o.textContent = n; sel.appendChild(o); }
+    if (keep && names.includes(keep)) sel.value = keep;
+  };
+  const bs = document.createElement("div"); bs.className = "btns"; s.appendChild(bs);
+  button(bs, "SAVE TO LIBRARY", async () => {
+    const name = nm.value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+    if (!name) { flash("NAME THE CAPE FIRST"); return; }
+    try { await OSWClient.library.cape.save(name, settingsObject()); nm.value = name; await fill(name); flash("SAVED TO LIBRARY: " + name); }
+    catch (e) { flash("SAVE FAILED: " + (e && e.message || e)); }
+  });
+  s.appendChild(sel);
+  const b2 = document.createElement("div"); b2.className = "btns"; s.appendChild(b2);
+  button(b2, "LOAD FROM LIBRARY", async () => {
+    const n = sel.value; if (!n) { flash("NO LIBRARY CAPES YET"); return; }
+    try { const o = await OSWClient.library.cape.get(n); if (applySettings(o)) { nm.value = n; flash("LOADED " + n); } else flash("NOT A CAPE LAB FILE"); }
+    catch (e) { flash("LOAD FAILED"); }
+  });
+  fill(); OSWClient.on("library.changed", (c) => { if (c && c.kind === "cape") fill(); });
+}
+
+function buildPanel() {
+  let s = section("Presets / Settings", true);
+  hint(s, "A/B THE CURL: RUN THE AUTOPILOT (T) ON OLD, THEN STABLE, AND COMPARE THE PEAK READOUTS.");
+  const bs = document.createElement("div"); bs.className = "btns"; s.appendChild(bs);
+  for (const n of Object.keys(PRESETS)) button(bs, n, () => applyPreset(n));
+  button(bs, "RESET CAPE", () => { reseed(); clearPeaks(); });
+  button(bs, "COPY SETTINGS", async () => { const t = exportJSON(); try { await navigator.clipboard.writeText(t); flash("SETTINGS COPIED"); } catch (e) { dialog("COPY THIS (CTRL+C)", t); } });
+  button(bs, "PASTE SETTINGS", () => dialog("PASTE SETTINGS JSON", "", (t) => { try { importJSON(t); flash("SETTINGS LOADED"); return true; } catch (e) { flash("BAD JSON"); return false; } }));
+  select(s, ui, "timeScale", "time scale", [[1, "1x"], [0.5, "0.5x"], [0.25, "0.25x"], [0.1, "0.1x"]], () => { ui.timeScale = parseFloat(ui.timeScale); });
+
+  s = section("Anti-curl", true);
+  hint(s, "MAX BEND: LARGEST ANGLE BETWEEN NEIGHBOURING SEGMENTS (180 = OFF). MIN SPAN: HOW MUCH OF ITS STRAIGHT LENGTH ANY STRETCH OF THE CHAIN MUST KEEP, SO IT CAN'T LOOP OR FOLD BACK ON ITSELF (0 = OFF).");
+  slider(s, C, "maxBendDeg", "max bend", 5, 180, 1);
+  slider(s, C, "spanMin", "min span", 0, 0.9, 0.01);
+  slider(s, C, "shear", "shear lock", 0, 1, 0.01);
+  slider(s, C, "rung", "width hold", 0, 1, 0.01);
+  slider(s, C, "restPull", "rest pull", 0, 300, 1);
+  slider(s, C, "nDrag", "cloth drag", 0, 30, 0.5);
+  slider(s, C, "tDrag", "drag along", 0, 5, 0.05);
+  check(s, C, "collide", "body collision");
+  slider(s, C, "thick", "collision pad", 0, 40, 1);
+  hint(s, "TURN-AROUND. SLIDE: PIN GLIDES THROUGH THE BODY WHILE THE SPRITE TURNS, CAPE STAYS PHYSICAL. MIRROR: CHAIN IS FLIPPED WITH THE SPRITE. SNAP: INSTANT (OLD BEHAVIOUR).");
+  select(s, C, "turnMode", "on turn", [["slide", "slide through body"], ["mirror", "mirror chain + squash"], ["snap", "snap (old)"]]);
+  slider(s, C, "turnTime", "turn time (s)", 0, 0.4, 0.01);
+
+  s = section("Cape sim");
+  slider(s, C, "segments", "segments", 6, 30, 1, reseed);
+  slider(s, C, "segLen", "segment length", 4, 24, 0.5, reseed);
+  slider(s, C, "gravity", "gravity", 0, 4000, 10);
+  slider(s, C, "drag", "air drag", 0, 10, 0.1);
+  slider(s, C, "lift", "lift at speed", 0, 1, 0.01);
+  slider(s, C, "flutter", "flutter", 0, 2500, 10);
+  slider(s, C, "backBias", "back bias", 0, 4000, 10);
+  slider(s, C, "wind", "wind (px/s)", -800, 800, 10);
+  slider(s, C, "hangDeg", "rest angle", 0, 80, 1);
+  slider(s, C, "sag", "rest vs motion", 0.1, 3, 0.05);
+  slider(s, C, "vRef", "streaming speed", 200, 1200, 10);
+  slider(s, C, "iterations", "iterations", 1, 20, 1);
+  slider(s, C, "bend", "stiffness", 0, 1, 0.01);
+  slider(s, C, "groundPad", "floor offset", 0, 80, 1);
+  slider(s, C, "groundFric", "floor friction", 0, 1, 0.01);
+
+  s = section("Attach / look", true);
+  hint(s, "2 PINS (RECOMMENDED): THE CAPE IS A CLOTH STRIP PINNED AT BOTH ENDS OF THE CLOAK'S BACK EDGE (THE PINK MARKERS), SO ITS ROOT EDGE CAN'T TILT OR GAP. 1 PIN: A RIBBON HUNG FROM THE MIDPOINT. PRESS G, THEN DRAG THE CYAN (A) AND PINK (B) DOTS ON THE BLOB. THE CAPE DRAWS BEHIND THE BLOB SO THE PINS HIDE UNDER THE ART.");
+  select(s, C, "attach", "attach", [["two", "2 pins (strip)"], ["one", "1 pin (ribbon)"]], () => { reseed(); clearPeaks(); });
+  slider(s, PIN, "ax", "pin A x (art)", 250, 620, 0.5, reseed);
+  slider(s, PIN, "ay", "pin A y (art)", 380, 660, 0.5, reseed);
+  slider(s, PIN, "bx", "pin B x (art)", 250, 620, 0.5, reseed);
+  slider(s, PIN, "by", "pin B y (art)", 380, 660, 0.5, reseed);
+  slider(s, L, "w1", "width at hem", 10, 280, 1);
+  slider(s, L, "taper", "width curve", 0.3, 2.5, 0.05);
+  slider(s, L, "split", "two-tone split", 0.1, 0.9, 0.01);
+  slider(s, L, "ripple", "hem ripple", 0, 0.4, 0.01);
+  slider(s, L, "rimW", "rim width", 0, 10, 0.5);
+  check(s, L, "folds", "fold lines");
+  select(s, L, "layer", "cape layer", [["behind", "behind blob"], ["front", "in front of blob"]]);
+  color(s, L, "top", "top colour"); color(s, L, "bottom", "bottom colour"); color(s, L, "rim", "rim colour"); color(s, L, "dark", "shade colour");
+
+  s = section("Tendrils", true);
+  hint(s, "THE SOLID CLOTH BODY RUNS DOWN TO 'SPLIT AT'; BELOW THAT THE CAPE FANS INTO TAPERED TENDRILS THAT RIDE THE VERLET SPINE. EACH GETS A TRAVELLING SINE (OFFSET GROWS ROOT -> TIP) WITH ITS OWN SPEED, WAVELENGTH, PHASE AND LENGTH. 2-PIN MODE ONLY.");
+  select(s, L, "mode", "cape render", [["tendrils", "body + tendrils"], ["strip", "solid strip"]]);
+  slider(s, L, "tCount", "tendrils", 2, 9, 1);
+  slider(s, L, "tSplit", "split at (0 root - 1 hem)", 0.15, 0.9, 0.01);
+  slider(s, L, "tAmp", "wave amplitude (px)", 0, 70, 1);
+  slider(s, L, "tWaves", "waves per tendril", 0.3, 3, 0.05);
+  slider(s, L, "tSpeed", "wave speed (rad/s)", 0, 14, 0.1);
+  slider(s, L, "tSpread", "speed variation", 0, 1, 0.01);
+  slider(s, L, "tIdle", "idle sway", 0, 1.5, 0.01);
+  slider(s, L, "tGain", "speed adds sway", 0, 2, 0.01);
+  slider(s, L, "tTaper", "point sharpness", 0.3, 2.5, 0.05);
+  slider(s, L, "tOverlap", "blade overlap", 0, 1, 0.01);
+  slider(s, L, "tLenVar", "length variation", 0, 0.7, 0.01);
+
+  s = section("Ghost tail (dissolve)", true);
+  hint(s, "THE SPAWN-DISSOLVE SHADER, RUN ALONG THE CAPE: NOTHING IS EATEN BEFORE 'STARTS AT', THE HEM IS FULLY GONE. THE NOISE DRIFTS TOWARD THE HEM SO THE BURN FRONT LICKS OFF THE TAIL. 2-PIN MODE ONLY (1-PIN RIBBON STAYS FLAT).");
+  check(s, L, "dis", "dissolve on");
+  slider(s, L, "disStart", "starts at (0 root - 1 hem)", 0, 0.95, 0.01);
+  slider(s, L, "disAmt", "how gone at hem", 0, 1, 0.01);
+  slider(s, L, "disSpeed", "speed pushes start up", 0, 1.5, 0.05);
+  slider(s, L, "disCell", "noise cell (px)", 3, 40, 1);
+  slider(s, L, "disEdge", "glow band width", 0.02, 0.6, 0.01);
+  slider(s, L, "disGlow", "glow boost", 0, 2, 0.05);
+  slider(s, L, "disFlow", "noise drift (px/s)", -200, 300, 5);
+  slider(s, L, "disFade", "alpha fade at hem", 0, 1, 0.01);
+  slider(s, L, "disSparks", "sparks", 0, 2, 0.05);
+  color(s, L, "disColA", "glow inner"); color(s, L, "disColB", "glow outer");
+
+  s = section("Blob");
+  slider(s, B, "scale", "scale", 0.3, 1, 0.01);
+  slider(s, B, "maxSpeed", "max speed", 200, 1200, 10);
+  slider(s, B, "dashMul", "dash multiplier", 1, 3, 0.05);
+  slider(s, B, "accel", "acceleration", 600, 8000, 50);
+  slider(s, B, "friction", "friction", 500, 8000, 50);
+  slider(s, B, "airCtl", "air control", 0, 1, 0.05);
+  slider(s, B, "jumpV", "jump speed", 400, 1600, 10);
+  slider(s, B, "gravity", "blob gravity", 1200, 6000, 50);
+}
+buildPanel(); buildLibrary(); restoreSaved(); setInterval(saveSoon, 2000); document.getElementById("panel").addEventListener("input", saveSoon); document.getElementById("panel").addEventListener("change", saveSoon);
+
+/* =====================================================================
+   LOOP (+ A SMALL HANDLE FOR TESTING: lab.advance(seconds) RUNS THE SIM WITHOUT DRAWING)
+   ===================================================================== */
+let last = performance.now();
+function frame(now) {
+  const raw = Math.min(0.05, (now - last) / 1000); last = now;
+  ui.fps = lerp(ui.fps, 1 / Math.max(raw, 1e-4), 0.05);
+  if (!ui.paused) { update(raw * ui.timeScale); sparksStep(raw * ui.timeScale); tendrilStep(raw * ui.timeScale); }
+  draw();
+  if (((now / 100) | 0) !== frame.h) { frame.h = (now / 100) | 0; updateHUD(); }
+  requestAnimationFrame(frame);
+}
+window.lab = { B, C, L, PIN, blob, cape, ui, peak, update, applyPreset, resetAll, clearPeaks, capeMetrics, keys,
+  advance(sec, dt = 1 / 60) { for (let t = 0; t < sec; t += dt) update(dt); } };
+resize(); resetAll();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

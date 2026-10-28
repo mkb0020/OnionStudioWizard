@@ -38,6 +38,9 @@ export function createBridge({ library, frames }) {
     'library.map.list': () => library.listMaps(),
     'library.map.get':  (a) => library.readMap(a.map),
     'library.map.save': (a) => library.saveMap(a.map, a.data),
+    'library.cape.list': () => library.listCapes(),
+    'library.cape.get':  (a) => library.readCape(a.cape),
+    'library.cape.save': (a) => library.saveCape(a.cape, a.data),
   };
 
   const isToolWindow = (src) => { for (const f of frames.values()) if (f.contentWindow === src) return true; return false; };
