@@ -934,8 +934,8 @@ async function savePinsToCharacter() {
   try {
     const sheet = await OSWClient.library.character.get(bodyId); if (!sheet) { flash("NO CHARACTER SHEET FOR " + bodyId); return; }
     const prev = sheet.cape || {};
-    sheet.cape = { version: 1, view: prev.view || "right", pins: { ax: PIN.ax, ay: PIN.ay, bx: PIN.bx, by: PIN.by }, colliders: COLLIDERS_ART.map((c) => ({ x: c.x, y: c.y, r: c.r })),
-      defaults: { scale: B.scale, segLen: C.segLen, segments: C.segments, w1: L.w1, hangDeg: C.hangDeg } };
+    sheet.cape = Object.assign({}, prev, { version: 1, view: prev.view || "right", pins: { ax: PIN.ax, ay: PIN.ay, bx: PIN.bx, by: PIN.by }, colliders: COLLIDERS_ART.map((c) => ({ x: c.x, y: c.y, r: c.r })),
+      defaults: { scale: B.scale, segLen: C.segLen, segments: C.segments, w1: L.w1, hangDeg: C.hangDeg } });   // prev KEEPS BLOCKS OTHER TOOLS OWN (play: {...} IS PLAY'S)
     await OSWClient.library.character.save(bodyId, sheet); bodyPins = { ...sheet.cape.pins }; flash("PINS SAVED TO " + bodyId.toUpperCase());
   } catch (e) { flash("SAVE FAILED: " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); }
 }

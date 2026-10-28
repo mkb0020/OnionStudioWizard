@@ -138,10 +138,16 @@
     ],
     "defaults": {
       "scale": 0.45,
-      "segLen": 10,
-      "segments": 14,
-      "w1": 56,
+      "segLen": 14,
+      "segments": 13,
+      "w1": 90,
       "hangDeg": 22
+    },
+    "play": {
+      "ref": {
+        "x": 368.5,
+        "y": 369
+      }
     }
   }
 }
