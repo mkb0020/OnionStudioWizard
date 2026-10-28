@@ -41,16 +41,16 @@
    ====================================================================== */
 const R2D = Math.PI / 180, FPS = 24;
 /* ======================= CHARACTER ART =======================
-   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of eleven 800x800 frames (8800x800): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
-   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe. ART_FRAME maps each part name to its frame.
+   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of twelve 800x800 frames (9600x800): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
+   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe, 11 blue filler disc (not a rig part yet: sliced into the library for the PLAY cape to fill gaps). ART_FRAME maps each part name to its frame.
    (The bag frame was removed Oct 28 2026: the bag comes from accessories.png.)
    The page loads that file on start (so redrawing the sheet updates the rig); it must be served over http.
    Pivots are positions inside the 800x800 frame, measured from the mannequin's gray joint circles; the rig maps each
    part's own pivot-to-pivot axis onto the matching skeleton bone (rotating and stretching it along the bone). */
-const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=8800;   // frame 0 of this sheet is the full mannequin
+const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=9600;   // frame 0 of this sheet is the full mannequin
 const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
 const ART_FRAME={"head": 1, "chest": 2, "pelvis": 3, "upperArm": 4, "forearm": 5, "handR": 6, "handL": 7, "thigh": 8, "calf": 9, "shoe": 10};   // frame index of each part in the sheet
-const ART_BOX={"head": [361, 216, 79, 94], "chest": [370, 315, 68, 101], "pelvis": [360, 394, 72, 106], "upperArm": [377, 320, 39, 107], "forearm": [389, 400, 43, 86], "handR": [402, 451, 47, 56], "handL": [403, 462, 45, 47], "thigh": [368, 441, 61, 166], "calf": [362, 578, 50, 166], "shoe": [360, 717, 92, 79]};   // [x,y,w,h] crop of each frame (bbox + 4px margin)
+const ART_BOX={"head": [319, 196, 140, 167], "chest": [370, 315, 68, 101], "pelvis": [360, 394, 72, 106], "upperArm": [377, 320, 39, 107], "forearm": [389, 400, 43, 86], "handR": [402, 451, 47, 56], "handL": [403, 462, 45, 47], "thigh": [368, 441, 61, 166], "calf": [362, 578, 50, 166], "shoe": [360, 717, 92, 79]};   // [x,y,w,h] crop of each frame (bbox + 4px margin)
 const ART_PIV={
   hip:[398,472], knee:[391.5,598], ankle:[385.5,730],        // hip = centre of the thigh's top cap; knee = centre of the calf's top cap (thigh bottom ends at it); ankle = boot pivot, mid-cuff above the boot dome (sole 61px below, heel 22px behind; redrawn art, Oct 28 2026)
   shoulder:[395.5,338], elbow:[402,413], wrist:[419.5,473.5],    // shoulder / elbow / wrist = centres of the round caps at the ends of the arm parts
@@ -510,7 +510,7 @@ function loadArt(){
   return new Promise(res=>{
     const fail=m=>{ artLabel='not found'; showLoadError(new Error(m)); res(); };
     const im=new Image();
-    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 8800x800 (eleven 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
+    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 9600x800 (twelve 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
     im.onerror=()=>fail('could not load '+SHEET_URL);
     im.src=SHEET_URL;
   });
