@@ -104,10 +104,10 @@
     "version": 1,
     "view": "right",
     "pins": {
-      "ax": 367,
-      "ay": 318,
-      "bx": 370,
-      "by": 420
+      "ax": 381,
+      "ay": 340,
+      "bx": 388,
+      "by": 347
     },
     "colliders": [
       {
@@ -137,11 +137,11 @@
       }
     ],
     "defaults": {
-      "scale": 0.45,
-      "segLen": 14,
-      "segments": 13,
-      "w1": 90,
-      "hangDeg": 22
+      "scale": 0.55,
+      "segLen": 12.5,
+      "segments": 16,
+      "w1": 104,
+      "hangDeg": 34
     },
     "play": {
       "ref": {
