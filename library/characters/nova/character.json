@@ -27,7 +27,7 @@
     {
       "label": "Gravity",
       "value": 1800,
-      "unit": "px/s\u00b2"
+      "unit": "px/s²"
     },
     {
       "label": "Max fall speed",
@@ -62,7 +62,7 @@
     {
       "label": "Air control",
       "value": 1,
-      "unit": "\u00d7"
+      "unit": "×"
     },
     {
       "label": "Coyote time",
@@ -104,10 +104,10 @@
     "version": 1,
     "view": "right",
     "pins": {
-      "ax": 381,
-      "ay": 340,
-      "bx": 388,
-      "by": 347
+      "ax": 347,
+      "ay": 322.5,
+      "bx": 412,
+      "by": 322.5
     },
     "colliders": [
       {
@@ -138,10 +138,10 @@
     ],
     "defaults": {
       "scale": 0.55,
-      "segLen": 12.5,
-      "segments": 16,
-      "w1": 104,
-      "hangDeg": 34
+      "segLen": 16,
+      "segments": 12,
+      "w1": 117,
+      "hangDeg": 17
     },
     "play": {
       "ref": {
