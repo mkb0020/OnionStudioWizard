@@ -384,6 +384,8 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="circle"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/></svg></button>
       <button class="tb" data-tool="fill"><svg viewBox="0 0 24 24"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg></button>
       <button class="tb" data-tool="blur"><svg viewBox="0 0 24 24"><path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/></svg></button>
+      <button class="tb" data-tool="wrinkle" title="Wrinkle brush (W): stroke a fold into cloth; light ridge, shadowed flanks"><svg viewBox="0 0 24 24"><path d="M3 7.5c3-3.5 6 3.5 9 0s6 3.5 9 0"/><path d="M3 13c3-3.5 6 3.5 9 0s6 3.5 9 0"/><path d="M3 18.5c3-3.5 6 3.5 9 0s6 3.5 9 0"/></svg></button>
+      <button class="tb" data-tool="texture" title="Texture brushes (X): blotch, speckle, stone, crack"><svg viewBox="0 0 24 24"><path d="M3 5l5 3 3-4 4 4 6-3"/><path d="M4 12l4 2 3-3 3 4 6-2"/><path d="M3 20l5-3 3 2 4-3 5 2"/><circle cx="6" cy="9" r=".7"/><circle cx="17" cy="14" r=".7"/><circle cx="12" cy="18" r=".7"/></svg></button>
       <button class="tb" data-tool="move"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
       <button class="tb" data-tool="picker" title="Eyedropper (Q): pick a color from the canvas"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
@@ -461,6 +463,81 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <input type="range" id="blurStr" min="1" max="100" value="30"><output id="blurOut">30%</output>
       </div>
       <p class="note">Higher strength = softer result.</p>
+    </div>
+    <div class="sec" id="wrinkleSec" hidden>
+      <h2>Wrinkle</h2>
+      <div class="onion-row">
+        <span class="lbl">POWER</span>
+        <input type="range" id="wrInt" min="1" max="100" value="60"><output id="wrIntOut">60%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">LIGHT</span>
+        <input type="range" id="wrAng" min="0" max="359" value="225"><output id="wrAngOut">225&deg;</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">LEAN</span>
+        <input type="range" id="wrDir" min="0" max="100" value="40"><output id="wrDirOut">40%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">TAPER</span>
+        <input type="range" id="wrTaper" min="0" max="100" value="60"><output id="wrTaperOut">60%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">STYLE</span>
+        <select id="wrTone" style="flex:1;min-width:0"><option value="0">Smooth</option><option value="3">Cel 3-tone</option><option value="5">Cel 5-tone</option></select>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">SHADOW</span>
+        <select id="wrShadow" style="flex:1;min-width:0"><option value="#170032">Void</option><option value="#37025a">Violet</option><option value="#730132">Plum</option><option value="#000000">Ink</option></select>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">SHINE</span>
+        <select id="wrLight" style="flex:1;min-width:0"><option value="#DBE2E9">Cool white</option><option value="#FFC7FF">Blush</option><option value="#fad0c4">Peach</option><option value="#ffffff">White</option></select>
+      </div>
+      <p class="note">Drag along a fold. The center goes light, both flanks go dark, and it only touches existing paint on the layer. LEAN 0 = symmetric; higher = shadow gathers on the side away from LIGHT.</p>
+    </div>
+    <div class="sec" id="textureSec" hidden>
+      <h2>Texture</h2>
+      <div class="onion-row">
+        <span class="lbl">TYPE</span>
+        <select id="txType" style="flex:1;min-width:0"><option value="stone">Stone (blotch + speckle)</option><option value="blotch">Blotch</option><option value="speckle">Speckle</option><option value="crack">Crack</option></select>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">POWER</span>
+        <input type="range" id="txPow" min="1" max="100" value="60"><output id="txPowOut">60%</output>
+      </div>
+      <div class="onion-row" data-for="stone blotch">
+        <span class="lbl">SCALE</span>
+        <input type="range" id="txScale" min="10" max="200" value="60"><output id="txScaleOut">60px</output>
+      </div>
+      <div class="onion-row" data-for="stone speckle">
+        <span class="lbl">GRAIN</span>
+        <input type="range" id="txGrain" min="0" max="100" value="50"><output id="txGrainOut">50%</output>
+      </div>
+      <div class="onion-row" data-for="crack">
+        <span class="lbl">JAGGED</span>
+        <input type="range" id="txJag" min="0" max="100" value="55"><output id="txJagOut">55%</output>
+      </div>
+      <div class="onion-row" data-for="crack">
+        <span class="lbl">BRANCH</span>
+        <input type="range" id="txBranch" min="0" max="100" value="40"><output id="txBranchOut">40%</output>
+      </div>
+      <div class="onion-row" data-for="crack">
+        <span class="lbl">LIGHT</span>
+        <input type="range" id="txAng" min="0" max="359" value="225"><output id="txAngOut">225&deg;</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">DARK</span>
+        <select id="txShadow" style="flex:1;min-width:0"><option value="#37025a">Violet</option><option value="#170032">Void</option><option value="#2a2f45">Slate</option><option value="#730132">Plum</option><option value="#000000">Ink</option></select>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">LIGHT</span>
+        <select id="txLight" style="flex:1;min-width:0"><option value="#C4C3D0">Lavender</option><option value="#DBE2E9">Cool white</option><option value="#9090C0">Periwinkle</option><option value="#FFC7FF">Blush</option><option value="#ffffff">White</option></select>
+      </div>
+      <div class="onion-row" data-for="stone blotch speckle">
+        <button class="tgl" id="txSeed" style="width:auto;flex:1">NEW PATTERN</button>
+      </div>
+      <p class="note" id="txNote"></p>
     </div>
 
 
@@ -1704,6 +1781,372 @@ const Engine = (() => {
     }
   }
 
+  /* WRINKLE BRUSH. Each stroke is a fold in the cloth already on the layer: a light ridge down the middle of the
+     stroke with soft shadow along both flanks, fading out into the surrounding cloth.
+       1. A height field H is built from the stroke: H = 1 - (distance to the stroke path / local radius), so H is 1 on
+          the path and 0 at the brush edge. Taper shrinks the local radius near the stroke's ends.
+       2. Each pixel's normalized distance from the ridge is d = 1 - H. A profile turns d into one shading value:
+          positive near the ridge (highlight), negative on the flanks (shadow).
+       3. DIRECTION leans the shading toward a light angle: the flank facing the light loses shadow, the far flank gains it.
+       4. The shading is applied to the layer's RGB (alpha untouched, so folds only land on existing cloth).
+     The layer pixels are always re-shaded from the saved "before" copy (see PixelEdit), so the live preview, the final
+     tapered result, and undo are exact, and overlapping dabs inside one stroke never double up.
+     Options o: {size, intensity 1-100, angle deg, dir 0-100, taper 0-100, tone 0|3|5 (cel bands), shadow '#rrggbb', light '#rrggbb'} */
+  let wrH = null, wrA = null;      // height field, and how strong the fold is there (1 = full brush radius, less in a taper)
+  const smooth01 = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const hexRGB = h => { const n = parseInt(h.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+
+  class WrinkleDrawer {
+    // `edit` must be a PixelEdit made just before this (its snapshot is the "before" layer).
+    constructor(project, layer, edit, o) {
+      this.ctx = layer.ctx; this.edit = edit; this.w = project.width; this.h = project.height;
+      this.R = Math.max(2, o.size / 2);
+      this.I = o.intensity / 100; this.dir = o.dir / 100; this.taper = o.taper / 100; this.tone = o.tone || 0;
+      const a = (o.angle || 0) * Math.PI / 180;
+      this.Lx = Math.cos(a); this.Ly = Math.sin(a);                        // 2D direction the light comes FROM
+      const sh = hexRGB(o.shadow), li = hexRGB(o.light);
+      this.shMul = sh.map(v => 0.3 + 0.7 * v / 255);                       // multiply tint: darkens and leans toward the shadow color
+      this.li = li;
+      if (!wrH || wrH.length !== this.w * this.h) { wrH = new Float32Array(this.w * this.h); wrA = new Float32Array(this.w * this.h); }
+      else wrH.fill(0);
+      this.pts = []; this.lastMid = null; this.path = [];
+      this.box = null;                                                     // dirty box in canvas px
+    }
+    start(p) { this.pts = [p]; this.path = [p]; this.lastMid = p; this._build(false); this._shade(this._bounds([p])); }
+    move(p) {
+      const last = this.pts[this.pts.length - 1];
+      if (Math.hypot(p.x - last.x, p.y - last.y) < 1) return false;
+      this.pts.push(p);
+      const mid = { x: (last.x + p.x) / 2, y: (last.y + p.y) / 2 };
+      const seg = flattenQuad(this.lastMid, last, mid);                    // same smoothed path the normal brush draws
+      this.lastMid = mid;
+      const from = this.path.length - 1;
+      for (let i = 1; i < seg.length; i++) this.path.push(seg[i]);
+      this._build(false, from);                                            // live: only the new piece, start taper only
+      this._shade(this._bounds(this.path.slice(Math.max(0, from - 1))));
+      return true;
+    }
+    end() {
+      const last = this.pts[this.pts.length - 1];
+      if (this.pts.length > 1 && last) { this.path.push({ x: last.x, y: last.y }); }
+      if (this.path.length < 2) return;
+      wrH.fill(0);                                                         // rebuild the whole stroke with the end taper
+      this._build(true);
+      this._shade(this._bounds(this.path));
+    }
+    // Radius at path point i (px). Start taper always; end taper only on the final rebuild.
+    _radius(i, total, fin) {
+      if (this.taper <= 0) return this.R;
+      const len = this._len;
+      const T = this.taper * (fin ? Math.min(this.R * 4, len / 2) : this.R * 4);   // taper length in px (fixed while drawing)
+      if (T <= 0) return this.R;
+      const d0 = this._cum[i], d1 = fin ? len - this._cum[i] : Infinity;
+      const f = Math.min(smooth01(0, T, d0), fin ? smooth01(0, T, d1) : 1);
+      return Math.max(0.6, this.R * (0.12 + 0.88 * f));
+    }
+    _lengths() {
+      const c = [0];
+      for (let i = 1; i < this.path.length; i++) c.push(c[i - 1] + Math.hypot(this.path[i].x - this.path[i - 1].x, this.path[i].y - this.path[i - 1].y));
+      this._cum = c; this._len = c[c.length - 1];
+    }
+    _build(fin, from = 0) {
+      this._lengths();
+      const P = this.path, n = P.length;
+      if (n === 1) { this._seg(P[0], P[0], this._radius(0, n, fin), this._radius(0, n, fin)); return; }
+      for (let i = Math.max(1, from + 1); i < n; i++) this._seg(P[i - 1], P[i], this._radius(i - 1, n, fin), this._radius(i, n, fin));
+    }
+    // Raise the height field for one path segment a->b whose radius runs ra->rb.
+    _seg(a, b, ra, rb) {
+      const W = this.w, Hh = this.h, rm = Math.max(ra, rb) + 1.5;
+      const X0 = Math.max(0, Math.floor(Math.min(a.x, b.x) - rm)), X1 = Math.min(W - 1, Math.ceil(Math.max(a.x, b.x) + rm));
+      const Y0 = Math.max(0, Math.floor(Math.min(a.y, b.y) - rm)), Y1 = Math.min(Hh - 1, Math.ceil(Math.max(a.y, b.y) + rm));
+      const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+      for (let y = Y0; y <= Y1; y++) {
+        const row = y * W;
+        for (let x = X0; x <= X1; x++) {
+          const px = x + 0.5, py = y + 0.5;
+          const t = L2 > 0 ? Math.min(1, Math.max(0, ((px - a.x) * dx + (py - a.y) * dy) / L2)) : 0;
+          const d = Math.hypot(px - (a.x + dx * t), py - (a.y + dy * t)), r = ra + (rb - ra) * t;
+          if (d < r) { const v = 1 - d / r; if (v > wrH[row + x]) { wrH[row + x] = v; wrA[row + x] = r / this.R; } }
+        }
+      }
+    }
+    _bounds(pts) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of pts) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
+      const r = this.R + 3;
+      return { x0: Math.max(0, Math.floor(x0 - r)), y0: Math.max(0, Math.floor(y0 - r)), x1: Math.min(this.w, Math.ceil(x1 + r)), y1: Math.min(this.h, Math.ceil(y1 + r)) };
+    }
+    // Re-shade the rectangle bx from the saved "before" pixels.
+    _shade(bx) {
+      const x0 = bx.x0, y0 = bx.y0, bw = bx.x1 - bx.x0, bh = bx.y1 - bx.y0;
+      if (bw <= 0 || bh <= 0) return;
+      const src = scratch.getContext('2d').getImageData(x0, y0, bw, bh), d = src.data, W = this.w, Hh = this.h;
+      const I = this.I, dir = this.dir, Lx = this.Lx, Ly = this.Ly, tone = this.tone, k = tone ? (tone - 1) / 2 : 0;
+      const hiStr = 0.62 * I, shStr = 0.85 * I, sm = this.shMul, li = this.li;
+      for (let j = 0; j < bh; j++) {
+        const y = y0 + j, row = y * W;
+        for (let i = 0; i < bw; i++) {
+          const x = x0 + i, hv = wrH[row + x];
+          if (hv <= 0) continue;
+          const q = (j * bw + i) * 4;
+          if (d[q + 3] === 0) continue;                                    // no cloth here: leave it alone
+          const dn = 1 - hv;                                               // 0 on the ridge, 1 at the brush edge
+          let hi = 1 - smooth01(0, 0.5, dn);                               // highlight: strongest on the ridge
+          let sh = smooth01(0.28, 0.68, dn) * (1 - smooth01(0.8, 1, dn));   // shadow: a band on each flank
+          if (dir > 0) {
+            const gx = (x + 1 < W ? wrH[row + x + 1] : hv) - (x > 0 ? wrH[row + x - 1] : hv);
+            const gy = (y + 1 < Hh ? wrH[row + W + x] : hv) - (y > 0 ? wrH[row - W + x] : hv);
+            const gl = Math.hypot(gx, gy);
+            if (gl > 1e-6) {
+              const t = -(gx * Lx + gy * Ly) / gl * smooth01(0.08, 0.5, dn);   // +1: flank faces the light, -1: faces away
+              sh = Math.min(1, Math.max(0, sh * (1 - dir * t)));
+              hi = Math.min(1, Math.max(0, hi * (1 + dir * t * 0.5)));
+            }
+          }
+          let s = hi - sh;                                                 // -1 (deep shadow) .. +1 (highlight)
+          if (tone) s = Math.round(s * k) / k;                             // cel bands
+          const amp = smooth01(0.1, 0.7, wrA[row + x]);                    // tapered tips fade out instead of ending in a dark speck
+          if (s > 0) {
+            const b = s * hiStr * amp;
+            d[q] += (li[0] - d[q]) * b; d[q + 1] += (li[1] - d[q + 1]) * b; d[q + 2] += (li[2] - d[q + 2]) * b;
+          } else if (s < 0) {
+            const a = -s * shStr * amp;
+            d[q] += (d[q] * sm[0] - d[q]) * a; d[q + 1] += (d[q + 1] * sm[1] - d[q + 1]) * a; d[q + 2] += (d[q + 2] * sm[2] - d[q + 2]) * a;
+          }
+        }
+      }
+      this.ctx.putImageData(src, x0, y0);
+      this.edit.touch(x0, y0, 0); this.edit.touch(x0 + bw, y0 + bh, 0);
+    }
+  }
+
+  /* TEXTURE BRUSHES (stone). Same idea as the wrinkle brush: every pixel is re-computed from the saved "before"
+     copy, only where the layer already has paint, so live preview, undo and overlapping dabs inside one stroke are exact.
+       BLOTCH   soft cloud-like patches of lighter and darker stone, from layered value noise.
+       SPECKLE  tiny soft flecks, light and dark, grouped into clusters by a slow second noise.
+       STONE    blotch + speckle in one stroke.
+     The noise is anchored to the canvas (not to the stroke), so painting back over an area keeps the same pattern.
+     Patches pull toward the SHADOW tint when dark and the SHINE tint when light, which keeps the stone from going grey-flat. */
+  const hash2 = (x, y, s) => {
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s | 0, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  };
+  function vnoise(x, y, s) {                 // smooth value noise, 0..1
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+    const a = hash2(xi, yi, s), b = hash2(xi + 1, yi, s), c = hash2(xi, yi + 1, s), d = hash2(xi + 1, yi + 1, s);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  }
+  function fbm(x, y, s, oct) {
+    let amp = 0.5, f = 1, t = 0, n = 0;
+    for (let i = 0; i < oct; i++) { t += amp * vnoise(x * f, y * f, s + i * 101); n += amp; amp *= 0.5; f *= 2.03; }
+    return t / n;
+  }
+
+  // o: {type 'blotch'|'speckle'|'stone', size, power 1-100, scale px, grain 0-100, shadow '#rrggbb', light '#rrggbb', seed}
+  // Reuses WrinkleDrawer's smoothed stroke path and soft distance field (wrH): H = 1 at the stroke center, 0 at the brush edge.
+  class TextureDrawer extends WrinkleDrawer {
+    constructor(project, layer, edit, o) {
+      super(project, layer, edit, { size: o.size, intensity: 100, angle: 0, dir: 0, taper: 0, tone: 0, shadow: o.shadow, light: o.light });
+      this.type = o.type; this.P = o.power / 100; this.scale = Math.max(4, o.scale); this.seed = o.seed | 0;
+      this.th = 0.93 - 0.4 * (o.grain / 100);                              // fleck threshold: lower = more flecks
+    }
+    _shade(bx) {
+      const x0 = bx.x0, y0 = bx.y0, bw = bx.x1 - bx.x0, bh = bx.y1 - bx.y0;
+      if (bw <= 0 || bh <= 0) return;
+      const src = scratch.getContext('2d').getImageData(x0, y0, bw, bh), d = src.data, W = this.w;
+      const blotch = this.type !== 'speckle', speck = this.type !== 'blotch';
+      const sm = this.shMul, li = this.li, sc = this.scale, th = this.th, seed = this.seed;
+      const hiK = 0.4 * this.P, shK = 0.55 * this.P;
+      for (let j = 0; j < bh; j++) {
+        const y = y0 + j, row = y * W;
+        for (let i = 0; i < bw; i++) {
+          const x = x0 + i, hv = wrH[row + x];
+          if (hv <= 0) continue;
+          const q = (j * bw + i) * 4;
+          if (d[q + 3] === 0) continue;
+          const cov = smooth01(0, 0.55, hv);                               // full strength inside, soft fade at the brush edge
+          const fx = x + 0.5, fy = y + 0.5;
+          let s = 0;
+          if (blotch) {
+            const wx = (vnoise(fx / sc * 1.4, fy / sc * 1.4, seed + 211) - 0.5) * 0.3, wy = (vnoise(fx / sc * 1.4 + 31.7, fy / sc * 1.4, seed + 223) - 0.5) * 0.3;   // warp = ragged patch edges
+            let v = Math.min(1, Math.max(-1, (fbm(fx / sc + wx, fy / sc + wy, seed, 4) - 0.5) * 3.4));
+            s += v * (1.5 - 0.5 * v * v) * (speck ? 0.8 : 1);              // flatter plateaus = patchier
+          }
+          if (speck) {
+            const dens = 0.3 + 0.7 * smooth01(0.3, 0.75, vnoise(fx / 40, fy / 40, seed + 7));
+            const lf = smooth01(th, th + 0.24, vnoise(fx / 1.9, fy / 1.9, seed + 31)) * dens;
+            const df = smooth01(th, th + 0.24, vnoise(fx / 1.9 + 57.3, fy / 1.9 + 11.1, seed + 53)) * dens;
+            s += (lf - df * 1.15) * (blotch ? 0.75 : 1.0);
+          }
+          s = Math.min(1, Math.max(-1, s)) * cov;
+          if (s > 0) {
+            const b = s * hiK;
+            d[q] += (li[0] - d[q]) * b; d[q + 1] += (li[1] - d[q + 1]) * b; d[q + 2] += (li[2] - d[q + 2]) * b;
+          } else if (s < 0) {
+            const a = -s * shK;
+            d[q] += (d[q] * sm[0] - d[q]) * a; d[q + 1] += (d[q + 1] * sm[1] - d[q + 1]) * a; d[q + 2] += (d[q + 2] * sm[2] - d[q + 2]) * a;
+          }
+        }
+      }
+      this.ctx.putImageData(src, x0, y0);
+      this.edit.touch(x0, y0, 0); this.edit.touch(x0 + bw, y0 + bh, 0);
+    }
+  }
+
+  /* CRACK BRUSH. Drag a rough line; the crack is generated from it: the line is resampled, each point is knocked sideways
+     by random jitter (JAGGED), the width pinches toward both ends, and short branches sprout from it (BRANCHES), with a few
+     sub-branches. All randomness comes from a per-stroke seed and the position along the line, so the crack grows steadily as
+     you drag instead of flickering, and it is rebuilt with its end taper when you let go.
+     Rendering: every pixel stores its distance to the nearest crack edge, the width there, and whether it lies toward the
+     light. From that: a dark core, a thin bright chip along the lit lip, and a soft shadow halo on the far side.
+     o: {size = core width px, power, jag 0-100, branch 0-100, angle deg (light), shadow, light} */
+  let crD = null, crR = null, crF = null;
+  class CrackDrawer {
+    constructor(project, layer, edit, o) {
+      this.ctx = layer.ctx; this.edit = edit; this.w = project.width; this.h = project.height;
+      this.size = Math.max(1, o.size); this.P = o.power / 100; this.jag = o.jag / 100; this.branch = o.branch / 100;
+      const a = (o.angle || 0) * Math.PI / 180; this.Lx = Math.cos(a); this.Ly = Math.sin(a);
+      this.shMul = hexRGB(o.shadow).map(v => 0.3 + 0.7 * v / 255); this.li = hexRGB(o.light);
+      this.seed = (Math.random() * 2147483647) | 0;
+      this.halo = this.size * 1.6 + 3;
+      const n = this.w * this.h;
+      if (!crD || crD.length !== n) { crD = new Float32Array(n); crR = new Float32Array(n); crF = new Float32Array(n); }
+      crD.fill(1e9); crR.fill(0); crF.fill(0);
+      this.pts = []; this.path = []; this.lastMid = null; this.prev = null;
+    }
+    _rnd(i, c) { return hash2(i, c, this.seed); }
+    start(p) { this.pts = [p]; this.path = [p]; this.lastMid = p; }
+    move(p) {
+      const last = this.pts[this.pts.length - 1];
+      if (Math.hypot(p.x - last.x, p.y - last.y) < 1) return false;
+      this.pts.push(p);
+      const mid = { x: (last.x + p.x) / 2, y: (last.y + p.y) / 2 };
+      const seg = flattenQuad(this.lastMid, last, mid);                    // same smoothed path the normal brush draws
+      this.lastMid = mid;
+      for (let i = 1; i < seg.length; i++) this.path.push(seg[i]);
+      this._render(false);
+      return true;
+    }
+    end() {
+      const last = this.pts[this.pts.length - 1];
+      if (last) this.path.push({ x: last.x, y: last.y });
+      if (this.path.length >= 2) this._render(true);
+    }
+    _geom(fin) {
+      const P = this.path, jag = this.jag, sz = this.size, out = [];
+      const stp = 9 - 4 * jag;                                             // jagged cracks change direction more often
+      const res = [{ x: P[0].x, y: P[0].y, s: 0 }]; let need = stp, cum = 0;
+      for (let i = 1; i < P.length; i++) {                                 // resample at even steps along the dragged line
+        let ax = P[i - 1].x, ay = P[i - 1].y; const bx = P[i].x, by = P[i].y;
+        let sl = Math.hypot(bx - ax, by - ay);
+        while (sl >= need) { const t = need / sl; ax += (bx - ax) * t; ay += (by - ay) * t; cum += need; res.push({ x: ax, y: ay, s: cum }); sl -= need; need = stp; }
+        need -= sl;
+      }
+      const lp = P[P.length - 1], rl = res[res.length - 1], dl = Math.hypot(lp.x - rl.x, lp.y - rl.y);
+      if (dl > 1.5) res.push({ x: lp.x, y: lp.y, s: rl.s + dl });
+      const n = res.length;
+      if (n < 2) return out;
+      const L = res[n - 1].s, amp = jag * (3 + sz * 1.3), T = Math.min(L / 2, 10 + sz * 5), main = [];
+      for (let i = 0; i < n; i++) {
+        const a = res[Math.max(0, i - 1)], b = res[Math.min(n - 1, i + 1)];
+        let tx = b.x - a.x, ty = b.y - a.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+        const s = res[i].s, edge = i === 0 || (fin && i === n - 1);
+        const off = edge ? 0 : (this._rnd(i, 1) * 2 - 1) * amp + (vnoise(s / 55, 0.5, this.seed) - 0.5) * 2 * amp;
+        const f = Math.min(smooth01(0, T, s), fin ? smooth01(0, T, L - s) : 1);
+        const wv = 0.7 + 0.6 * vnoise(s / 14, 3.3, this.seed + 5);
+        main.push({ x: res[i].x - ty * off, y: res[i].y + tx * off, r: Math.max(0.45, sz / 2 * (0.12 + 0.88 * f) * wv) });
+      }
+      out.push(main);
+      if (this.branch > 0) {
+        let lastB = -9;
+        for (let i = 3; i < n - 2; i++) {
+          if (i - lastB < 5 || this._rnd(i, 2) >= this.branch * 0.07) continue;
+          lastB = i;
+          const m = main[i], a = main[i - 1], b = main[i + 1];
+          const ang = Math.atan2(b.y - a.y, b.x - a.x) + (this._rnd(i, 3) < 0.5 ? -1 : 1) * (0.35 + this._rnd(i, 4) * 0.85);
+          const len = (22 + this._rnd(i, 5) * 80) * (0.55 + this.branch * 0.9);
+          this._branch(m.x, m.y, ang, len, Math.max(0.5, m.r * 0.75), 1, i * 7 + 11, out);
+        }
+      }
+      return out;
+    }
+    _branch(x, y, ang, len, r0, depth, k0, out) {
+      const stp = 9 - 4 * this.jag, n = Math.max(2, Math.ceil(len / stp)), pts = [];
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        pts.push({ x, y, r: Math.max(0.4, r0 * Math.pow(1 - t, 0.9)) });
+        ang += (this._rnd(k0 + k, 6) - 0.5) * (0.3 + this.jag * 1.5);       // the direction wanders, which makes it zig-zag
+        x += Math.cos(ang) * stp; y += Math.sin(ang) * stp;
+        if (depth > 0 && k > 1 && k < n - 1 && this._rnd(k0 + k, 7) < this.branch * 0.06) {
+          const side = this._rnd(k0 + k, 8) < 0.5 ? -1 : 1;
+          this._branch(x, y, ang + side * (0.4 + this._rnd(k0 + k, 9) * 0.7), len * (0.25 + this._rnd(k0 + k, 10) * 0.3),
+            Math.max(0.4, r0 * (1 - t) * 0.7), depth - 1, k0 * 13 + k * 3 + 5, out);
+        }
+      }
+      out.push(pts);
+    }
+    _clear(b) {
+      const W = this.w;
+      for (let y = b.y0; y < b.y1; y++) { const a = y * W + b.x0, z = y * W + b.x1; crD.fill(1e9, a, z); crR.fill(0, a, z); crF.fill(0, a, z); }
+    }
+    _seg(a, b) {
+      const W = this.w, Hh = this.h, halo = this.halo, rm = Math.max(a.r, b.r) + halo + 1, Lx = this.Lx, Ly = this.Ly;
+      const X0 = Math.max(0, Math.floor(Math.min(a.x, b.x) - rm)), X1 = Math.min(W - 1, Math.ceil(Math.max(a.x, b.x) + rm));
+      const Y0 = Math.max(0, Math.floor(Math.min(a.y, b.y) - rm)), Y1 = Math.min(Hh - 1, Math.ceil(Math.max(a.y, b.y) + rm));
+      const dx = b.x - a.x, dy = b.y - a.y, L2 = dx * dx + dy * dy;
+      for (let y = Y0; y <= Y1; y++) {
+        const row = y * W;
+        for (let x = X0; x <= X1; x++) {
+          const px = x + 0.5, py = y + 0.5;
+          const t = L2 > 0 ? Math.min(1, Math.max(0, ((px - a.x) * dx + (py - a.y) * dy) / L2)) : 0;
+          const cx = a.x + dx * t, cy = a.y + dy * t, d = Math.hypot(px - cx, py - cy), r = a.r + (b.r - a.r) * t, dd = d - r;
+          if (dd < halo && dd < crD[row + x]) { crD[row + x] = dd; crR[row + x] = r; crF[row + x] = d > 1e-6 ? ((px - cx) * Lx + (py - cy) * Ly) / d : 0; }
+        }
+      }
+    }
+    _render(fin) {
+      const geo = this._geom(fin);
+      if (this.prev) this._clear(this.prev);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const pad = this.halo + 2;
+      for (const pl of geo) for (const p of pl) { const e = p.r + pad; x0 = Math.min(x0, p.x - e); y0 = Math.min(y0, p.y - e); x1 = Math.max(x1, p.x + e); y1 = Math.max(y1, p.y + e); }
+      if (x0 === Infinity) return;
+      for (const pl of geo) for (let k = 1; k < pl.length; k++) this._seg(pl[k - 1], pl[k]);
+      const box = { x0: Math.max(0, Math.floor(x0)), y0: Math.max(0, Math.floor(y0)), x1: Math.min(this.w, Math.ceil(x1)), y1: Math.min(this.h, Math.ceil(y1)) };
+      const all = this.prev ? { x0: Math.min(box.x0, this.prev.x0), y0: Math.min(box.y0, this.prev.y0), x1: Math.max(box.x1, this.prev.x1), y1: Math.max(box.y1, this.prev.y1) } : box;
+      this._shade(all);
+      this.prev = box;
+    }
+    _shade(bx) {
+      const x0 = bx.x0, y0 = bx.y0, bw = bx.x1 - bx.x0, bh = bx.y1 - bx.y0;
+      if (bw <= 0 || bh <= 0) return;
+      const src = scratch.getContext('2d').getImageData(x0, y0, bw, bh), d = src.data, W = this.w;
+      const P = this.P, sm = this.shMul, li = this.li, halo = this.halo, eW = Math.max(1.6, this.size * 0.6 + 1);
+      const coreK = 0.55 + 0.45 * P;
+      for (let j = 0; j < bh; j++) {
+        const row = (y0 + j) * W + x0;
+        for (let i = 0; i < bw; i++) {
+          const dd = crD[row + i];
+          if (dd >= halo) continue;
+          const q = (j * bw + i) * 4;
+          if (d[q + 3] === 0) continue;                                    // only cracks existing paint
+          const F = crF[row + i], edge = smooth01(-0.2, 0.8, dd);
+          const hl = edge * (1 - smooth01(eW * 0.35, eW, dd)) * smooth01(0, 0.6, F) * 0.75 * P;        // bright chip on the lit lip
+          const hs = edge * (1 - smooth01(0, halo, dd)) * (0.3 + 0.7 * smooth01(0, 0.6, -F)) * 0.5 * P;    // shadow, heavier away from the light
+          const core = (1 - smooth01(-0.6, 0.6, dd)) * coreK;                                          // the dark crack itself
+          if (hl > 0) { d[q] += (li[0] - d[q]) * hl; d[q + 1] += (li[1] - d[q + 1]) * hl; d[q + 2] += (li[2] - d[q + 2]) * hl; }
+          if (hs > 0) { d[q] += (d[q] * sm[0] - d[q]) * hs; d[q + 1] += (d[q + 1] * sm[1] - d[q + 1]) * hs; d[q + 2] += (d[q + 2] * sm[2] - d[q + 2]) * hs; }
+          if (core > 0) { d[q] += (d[q] * sm[0] * 0.3 - d[q]) * core; d[q + 1] += (d[q + 1] * sm[1] * 0.3 - d[q + 1]) * core; d[q + 2] += (d[q + 2] * sm[2] * 0.3 - d[q + 2]) * core; }
+        }
+      }
+      this.ctx.putImageData(src, x0, y0);
+      this.edit.touch(x0, y0, 0); this.edit.touch(x0 + bw, y0 + bh, 0);
+    }
+  }
+
   // Flood fill on RGBA pixel data. A pixel matches the seed when every premultiplied channel
   // (alpha included) is within tol, so all fully transparent pixels count as equal.
   // Returns a 0/1 mask plus the box it covers.
@@ -2000,7 +2443,7 @@ const Engine = (() => {
     };
   }
 
-  return { MAX_HOLD, Layer, Frame, readZip, Project, PixelEdit, LayerShift, LayerAdjust, adjustBrightness, drawFitted, StrokeDrawer, BlurDrawer, drawDot, drawSegment, drawShape, tidyStroke, composite, floodMask, dilateMask, bucketFill, renderThumb, renderLayerThumb, renderOnion, exportFrame, exportSheet, sheetLayout, makeZip };
+  return { MAX_HOLD, Layer, Frame, readZip, Project, PixelEdit, LayerShift, LayerAdjust, adjustBrightness, drawFitted, StrokeDrawer, BlurDrawer, WrinkleDrawer, TextureDrawer, CrackDrawer, drawDot, drawSegment, drawShape, tidyStroke, composite, floodMask, dilateMask, bucketFill, renderThumb, renderLayerThumb, renderOnion, exportFrame, exportSheet, sheetLayout, makeZip };
 })();
 
 
@@ -2031,7 +2474,7 @@ const Engine = (() => {
   const cursorEl = $('#cursor');
   const chainBar = $('#chainBar');
 
-  const state = { tool: 'brush', crisp: false, stab: 0, tidy: false, merge: 4, brushId: 'pen', sizes: { pen: 2, brush: 20, eraser: 10, blur: 20 }, size: 2, color: '#000000', filled: false, radius: 0, paperColor: '#ffffff', fillTol: 30, fillExpand: 1, fillSrc: 'active', blurStr: 30, zoom: 1, panX: 0, panY: 0, space: false };
+  const state = { tool: 'brush', crisp: false, stab: 0, tidy: false, merge: 4, brushId: 'pen', sizes: { pen: 2, brush: 20, eraser: 10, blur: 20, wrinkle: 28, tx_stone: 60, tx_blotch: 60, tx_speckle: 60, tx_crack: 3 }, size: 2, color: '#000000', filled: false, radius: 0, paperColor: '#ffffff', fillTol: 30, fillExpand: 1, fillSrc: 'active', blurStr: 30, tx: { type: 'stone', power: 60, scale: 60, grain: 50, jag: 55, branch: 40, angle: 225, shadow: '#37025a', light: '#C4C3D0', seed: 1337 }, wr: { intensity: 60, angle: 225, dir: 40, taper: 60, tone: 0, shadow: '#170032', light: '#DBE2E9' }, zoom: 1, panX: 0, panY: 0, space: false };
 
   /* ---------- onion skin ---------- */
   // One previous frame only (cheaper and plenty for tracing). The engine still understands next / prevCount
@@ -2199,12 +2642,14 @@ const Engine = (() => {
     stage.classList.toggle('mv', t === 'move');
     stage.classList.toggle('pick', t === 'picker');
     cursorEl.classList.toggle('erase', t === 'eraser');
-    $('#assistSec').hidden = !(t === 'brush' || t === 'eraser');
+    $('#assistSec').hidden = !(t === 'brush' || t === 'eraser' || t === 'wrinkle' || t === 'texture');
     $('#tidyRow').hidden = $('#mergeRow').hidden = t !== 'brush';
     $('#shapeSec').hidden = !(t === 'rect' || t === 'circle');
     $('#radiusRow').hidden = t !== 'rect';
     $('#fillSec').hidden = t !== 'fill';
     $('#blurSec').hidden = t !== 'blur';
+    $('#wrinkleSec').hidden = t !== 'wrinkle';
+    $('#textureSec').hidden = t !== 'texture';
     syncSize();
   }
   $$('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
@@ -2325,7 +2770,13 @@ const Engine = (() => {
     const edit = new Engine.PixelEdit(project, layer);
     const drawer = state.tool === 'blur'
       ? new Engine.BlurDrawer(project, layer, edit, { size: state.size, strength: state.blurStr })
-      : new Engine.StrokeDrawer(layer.ctx, style(), edit);
+      : state.tool === 'wrinkle'
+        ? new Engine.WrinkleDrawer(project, layer, edit, Object.assign({ size: state.size }, state.wr))
+        : state.tool === 'texture'
+          ? (state.tx.type === 'crack'
+              ? new Engine.CrackDrawer(project, layer, edit, Object.assign({ size: state.size }, state.tx))
+              : new Engine.TextureDrawer(project, layer, edit, Object.assign({ size: state.size }, state.tx)))
+          : new Engine.StrokeDrawer(layer.ctx, style(), edit);
     drawer.start(p);
     stroke = { id: e.pointerId, drawer, edit, t0: performance.now(), timer: 0, ending: null, touch: e.pointerType === 'touch', lazy: { x: p.x, y: p.y, tx: p.x, ty: p.y } };
     requestRender();
@@ -2366,7 +2817,7 @@ const Engine = (() => {
     stroke.drawer.end();
     // Auto-tidy: smooth the stroke and fuse it with any older pass it runs alongside (one undo step, same as the stroke)
     if (state.tidy && state.tool === 'brush' && stroke.drawer.pts) Engine.tidyStroke(stroke.edit, stroke.drawer.pts, style(), state.merge);
-    stroke.edit.commit(state.tool === 'eraser' ? 'Erase' : state.tool === 'blur' ? 'Blur' : 'Brush stroke');
+    stroke.edit.commit(state.tool === 'eraser' ? 'Erase' : state.tool === 'blur' ? 'Blur' : state.tool === 'wrinkle' ? 'Wrinkle' : state.tool === 'texture' ? (state.tx.type === 'crack' ? 'Crack' : 'Texture') : 'Brush stroke');
     stroke = null; requestRender(); updateStatus();
   }
 
@@ -2491,11 +2942,11 @@ const Engine = (() => {
     }
     if (e.button !== 0) return;
     const p = toCanvas(e);
-    if (['brush', 'eraser', 'line', 'rect', 'circle', 'fill', 'blur', 'move'].includes(state.tool)) {
+    if (['brush', 'eraser', 'line', 'rect', 'circle', 'fill', 'blur', 'wrinkle', 'texture', 'move'].includes(state.tool)) {
       const why = editBlock(state.tool === 'move' ? 'move' : 'draw');
       if (why) { flash(why); return; }
     }
-    if (state.tool === 'brush' || state.tool === 'eraser' || state.tool === 'blur') {
+    if (state.tool === 'brush' || state.tool === 'eraser' || state.tool === 'blur' || state.tool === 'wrinkle' || state.tool === 'texture') {
       if (chain) finishChain();
       startStroke(e, p);
     } else if (state.tool === 'move') {
@@ -2899,6 +3350,71 @@ const Engine = (() => {
   }));
   $('#fillSrc').addEventListener('change', e => { state.fillSrc = e.target.value; e.target.blur(); });
   $('#blurStr').addEventListener('input', e => { state.blurStr = +e.target.value; $('#blurOut').textContent = e.target.value + '%'; });
+  // Wrinkle brush settings (remembered between sessions)
+  const WR_KEY = 'dtWrinkle';
+  function wrSave() { try { localStorage.setItem(WR_KEY, JSON.stringify(state.wr)); } catch (err) { /* optional */ } }
+  function wrSync() {
+    const w = state.wr;
+    $('#wrInt').value = w.intensity; $('#wrIntOut').textContent = w.intensity + '%';
+    $('#wrAng').value = w.angle; $('#wrAngOut').innerHTML = w.angle + '&deg;';
+    $('#wrDir').value = w.dir; $('#wrDirOut').textContent = w.dir ? w.dir + '%' : 'SYMM.';
+    $('#wrTaper').value = w.taper; $('#wrTaperOut').textContent = w.taper + '%';
+    $('#wrTone').value = String(w.tone); $('#wrShadow').value = w.shadow; $('#wrLight').value = w.light;
+  }
+  try {
+    const saved = JSON.parse(localStorage.getItem(WR_KEY) || 'null');
+    if (saved && typeof saved === 'object') {
+      const w = state.wr, num = (k, a, b) => { if (Number.isFinite(saved[k])) w[k] = clamp(Math.round(saved[k]), a, b); };
+      num('intensity', 1, 100); num('angle', 0, 359); num('dir', 0, 100); num('taper', 0, 100);
+      if ([0, 3, 5].includes(saved.tone)) w.tone = saved.tone;
+      if (/^#[0-9a-fA-F]{6}$/.test(saved.shadow) && $('#wrShadow').querySelector('option[value="' + saved.shadow + '"]')) w.shadow = saved.shadow;
+      if (/^#[0-9a-fA-F]{6}$/.test(saved.light) && $('#wrLight').querySelector('option[value="' + saved.light + '"]')) w.light = saved.light;
+    }
+  } catch (err) { /* optional */ }
+  wrSync();
+  [['#wrInt', 'intensity'], ['#wrAng', 'angle'], ['#wrDir', 'dir'], ['#wrTaper', 'taper']].forEach(([id, k]) =>
+    $(id).addEventListener('input', e => { state.wr[k] = +e.target.value; wrSync(); wrSave(); }));
+  $('#wrTone').addEventListener('change', e => { state.wr.tone = +e.target.value; wrSave(); e.target.blur(); });
+  $('#wrShadow').addEventListener('change', e => { state.wr.shadow = e.target.value; wrSave(); e.target.blur(); });
+  $('#wrLight').addEventListener('change', e => { state.wr.light = e.target.value; wrSave(); e.target.blur(); });
+  // Texture brush settings (remembered between sessions)
+  const TX_KEY = 'dtTexture', TX_NOTES = {
+    stone: 'Soft blotchy patches plus fine speckle, in one stroke. Only touches existing paint. Painting over the same spot again keeps the same pattern.',
+    blotch: 'Soft cloud-like patches of lighter and darker stone. SCALE sets how big the patches are.',
+    speckle: 'Tiny soft flecks, clumped unevenly. GRAIN sets how many.',
+    crack: 'Drag a rough line; the crack is generated from it. JAGGED = how zig-zag it is, BRANCH = how many offshoots. LIGHT sets which lip catches the light. Size is the crack width.'
+  };
+  function txSave() { try { localStorage.setItem(TX_KEY, JSON.stringify(state.tx)); } catch (err) { /* optional */ } }
+  function txSync() {
+    const t = state.tx;
+    $('#txType').value = t.type;
+    $('#txPow').value = t.power; $('#txPowOut').textContent = t.power + '%';
+    $('#txScale').value = t.scale; $('#txScaleOut').textContent = t.scale + 'px';
+    $('#txGrain').value = t.grain; $('#txGrainOut').textContent = t.grain + '%';
+    $('#txJag').value = t.jag; $('#txJagOut').textContent = t.jag + '%';
+    $('#txBranch').value = t.branch; $('#txBranchOut').textContent = t.branch ? t.branch + '%' : 'NONE';
+    $('#txAng').value = t.angle; $('#txAngOut').innerHTML = t.angle + '&deg;';
+    $('#txShadow').value = t.shadow; $('#txLight').value = t.light;
+    $$('#textureSec [data-for]').forEach(r => { r.hidden = !r.dataset.for.split(' ').includes(t.type); });
+    $('#txNote').textContent = TX_NOTES[t.type];
+  }
+  try {
+    const sv = JSON.parse(localStorage.getItem(TX_KEY) || 'null');
+    if (sv && typeof sv === 'object') {
+      const t = state.tx, num = (k, a, b) => { if (Number.isFinite(sv[k])) t[k] = clamp(Math.round(sv[k]), a, b); };
+      num('power', 1, 100); num('scale', 10, 200); num('grain', 0, 100); num('jag', 0, 100); num('branch', 0, 100); num('angle', 0, 359); num('seed', 0, 2147483646);
+      if (['stone', 'blotch', 'speckle', 'crack'].includes(sv.type)) t.type = sv.type;
+      if ($('#txShadow').querySelector('option[value="' + sv.shadow + '"]')) t.shadow = sv.shadow;
+      if ($('#txLight').querySelector('option[value="' + sv.light + '"]')) t.light = sv.light;
+    }
+  } catch (err) { /* optional */ }
+  txSync();
+  [['#txPow', 'power'], ['#txScale', 'scale'], ['#txGrain', 'grain'], ['#txJag', 'jag'], ['#txBranch', 'branch'], ['#txAng', 'angle']].forEach(([id, k]) =>
+    $(id).addEventListener('input', e => { state.tx[k] = +e.target.value; txSync(); txSave(); }));
+  $('#txType').addEventListener('change', e => { state.tx.type = e.target.value; txSync(); syncSize(); txSave(); e.target.blur(); });
+  $('#txShadow').addEventListener('change', e => { state.tx.shadow = e.target.value; txSave(); e.target.blur(); });
+  $('#txLight').addEventListener('change', e => { state.tx.light = e.target.value; txSave(); e.target.blur(); });
+  $('#txSeed').addEventListener('click', e => { state.tx.seed = Math.floor(Math.random() * 2147483646); txSave(); flash('New pattern'); e.target.blur(); });
 
   /* ---------- transform layer ---------- */
   let xfAll = false;
@@ -3145,9 +3661,10 @@ const Engine = (() => {
     pen:   { name: 'Fine tip',    min: 1,  max: 10,  def: 2 },
     brush: { name: 'Thick brush', min: 10, max: 100, def: 20 }
   };
-  const TOOL_SIZES = { eraser: { min: 1, max: 100, def: 10 }, blur: { min: 1, max: 100, def: 20 } };
+  const TOOL_SIZES = { eraser: { min: 1, max: 100, def: 10 }, blur: { min: 1, max: 100, def: 20 }, wrinkle: { min: 6, max: 120, def: 28 },
+    tx_stone: { min: 8, max: 200, def: 60 }, tx_blotch: { min: 8, max: 200, def: 60 }, tx_speckle: { min: 8, max: 200, def: 60 }, tx_crack: { min: 1, max: 24, def: 3 } };
   const sizeIn = $('#size');
-  const sizeKey = () => state.tool === 'eraser' ? 'eraser' : state.tool === 'blur' ? 'blur' : state.brushId;
+  const sizeKey = () => state.tool === 'eraser' ? 'eraser' : state.tool === 'blur' ? 'blur' : state.tool === 'wrinkle' ? 'wrinkle' : state.tool === 'texture' ? 'tx_' + state.tx.type : state.brushId;
   const sizeRange = k => BRUSHES[k] || TOOL_SIZES[k];
   function syncSize() {                      // slider range + value follow the active brush / tool
     const k = sizeKey(), r = sizeRange(k);
@@ -3160,7 +3677,7 @@ const Engine = (() => {
   function setBrush(id) {
     if (!BRUSHES[id]) return;
     state.brushId = id;
-    if (['eraser', 'blur', 'fill', 'move', 'hand'].includes(state.tool)) setTool('brush'); else syncSize();
+    if (['eraser', 'blur', 'wrinkle', 'texture', 'fill', 'move', 'hand'].includes(state.tool)) setTool('brush'); else syncSize();
   }
   $('#brushSel').addEventListener('change', e => { setBrush(e.target.value); e.target.blur(); });
 
@@ -3867,6 +4384,8 @@ const Engine = (() => {
       case 'c': setTool('circle'); break;
       case 'g': setTool('fill'); break;
       case 'u': setTool('blur'); break;
+      case 'w': setTool('wrinkle'); break;
+      case 'x': setTool('texture'); break;
       case 'q': setTool('picker'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;

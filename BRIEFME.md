@@ -20,6 +20,8 @@
   - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` (11 frames) into the library
   - Step 5: Rig Lab ART menu imports a character's parts from the library; pivots are saved as sidecars in each part's `meta.pivots`
+  - Drawing tool: WRINKLE brush (W): drag along a fold; light ridge down the middle, shadow on both flanks, tapered ends, clipped to existing paint. Settings: POWER, LIGHT angle, LEAN (0 = symmetric), TAPER, STYLE (smooth / cel 3-tone / cel 5-tone), SHADOW and SHINE tints. One undo step per stroke. Tested in a headless browser (undo/redo exact, nothing outside the cloth changes); needs a first look in the real app with a pen
+  - Drawing tool: TEXTURE tool (X) with four types: Stone (blotch + speckle), Blotch, Speckle, Crack. Soft canvas-anchored noise only touches existing paint; cracks are auto-generated from a rough drag (JAGGED, BRANCH, lit-lip LIGHT angle) with tapered ends. Tinted by DARK / LIGHT presets, NEW PATTERN re-rolls the noise. One undo step per stroke. Tested in a headless browser (undo/redo exact, nothing outside the paint changes); needs a first look in the real app with a pen
   - Step 9: Cape Lab tool (CAPE//BLOB verlet cloth + ghost-tail dissolve), settings save to `library/capes/<name>.json`
   - Step 10: Nova's own cape pins (Cape Lab BODY dropdown, pins and body colliders saved in `character.json`)
   - Step 11: PLAY reads a character's cape block (root shift from the pins, cape size, idle body circles); F3 compares with the old constants
