@@ -742,9 +742,9 @@ async function loadCapeProfile(slug, sheet) {
 }
 function applyCapeProfile() { Object.assign(CAPE_CLOTH, CAPE_CLOTH_BASE, capeProf.on && capeProf.data ? capeProf.data.look : null); cloth.need = true; }
 function capeColliders() {   // WORLD CIRCLES FOR THE BODY COLLIDERS (null = NONE). THEY FOLLOW FACING THE SAME WAY THE ROOT DOES
-  const d = capeProf.data; if (!(capeProf.on && d && d.collide && d.cols.length) || cape.idleBlend < 0.5) return null;   // IDLE ONLY: THE CIRCLES ARE THE STANDING MANNEQUIN, THE RUN / CAST / JUMP SPRITES LEAN OUT OF THEM AND THE CAPE BUNCHES UP
-  const sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth;
-  return d.cols.map(c => ({ x: P.x + c.x * dir * sx, y: P.y + (c.y - visualLift) * sy, r: c.r * SCALE + CAPE_BODY.pad }));
+  const d = capeProf.data; if (!(capeProf.on && d && d.collide && d.cols.length) || cape.idleBlend < 0.02) return null;   // IDLE ONLY: THE CIRCLES ARE THE STANDING MANNEQUIN, THE RUN / CAST / JUMP SPRITES LEAN OUT OF THEM AND THE CAPE BUNCHES UP
+  const sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth, g = clamp01(cape.idleBlend), gs = g * g * (3 - 2 * g);   // RADIUS GROWS WITH THE IDLE BLEND (SMOOTHSTEP) SO THE CIRCLES DON'T POP ON MID-STOP
+  return d.cols.map(c => ({ x: P.x + c.x * dir * sx, y: P.y + (c.y - visualLift) * sy, r: (c.r * SCALE + CAPE_BODY.pad) * gs }));
 }
 function capePush(q, c) { const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy); if (d < c.r) { if (d < 1e-4) { q.x = c.x - c.r; return; } q.x = c.x + dx / d * c.r; q.y = c.y + dy / d * c.r; } }
 const clamp01 = v => Math.max(0, Math.min(1, v));
@@ -813,6 +813,7 @@ function stepCloth(dt) {
       for (let i = 0; i < n - 1; i++) clothLink(Pn[i], Pn[i + 1], C.segLen, i === 0 ? 0 : 1, 1, 1);
       for (let i = 0; i < n - 2; i++) clothLink(Pn[i], Pn[i + 2], C.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, C.bend);
       if (body) for (const c of body) for (let i = 1; i < n; i++) capePush(Pn[i], c);   // KEEP THE CHAIN OUT OF THE BODY CIRCLES
+      if (B > 0.02 && body) for (let i = 1; i < n; i++) if ((Pn[i].x - Pn[0].x) * cape.dirSmooth > 0) Pn[i].x = Pn[0].x;   // RUN -> IDLE: THE CHAIN SWINGS IN FRONT OF THE TORSO AND HOOKS ON THE CIRCLES, SO IT NEVER GETS AHEAD OF THE COLLAR WHILE IDLE IS ACTIVE
     }
     for (let i = 1; i < n; i++) { const fl = Math.min(floorBelow(Pn[i].x, Pn[i].y), FLOOR_MAX) - 2; if (Pn[i].y > fl) Pn[i].y = fl; }   // DON'T SINK INTO THE FLOOR
     cloth.t += h;
