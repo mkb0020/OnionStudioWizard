@@ -20,6 +20,7 @@
   - Step 4: Character Builder tool (tabletop-style landscape sheet, turnaround, physics, items, spells, to-do), saved as `characters/<name>/character.json`
   - Step 3: drawing tool EXPORT menu has SAVE TO LIBRARY, new PARTS menu adds library items as layers, and one button slices `sideView.png` (11 frames) into the library
   - Step 5: Rig Lab ART menu imports a character's parts from the library; pivots are saved as sidecars in each part's `meta.pivots`
+  - Drawing tool: WRINKLE brush (W): drag along a fold; light ridge down the middle, shadow on both flanks, tapered ends, clipped to existing paint. Settings: POWER, LIGHT angle, LEAN (0 = symmetric), TAPER, STYLE (smooth / cel 3-tone / cel 5-tone), SHADOW and SHINE tints. One undo step per stroke. Tested in a headless browser (undo/redo exact, nothing outside the cloth changes); needs a first look in the real app with a pen
   - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
