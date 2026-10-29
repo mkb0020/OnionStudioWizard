@@ -30,7 +30,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.672Z",
-      "updated": "2026-10-28T23:43:27.039Z"
+      "updated": "2026-10-29T00:15:59.060Z"
     },
     {
       "id": "nova_side_chest",
@@ -60,7 +60,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.207Z",
-      "updated": "2026-10-28T23:43:24.213Z"
+      "updated": "2026-10-29T00:15:57.871Z"
     },
     {
       "id": "nova_side_far_hand",
@@ -90,7 +90,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.523Z",
-      "updated": "2026-10-28T23:43:26.156Z"
+      "updated": "2026-10-29T00:15:58.726Z"
     },
     {
       "id": "nova_side_filler_disc",
@@ -120,7 +120,7 @@
         "view": "side"
       },
       "created": "2026-10-28T23:43:27.974Z",
-      "updated": "2026-10-28T23:43:27.974Z"
+      "updated": "2026-10-29T00:15:59.408Z"
     },
     {
       "id": "nova_side_head",
@@ -150,7 +150,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.123Z",
-      "updated": "2026-10-28T23:43:23.793Z"
+      "updated": "2026-10-29T00:15:57.685Z"
     },
     {
       "id": "nova_side_lower_arm",
@@ -180,7 +180,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.392Z",
-      "updated": "2026-10-28T23:43:25.311Z"
+      "updated": "2026-10-29T00:15:58.392Z"
     },
     {
       "id": "nova_side_near_hand",
@@ -210,7 +210,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.445Z",
-      "updated": "2026-10-28T23:43:25.710Z"
+      "updated": "2026-10-29T00:15:58.560Z"
     },
     {
       "id": "nova_side_pelvis",
@@ -240,7 +240,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.260Z",
-      "updated": "2026-10-28T23:43:24.608Z"
+      "updated": "2026-10-29T00:15:58.043Z"
     },
     {
       "id": "nova_side_shoe",
@@ -270,7 +270,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.761Z",
-      "updated": "2026-10-28T23:43:27.421Z"
+      "updated": "2026-10-29T00:15:59.216Z"
     },
     {
       "id": "nova_side_thigh",
@@ -300,7 +300,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.579Z",
-      "updated": "2026-10-28T23:43:26.637Z"
+      "updated": "2026-10-29T00:15:58.882Z"
     },
     {
       "id": "nova_side_upper_arm",
@@ -330,7 +330,7 @@
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.317Z",
-      "updated": "2026-10-28T23:43:25.001Z"
+      "updated": "2026-10-29T00:15:58.225Z"
     },
     {
       "id": "nova_side_bag",
@@ -383,7 +383,7 @@
         "note": "full mannequin, facing right"
       },
       "created": "2026-10-26T01:44:58.000Z",
-      "updated": "2026-10-28T23:43:23.505Z",
+      "updated": "2026-10-29T00:15:57.477Z",
       "character": "nova",
       "view": "right"
     }
