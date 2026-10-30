@@ -680,16 +680,16 @@ function stepDissolve(dt) {
    IDLE, THE SPELL CAST AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
    EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
 const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
-const CLOAK_POSE = { run: { x: 150, y: 20, rot: 0 } };
+const CLOAK_POSE = { run: { x: 145, y: 20, rot: 0 } };
 const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
 const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'wallSlide', 'doubleJump']);
 const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
 const CAPE_SPRING = { stiffness: 150, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
-const CAPE_CLOTH = { segments: 14, segLen: 8, gravity: 1100, drag: 5.6, lift: 0.2, flutter: 100, backBias: 700, iterations: 2, bend: 0.5, step: 1 / 120, maxSteps: 6, w0: 40, w1: 8, ripple: 0.1, rootOffset: { x: -110, y: -180 }, hangX: 0.35, hangY: 0.93 };
+const CAPE_CLOTH = { segments: 14, segLen: 8, gravity: 900, drag: 5.6, lift: 0.2, flutter: 100, backBias: 700, iterations: 2, bend: 0.5, step: 1 / 120, maxSteps: 6, w0: 40, w1: 8, ripple: 0.1, rootOffset: { x: -110, y: -180 }, hangX: 0.35, hangY: 0.93 };
 const CAPE_COLORS = ['#0000ff', '#0000ff', '#0000ff'], CAPE_EDGE = '#0000ff', CAPE_EDGE_GLOW = '#0000ff';
 const CAPE_DISSOLVE = { enabled: true, start: 0.6, amount: 0.3, cell: 15, edge: 0, flow: 5, speed: 0.1, fade: 0.9, glow: 0.2, edgeFade: 0.9 };
 const DISSOLVE_EDGE_INNER = '#1C90D6', DISSOLVE_EDGE_OUTER = '#8D2EC2';
-const IDLE_CAPE = { enabled: true, root: { x: 30, y: -185 }, rootBob: [0, -2, -3, -4, -3, -2], blendRate: 5, backBias: 550, gust: 1050, gustHz: 0.35, flutter: 150, layered: false, topWidth: 0, liningShift: 0.12, liningColors: ['#0000FF', '#0000FF', '#0000FF'], liningEdge: '#1061C6', liningGlow: '#0A0568' };
+const IDLE_CAPE = { enabled: true, root: { x: 20, y: -185 }, rootBob: [0, -2, -3, -4, -3, -2], blendRate: 5, backBias: 550, gust: 1050, gustHz: 0.35, flutter: 150, layered: false, topWidth: 0, liningShift: 0.12, liningColors: ['#0000FF', '#0000FF', '#0000FF'], liningEdge: '#1061C6', liningGlow: '#0A0568' };
 const ATTACK_CAPE = { enabled: true, root: { x: 0, y: -185 }, blendRate: 20, backBias: 600, flutter: 250, gust: 7000, gustLift: 0.7, gustTime: 0.6 };
 const JUMP_CAPE = { roots: { jumpStart: { x: 14, y: -205 }, jump: { x: 8, y: -215 }, fall: { x: 20, y: -244 }, land: { x: 26, y: -238 } }, blendRate: 16, rootEase: 30 };
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -706,7 +706,7 @@ const cloth = { p: [], need: true, t: 0, acc: 0, lastRoot: null, dormant: false,
    - ROOT: THE HAND-TUNED PER-POSE ROOTS ABOVE STAY, MOVED BY HOW FAR THE PIN MIDPOINT IS FROM cape.play.ref (THE MIDPOINT THEY WERE TUNED AGAINST). NO ref = NO SHIFT.
    - SIZE: ROOT WIDTH = THE DISTANCE BETWEEN THE PINS; defaults (segments, segLen, w1, hangDeg) ARE CAPE LAB WORLD PX AT ITS BODY SCALE, CONVERTED TO PLAY WORLD PX.
    - BODY: THE COLLIDER CIRCLES KEEP THE CHAIN OUT OF THE BODY IN IDLE ONLY (cape.play.collide: false TURNS IT OFF). F3 TOGGLES THE WHOLE THING SO YOU CAN COMPARE. VISUAL ONLY, LIKE THE REST OF THE CAPE. */
-const CAPE_CLOTH_BASE = Object.assign({}, CAPE_CLOTH), CAPE_BODY = { pad: 2 };
+const CAPE_CLOTH_BASE = Object.assign({}, CAPE_CLOTH), CAPE_BODY = { pad: 0 };
 const capeProf = { on: true, data: null, note: 'none' };   // data = { k, shift:{x,y}, cols:[{x,y,r}] (SPRITE ART PX FROM THE FEET), look:{...CAPE_CLOTH FIELDS}, collide }
 function alphaScan(src, sx, sw, sh, thr) {   // BOUNDING BOX + FEET CENTRE (LOWEST 30 ROWS) OF ONE CELL; null IF EMPTY
   const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g = c.getContext('2d', { willReadFrequently: true });
