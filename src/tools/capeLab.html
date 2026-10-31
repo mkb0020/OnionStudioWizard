@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <base href="../">  <!-- OSW: RESOLVES assets/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CAPE LAB // BLOB</title>
+<title>CAPE LAB // NOVA2</title>
 <style>
 /* ---------- THEME: DEEP VIOLET + NEON (PALETTE FROM colorPalette/) ---------- */
 :root{--bg:#0c001f;--panel:rgba(23,0,50,.88);--line:#37025a;--ink:#C4C3D0;--dim:#9090C0;--cyan:#00ffff;--mag:#dc4ce8;--vio:#A55AFF;--mint:#67FEBD;--warn:#ff6200}
@@ -50,8 +50,8 @@ button:hover{border-color:var(--cyan);color:var(--cyan)}
 <body>
 <canvas id="c"></canvas>
 <div id="hud">
-  <h1>CAPE LAB <span>//</span> <span id="bodyName" style="color:var(--cyan)">BLOB</span></h1>
-  <div class="keys"><b>A/D</b> or <b>&larr;/&rarr;</b> move &nbsp; <b>W/&uarr;/Space</b> jump &nbsp; <b>Shift</b> dash &nbsp; <b>drag</b> the blob with the mouse<br>
+  <h1>CAPE LAB <span>//</span> <span id="bodyName" style="color:var(--cyan)">NOVA2</span></h1>
+  <div class="keys"><b>A/D</b> or <b>&larr;/&rarr;</b> move &nbsp; <b>W/&uarr;/Space</b> jump &nbsp; <b>Shift</b> dash &nbsp; <b>drag</b> the body with the mouse<br>
   <b>T</b> autopilot stress test &nbsp; <b>R</b> reset &nbsp; <b>G</b> debug overlay &nbsp; <b>F</b> slow-mo &nbsp; <b>P</b> pause &nbsp; <b>X</b> clear peaks &nbsp; <b>H</b> hide panel</div>
   <div id="meter"></div>
 </div>
@@ -62,26 +62,31 @@ button:hover{border-color:var(--cyan);color:var(--cyan)}
 <script src="js/oswClient.js"></script>
 <script>
 /* =====================================================================
-   CONFIG - ART + COLLIDERS (ALL IN 800x800 ART PIXELS OF assets/images/blob.png)
+   CONFIG - ART + COLLIDERS (ALL IN 400x400 ART PIXELS OF assets/images/nova/Nova2.png)
+   NOVA2.png IS AT THE SAME ART SCALE AS PLAY'S 400 PX SPRITE SHEETS (SAME FOOT BASELINE y399, SAME FEET CENTRE x~235), SO 1 ART PX HERE = 1 SPRITE ART PX IN PLAY.
+   WITH B.scale = 0.5 (PLAY'S SCALE) 1 WORLD PX HERE = 1 WORLD PX IN PLAY.
    ===================================================================== */
-const BLOB_SRC = "assets/images/misc/blob.png";
-const ART = { w: 800, h: 800, px: 500, py: 624, box: [333, 194, 666, 624] };           // PIVOT = FEET CENTER OF THE BLOB (BBOX IS x333-666, y194-624)
-const COLLIDERS_ART = [                                      // CIRCLES THE CAPE CAN'T SINK INTO (EDIT IF THE ART CHANGES; G SHOWS THEM)
-  { x: 545, y: 335, r: 112 },                                // HEAD + HOOD MASS
-  { x: 548, y: 548, r: 76 },                                 // BELLY
+const BODY_SRC = "assets/images/nova/Nova2.png";
+const ART = { w: 400, h: 400, px: 235, py: 399, box: [191, 74, 275, 399] };            // PIVOT = FEET CENTER OF THE BODY (BBOX IS x191-275, y74-399)
+const COLLIDERS_ART = [                                      // CIRCLES THE CAPE CAN'T SINK INTO (EDIT IF THE ART CHANGES; G SHOWS THEM). STARTING POINT = nova's SAVED CIRCLES CONVERTED FROM THE 800 PX RIGHT VIEW (x0.5, FEET-ANCHORED), HEAD NUDGED UP FOR THE HOOD EARS
+  { x: 228, y: 116, r: 36 },                                 // HEAD + HOOD MASS
+  { x: 234, y: 188, r: 19 },                                 // CHEST
+  { x: 232, y: 228, r: 15 },                                 // WAIST / BAG
+  { x: 231, y: 272, r: 13 },                                 // THIGH
+  { x: 229, y: 307, r: 11 },                                 // KNEE
 ];
 
 /* =====================================================================
    SETTINGS - EVERY SLIDER LIVES IN ONE OF THESE OBJECTS (COPY SETTINGS EXPORTS THEM)
    ===================================================================== */
-const B = {            // BLOB BODY
-  scale: 0.55, maxSpeed: 560, accel: 3200, friction: 3000, airCtl: 0.8,
+const B = {            // BODY (scale 0.5 = PLAY'S SCALE FOR THE 400 PX SPRITE ART)
+  scale: 0.5, maxSpeed: 560, accel: 3200, friction: 3000, airCtl: 0.8,
   jumpV: 1000, gravity: 2800, dashMul: 1.7,
 };
 const C = {            // CAPE SIM (WORLD PX; SEE ALSO anti-curl BLOCK)
-  segments: 14, segLen: 14, gravity: 1800, drag: 1.2, nDrag: 9, tDrag: 0.4,
+  segments: 12, segLen: 7.5, gravity: 1800, drag: 1.2, nDrag: 9, tDrag: 0.4,
   lift: 0.55, flutter: 260, backBias: 0, wind: 0,
-  hangDeg: 55, sag: 0.55, vRef: 500, restPull: 45,
+  hangDeg: 17, sag: 0.55, vRef: 500, restPull: 45,
   iterations: 8, bend: 0.35, step: 1 / 120, maxSteps: 6,
   // ANTI-CURL
   spanMin: 0.5, maxBendDeg: 28, collide: true, thick: 6,
@@ -92,7 +97,7 @@ const C = {            // CAPE SIM (WORLD PX; SEE ALSO anti-curl BLOCK)
   attach: "two", shear: 1.0, rung: 0.3,
 };
 const L = {            // LOOK
-  w1: 54, taper: 1.0, ripple: 0.06, split: 0.55,
+  w1: 53, taper: 1.0, ripple: 0.06, split: 0.55,
   top: "#1d54ed", bottom: "#1a4fda", rim: "#1078f0", dark: "#1040b8",
   rimW: 3, folds: true, layer: "behind",
   // GHOST TAIL (DISSOLVE). disStart: 0 = ROOT, 1 = HEM. disAmt: HOW GONE THE HEM GETS (1 = FULLY).
@@ -100,7 +105,7 @@ const L = {            // LOOK
   mode: "tendrils", tCount: 5, tSplit: 0.4, tAmp: 28, tSpeed: 5, tSpread: 0.45, tTaper: 0.8, tOverlap: 0.35, tLenVar: 0.3, tWaves: 1.25, tIdle: 0.45, tGain: 0.9,
   disSparks: 0.3, disColA: "#c8fcff", disColB: "#dc4ce8",
 };
-const PIN = { ax: 389.5, ay: 461.5, bx: 459.5, by: 608.5 };   // THE TWO PINK MARKERS: TOP + BOTTOM OF THE CLOAK'S BACK EDGE (ART PX). 1-PIN MODE USES THEIR MIDPOINT. IN DEBUG MODE (G) DRAG THE DOTS.
+const PIN = { ax: 206, ay: 163, bx: 239, by: 163 };           // THE TWO PINK MARKERS: CLOAK ATTACH POINTS (ART PX). STARTING POINT = nova's SAVED PINS CONVERTED FROM THE 800 PX RIGHT VIEW. 1-PIN MODE USES THEIR MIDPOINT. IN DEBUG MODE (G) DRAG THE DOTS.
 
 const PRESETS = {
   STABLE: {},
@@ -113,9 +118,11 @@ const PRESETS = {
   },
 };
 const DEFAULTS = JSON.parse(JSON.stringify({ B, C, L, PIN }));
-// BODIES: THE BLOB IS THE BUILT-IN TEST BODY. A CHARACTER BODY COMES FROM THE LIBRARY (ITS side VIEW PNG) + ITS character.json "cape" BLOCK (PINS, COLLIDERS, DEFAULTS), ALL IN THAT VIEW'S PIXELS.
-const BLOB_BODY = JSON.parse(JSON.stringify({ id: "blob", name: "BLOB", src: BLOB_SRC, art: { w: ART.w, h: ART.h, px: ART.px, py: ART.py }, box: ART.box, colliders: COLLIDERS_ART, pins: PIN, defaults: null }));
-let bodyId = "blob", bodyPins = { ...PIN }, bodyObjUrl = null, bodySel = null;
+// BODIES: NOVA2 (assets/images/nova/Nova2.png, SPRITE-SHEET ART SCALE) IS THE BUILT-IN TEST BODY. A CHARACTER BODY COMES FROM THE LIBRARY (ITS side VIEW PNG) + ITS character.json "cape" BLOCK (PINS, COLLIDERS, DEFAULTS), ALL IN THAT VIEW'S PIXELS.
+// THE BUILT-IN ID IS "nova2" (NOT THE OLD "blob") SO A STALE localStorage / SAVED FILE MADE ON THE BLOB DROPS ITS PINS AND SCALE INSTEAD OF APPLYING THEM TO THIS ART.
+const BUILTIN_ID = "nova2";
+const BUILTIN_BODY = JSON.parse(JSON.stringify({ id: BUILTIN_ID, name: "NOVA2", src: BODY_SRC, art: { w: ART.w, h: ART.h, px: ART.px, py: ART.py }, box: ART.box, colliders: COLLIDERS_ART, pins: PIN, defaults: null }));
+let bodyId = BUILTIN_ID, bodyPins = { ...PIN }, bodyObjUrl = null, bodySel = null;
 
 /* =====================================================================
    SIM (ENGINE-AGNOSTIC: NO CANVAS, NO DOM. PORTS TO GDSCRIPT / KAPLAY AS-IS)
@@ -293,7 +300,7 @@ const cv = document.getElementById("c"), ctx = cv.getContext("2d");
 let W = 0, H = 0, DPR = 1, groundY = 0;
 const img = new Image(); let imgOK = false;
 img.onload = () => { imgOK = true; }; img.onerror = () => { imgOK = false; flash("COULD NOT LOAD THE BODY ART - USING PLACEHOLDER. SERVE src/ OVER HTTP."); };
-img.src = BLOB_SRC;
+img.src = BODY_SRC;
 
 const blob = { x: 0, y: 0, vx: 0, vy: 0, facing: 1, faceS: 1, turnFrom: 1, grounded: true, sq: 0, sqv: 0, turnT: 1, dragging: false };
 const cape = { p: [], t: 0, acc: 0, last: null, vel: { x: 0, y: 0 } };
@@ -875,7 +882,7 @@ function applySettings(o) { // ACCEPTS osw-cape FILES AND THE OLD COPY SETTINGS 
   if (o.format && o.format !== "osw-cape") return false;
   if (!(o.B || o.C || o.L || o.PIN)) return false;
   o = JSON.parse(JSON.stringify(o));
-  if ((o.body || "blob") !== bodyId) { delete o.PIN; if (o.B) delete o.B.scale; }   // PINS AND SCALE BELONG TO THE BODY THEY WERE MADE ON
+  if ((o.body || BUILTIN_ID) !== bodyId) { delete o.PIN; if (o.B) delete o.B.scale; }   // PINS AND SCALE BELONG TO THE BODY THEY WERE MADE ON
   importJSON(JSON.stringify(o)); clearPeaks(); return true;
 }
 let saveT = 0, lastSaved = "";
@@ -883,7 +890,7 @@ function saveSoon() { clearTimeout(saveT); saveT = setTimeout(() => { try { cons
 function restoreSaved() {
   try {
     const t = localStorage.getItem(SAVE_KEY); if (!t) return; const o = JSON.parse(t);
-    if (o.body && o.body !== "blob" && window.OSWClient && OSWClient.hosted) loadBody(o.body).then(() => applySettings(o)); else applySettings(o);
+    if (o.body && o.body !== BUILTIN_ID && window.OSWClient && OSWClient.hosted) loadBody(o.body).then(() => applySettings(o)); else applySettings(o);
   } catch (e) { /* IGNORE A BAD SAVE */ }
 }
 
@@ -893,7 +900,7 @@ function applyBody(b) {
   COLLIDERS_ART.length = 0; for (const c of b.colliders) COLLIDERS_ART.push({ x: c.x, y: c.y, r: c.r });
   Object.assign(PIN, b.pins); bodyPins = { ...b.pins };
   imgOK = false; img.src = b.src;
-  const d = b.defaults || (b.id === "blob" ? { scale: DEFAULTS.B.scale, segLen: DEFAULTS.C.segLen, segments: DEFAULTS.C.segments, w1: DEFAULTS.L.w1, hangDeg: DEFAULTS.C.hangDeg } : null);
+  const d = b.defaults || (b.id === BUILTIN_ID ? { scale: DEFAULTS.B.scale, segLen: DEFAULTS.C.segLen, segments: DEFAULTS.C.segments, w1: DEFAULTS.L.w1, hangDeg: DEFAULTS.C.hangDeg } : null);
   if (d) { if (d.scale) B.scale = d.scale; if (d.segLen) C.segLen = d.segLen; if (d.segments) C.segments = d.segments; if (d.w1) L.w1 = d.w1; if (d.hangDeg != null) C.hangDeg = d.hangDeg; }
   document.getElementById("bodyName").textContent = String(b.name || b.id).toUpperCase();
   if (bodySel) bodySel.value = b.id;
@@ -915,7 +922,7 @@ function measureArt(url) { // SIZE, OPAQUE BOUNDING BOX AND FEET PIVOT (CENTRE O
   });
 }
 async function loadBody(id) {
-  if (id === "blob") { applyBody(BLOB_BODY); return true; }
+  if (id === BUILTIN_ID) { applyBody(BUILTIN_BODY); return true; }
   try {
     const sheet = await OSWClient.library.character.get(id), cp = (sheet && sheet.cape) || {}, view = cp.view || "right";
     const png = await OSWClient.library.readImage(id + "." + view), url = URL.createObjectURL(png), m = await measureArt(url);
@@ -930,7 +937,7 @@ async function loadBody(id) {
   } catch (e) { flash("COULD NOT LOAD BODY " + id + ": " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); if (bodySel) bodySel.value = bodyId; return false; }
 }
 async function savePinsToCharacter() {
-  if (bodyId === "blob") { flash("THE BLOB HAS NO CHARACTER SHEET - PICK A CHARACTER BODY"); return; }
+  if (bodyId === BUILTIN_ID) { flash("NOVA2 IS THE BUILT-IN TEST BODY (NO CHARACTER SHEET) - PICK A CHARACTER BODY TO SAVE PINS"); return; }
   try {
     const sheet = await OSWClient.library.character.get(bodyId); if (!sheet) { flash("NO CHARACTER SHEET FOR " + bodyId); return; }
     const prev = sheet.cape || {};
@@ -947,7 +954,7 @@ function buildLibrary() { // ONLY WHEN HOSTED IN THE WIZARD
   hint(s, "SAVES THE CAPE SETTINGS TO library/capes/<name>.json SO PLAY AND THE CHARACTER CAN USE THEM LATER.");
   hint(s, "BODY: WHICH CHARACTER'S SIDE VIEW THE CAPE HANGS OFF. SAVE PINS WRITES THE PINS, BODY COLLIDERS AND CAPE SIZE INTO THAT CHARACTER'S SHEET (character.json).");
   bodySel = document.createElement("select"); bodySel.id = "bodySel"; s.appendChild(bodySel);
-  OSWClient.library.character.list().then((names) => { bodySel.innerHTML = ""; for (const n of ["blob", ...names]) { const o = document.createElement("option"); o.value = o.textContent = n; bodySel.appendChild(o); } bodySel.value = bodyId; }).catch(() => {});
+  OSWClient.library.character.list().then((names) => { bodySel.innerHTML = ""; for (const n of [BUILTIN_ID, ...names]) { const o = document.createElement("option"); o.value = o.textContent = n; bodySel.appendChild(o); } bodySel.value = bodyId; }).catch(() => {});
   bodySel.addEventListener("change", () => loadBody(bodySel.value));
   const bb = document.createElement("div"); bb.className = "btns"; s.appendChild(bb);
   button(bb, "SAVE PINS TO CHARACTER", savePinsToCharacter);
@@ -1030,7 +1037,7 @@ function buildPanel() {
   slider(s, L, "ripple", "hem ripple", 0, 0.4, 0.01);
   slider(s, L, "rimW", "rim width", 0, 10, 0.5);
   check(s, L, "folds", "fold lines");
-  select(s, L, "layer", "cape layer", [["behind", "behind blob"], ["front", "in front of blob"]]);
+  select(s, L, "layer", "cape layer", [["behind", "behind body"], ["front", "in front of body"]]);
   color(s, L, "top", "top colour"); color(s, L, "bottom", "bottom colour"); color(s, L, "rim", "rim colour"); color(s, L, "dark", "shade colour");
 
   s = section("Tendrils", true);
@@ -1062,7 +1069,7 @@ function buildPanel() {
   slider(s, L, "disSparks", "sparks", 0, 2, 0.05);
   color(s, L, "disColA", "glow inner"); color(s, L, "disColB", "glow outer");
 
-  s = section("Blob");
+  s = section("Body");
   slider(s, B, "scale", "scale", 0.3, 1, 0.01);
   slider(s, B, "maxSpeed", "max speed", 200, 1200, 10);
   slider(s, B, "dashMul", "dash multiplier", 1, 3, 0.05);
@@ -1070,7 +1077,7 @@ function buildPanel() {
   slider(s, B, "friction", "friction", 500, 8000, 50);
   slider(s, B, "airCtl", "air control", 0, 1, 0.05);
   slider(s, B, "jumpV", "jump speed", 400, 1600, 10);
-  slider(s, B, "gravity", "blob gravity", 1200, 6000, 50);
+  slider(s, B, "gravity", "body gravity", 1200, 6000, 50);
 }
 buildPanel(); buildLibrary(); restoreSaved(); setInterval(saveSoon, 2000); document.getElementById("panel").addEventListener("input", saveSoon); document.getElementById("panel").addEventListener("change", saveSoon);
 
