@@ -60,6 +60,7 @@ button:hover{border-color:var(--cyan);color:var(--cyan)}
 <div id="dlg"><div><h3 id="dlgT"></h3><textarea id="dlgTa" spellcheck="false"></textarea><div class="btns" style="margin:6px 0 0;padding:0;border:0;background:none;width:auto;box-shadow:none"><button id="dlgOk">OK</button><button id="dlgNo">CLOSE</button></div></div></div>
 
 <script src="js/oswClient.js"></script>
+<script src="js/capeSim.js"></script>
 <script>
 /* =====================================================================
    CONFIG - ART + COLLIDERS (ALL IN 400x400 ART PIXELS OF assets/images/nova/Nova2.png)
@@ -122,176 +123,13 @@ const DEFAULTS = JSON.parse(JSON.stringify({ B, C, L, PIN }));
 // THE BUILT-IN ID IS "nova2" (NOT THE OLD "blob") SO A STALE localStorage / SAVED FILE MADE ON THE BLOB DROPS ITS PINS AND SCALE INSTEAD OF APPLYING THEM TO THIS ART.
 const BUILTIN_ID = "nova2";
 const BUILTIN_BODY = JSON.parse(JSON.stringify({ id: BUILTIN_ID, name: "NOVA2", src: BODY_SRC, art: { w: ART.w, h: ART.h, px: ART.px, py: ART.py }, box: ART.box, colliders: COLLIDERS_ART, pins: PIN, defaults: null }));
-let bodyId = BUILTIN_ID, bodyPins = { ...PIN }, bodyObjUrl = null, bodySel = null;
+let bodyId = BUILTIN_ID, bodyPins = { ...PIN }, bodyObjUrl = null, bodySel = null, targetSel = null;
+let bodySpace = "sprite";   // WHICH PIXELS PIN / COLLIDERS ARE IN: "sprite" = NOVA2.png = THE 400 PX SPRITE-SHEET CELLS (PLAY USES THEM 1:1), "view" = A CHARACTER'S 800 PX SIDE-VIEW PNG (PLAY CONVERTS WITH A SCALE k)
 
 /* =====================================================================
-   SIM (ENGINE-AGNOSTIC: NO CANVAS, NO DOM. PORTS TO GDSCRIPT / KAPLAY AS-IS)
+   SIM: THE VERLET CLOTH LIVES IN js/capeSim.js (ONE COPY, SHARED WITH PLAY). THESE ARE THE PIECES THIS PAGE USES.
    ===================================================================== */
-/* SIM:BEGIN */
-const TAU = Math.PI * 2;
-const SPANS = [3, 5, 8, 12];
-const wrapA = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
-
-// THE CAPE IS ONE CHAIN PER PIN. 1 PIN = A SINGLE SPINE (DRAWN AS A RIBBON). 2 PINS = TWO EDGE CHAINS LINKED BY RUNGS + DIAGONALS = A CLOTH STRIP WHOSE ROOT EDGE IS PINNED AT BOTH ENDS.
-function capeReset(cape, P, pins, facing) { // HANG EACH CHAIN DOWN-AND-BACK FROM ITS PIN
-  const h = P.hangDeg * Math.PI / 180;
-  cape.chains = pins.map((root) => {
-    const p = [];
-    for (let i = 0; i < P.segments; i++) {
-      const x = root.x - facing * Math.sin(h) * i * P.segLen, y = root.y + Math.cos(h) * i * P.segLen;
-      p.push({ x, y, px: x, py: y });
-    }
-    return { p };
-  });
-  cape.p = cape.chains[0].p;
-  cape.last = pins.map((r) => ({ x: r.x, y: r.y }));
-  cape.acc = 0;
-}
-
-function capeMirror(cape, axisX) { // FLIP EVERY CHAIN (POSITION AND VELOCITY) ACROSS A VERTICAL AXIS - CLEAN TURN-AROUND
-  for (const c of cape.chains) for (const q of c.p) { q.x = 2 * axisX - q.x; q.px = 2 * axisX - q.px; }
-}
-
-// WHERE THE CAPE "WANTS" TO POINT: DOWN-AND-BACK AT REST, STREAMING OPPOSITE THE TRAVEL DIRECTION WHEN MOVING.
-function capeRefDir(P, vel, facing) {
-  const h = P.hangDeg * Math.PI / 180;
-  const x = -facing * Math.sin(h) * P.sag - vel.x / P.vRef;
-  const y = Math.cos(h) * P.sag - vel.y / P.vRef;
-  const l = Math.hypot(x, y) || 1;
-  return { x: x / l, y: y / l };
-}
-
-// env = { pins:[{x,y}...], widths:[n], facing, vel:{x,y}, groundY, colliders:[{x,y,r}] }
-function capeStep(cape, P, env, dt) {
-  const K = env.pins.length, n = P.segments;
-  if (!cape.chains || cape.chains.length !== K || cape.chains[0].p.length !== n) capeReset(cape, P, env.pins, env.facing);
-  if (dt <= 0) return;
-  cape.acc = Math.min(cape.acc + dt, P.maxSteps * P.step);
-  const steps = Math.floor(cape.acc / P.step);
-  if (steps === 0) return;
-  cape.acc -= steps * P.step;
-
-  const h = P.step, damp = Math.max(0, 1 - P.drag * h);
-  const speed01 = Math.min(1, Math.abs(env.vel.x) / P.vRef);
-  const ref = capeRefDir(P, env.vel, env.facing);
-  const chordMin = 2 * P.segLen * Math.cos(P.maxBendDeg * Math.PI / 360), useBend = P.maxBendDeg < 179.5;
-
-  for (let st = 1; st <= steps; st++) {
-    const f = st / steps;
-    // 1) PINS + FORCES + VERLET INTEGRATION, ONE CHAIN AT A TIME
-    for (let k = 0; k < K; k++) {
-      const Pt = cape.chains[k].p, a0 = cape.last[k], b0 = env.pins[k];
-      Pt[0].x = a0.x + (b0.x - a0.x) * f;                   // SLIDE THE PIN ALONG THE FRAME'S TRAVEL SO FAST MOVES DON'T JERK THE CHAIN
-      Pt[0].y = a0.y + (b0.y - a0.y) * f;
-      Pt[0].px = Pt[0].x; Pt[0].py = Pt[0].y;
-      for (let i = 1; i < n; i++) {
-        const q = Pt[i], a = Pt[i - 1], b = Pt[Math.min(n - 1, i + 1)];
-        let tx = b.x - a.x, ty = b.y - a.y; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
-        const nx = -ty, ny = tx;                            // SEGMENT NORMAL
-        const vx = (q.x - q.px) / h - P.wind, vy = (q.y - q.py) / h; // VELOCITY RELATIVE TO THE AIR (PX/S)
-        const vn = vx * nx + vy * ny, vt = vx * tx + vy * ty;
-        const tip = i / (n - 1);
-        // CLOTH-STYLE AIR DRAG: THE COMPONENT ACROSS THE CLOTH IS RESISTED HARD, ALONG IT LIGHTLY. THIS IS WHAT MAKES IT STREAM AND NOT TUMBLE.
-        let ax = -P.nDrag * vn * nx - P.tDrag * vt * tx;
-        let ay = -P.nDrag * vn * ny - P.tDrag * vt * ty;
-        ay += P.gravity * (1 - P.lift * speed01);
-        ax += -env.facing * P.backBias * tip;
-        const fl = P.flutter * speed01 * tip;               // SMOOTH TURBULENCE (GROWS TOWARD THE HEM AND WITH SPEED); EDGES GET A SLIGHT PHASE OFFSET
-        ax += Math.sin(cape.t * 9 + i * 0.8 + k * 0.7) * fl;
-        ay += Math.cos(cape.t * 7.3 + i * 1.1 + k * 0.7) * fl;
-        if (P.restPull > 0) {                               // SOFT PULL TOWARD THE "WANTS TO POINT" SHAPE
-          ax += (Pt[0].x + ref.x * i * P.segLen - q.x) * P.restPull;
-          ay += (Pt[0].y + ref.y * i * P.segLen - q.y) * P.restPull;
-        }
-        const mx = (q.x - q.px) * damp, my = (q.y - q.py) * damp;
-        q.px = q.x; q.py = q.y;
-        q.x += mx + ax * h * h; q.y += my + ay * h * h;
-      }
-    }
-
-    // 2) CONSTRAINTS (REPEATED)
-    for (let it = 0; it < P.iterations; it++) {
-      for (let k = 0; k < K; k++) {
-        const Pt = cape.chains[k].p;
-        for (let i = 0; i < n - 1; i++) link(Pt[i], Pt[i + 1], P.segLen, i === 0 ? 0 : 1, 1, 1);
-        if (P.bend > 0) for (let i = 0; i < n - 2; i++) link(Pt[i], Pt[i + 2], P.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, P.bend);
-        if (useBend) for (let i = 0; i < n - 2; i++) { const d = Math.hypot(Pt[i + 2].x - Pt[i].x, Pt[i + 2].y - Pt[i].y); if (d < chordMin) link(Pt[i], Pt[i + 2], chordMin, i === 0 ? 0 : 1, 1, 1); } // NO SHARP FOLDS: ONE-SIDED DISTANCE LIMIT BETWEEN POINTS TWO APART (CHORD = 2L*cos(bend/2))
-        if (P.spanMin > 0) for (const s of SPANS) {         // NO LOOPS / HAIRPINS: POINTS s APART MAY NOT GET CLOSER THAN spanMin * (STRAIGHT LENGTH)
-          if (s >= n) break;
-          const dmin = P.spanMin * s * P.segLen;
-          for (let i = 0; i + s < n; i++) { const a = Pt[i], b = Pt[i + s]; if (Math.hypot(b.x - a.x, b.y - a.y) < dmin) link(a, b, dmin, i === 0 ? 0 : 1, 1, 1); }
-        }
-      }
-      if (K === 2) {                                        // CLOTH ACROSS THE WIDTH. THE STRIP MAY NARROW (HANG / FOLD FLAT) BUT NEVER STRETCH WIDER THAN ITS WIDTH, AND CAN'T SHEAR
-        const A = cape.chains[0].p, Bp = cape.chains[1].p;
-        for (let i = 1; i < n; i++) {
-          const d = Math.hypot(Bp[i].x - A[i].x, Bp[i].y - A[i].y);
-          link(A[i], Bp[i], env.widths[i], 1, 1, d > env.widths[i] ? 1 : P.rung);   // HARD ABOVE THE WIDTH, SOFT (P.rung) BELOW IT
-        }
-        if (P.shear > 0) for (let i = 1; i < n - 1; i++) {   // DIAGONALS: MAX-ONLY, SO THE STRIP CAN'T SLIDE SIDEWAYS BUT CAN STILL NARROW. SKIPPED AT THE ROOT QUAD (ITS RUNG IS SLANTED BY THE PINS)
-          const dmax = Math.hypot(P.segLen, (env.widths[i] + env.widths[i + 1]) / 2);
-          if (Math.hypot(Bp[i + 1].x - A[i].x, Bp[i + 1].y - A[i].y) > dmax) link(A[i], Bp[i + 1], dmax, 1, 1, P.shear);
-          if (Math.hypot(A[i + 1].x - Bp[i].x, A[i + 1].y - Bp[i].y) > dmax) link(Bp[i], A[i + 1], dmax, 1, 1, P.shear);
-        }
-      }
-      for (let k = 0; k < K; k++) {
-        const Pt = cape.chains[k].p;
-        if (P.collide) for (let i = 1; i < n; i++) for (const c of env.colliders) push(Pt[i], c, P.thick);
-        for (let i = 1; i < n; i++) {                       // FLOOR
-          const q = Pt[i], gy = env.groundY - P.groundPad;
-          if (q.y > gy) { q.y = gy; q.py = gy; q.px += (q.x - q.px) * P.groundFric; }   // ON THE FLOOR: ZERO VERTICAL VELOCITY (LEFT IN, IT PILES UP AGAINST THE CONSTRAINTS AND BLOWS UP) + FRICTION
-        }
-      }
-    }
-    cape.t += h;
-  }
-  cape.last = env.pins.map((r) => ({ x: r.x, y: r.y }));
-}
-
-function link(a, b, rest, wA, wB, stiff) { // MOVE TWO POINTS TOWARD/AWAY UNTIL `rest` APART (w = HOW MUCH EACH MOVES, 0 = PINNED)
-  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1e-4, w = wA + wB;
-  if (w === 0) return;
-  const k = ((d - rest) / d) * stiff;
-  a.x += dx * k * (wA / w); a.y += dy * k * (wA / w);
-  b.x -= dx * k * (wB / w); b.y -= dy * k * (wB / w);
-}
-
-function push(q, c, pad) { // KEEP A POINT OUTSIDE A CIRCLE
-  const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy), m = c.r + pad;
-  if (d < m) {
-    if (d < 1e-4) { q.x = c.x - m; return; }
-    q.x = c.x + (dx / d) * m; q.y = c.y + (dy / d) * m;
-  }
-}
-
-function segX(a, b, c, d) { // DO SEGMENTS ab AND cd CROSS?
-  const o = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
-  return (o(a, b, c) > 0) !== (o(a, b, d) > 0) && (o(c, d, a) > 0) !== (o(c, d, b) > 0);
-}
-
-const quadArea = (A, Bp, i) => (A[i + 1].x - A[i].x) * (Bp[i].y - A[i].y) - (A[i + 1].y - A[i].y) * (Bp[i].x - A[i].x); // SIGNED: FLIPS WHEN A STRIP QUAD IS TWISTED INSIDE OUT
-
-function capeMetrics(cape) { // CURL READOUTS: WORST JOINT BEND, TOTAL TURNING, SELF-CROSSINGS, (2 PINS) INVERTED QUADS
-  let worst = 0, total = 0, cross = 0, twist = 0;
-  for (const c of cape.chains) {
-    const Pt = c.p, n = Pt.length; let tot = 0, prev = null;
-    for (let i = 0; i < n - 1; i++) {
-      const a = Math.atan2(Pt[i + 1].y - Pt[i].y, Pt[i + 1].x - Pt[i].x);
-      if (prev !== null) { const d = Math.abs(wrapA(a - prev)); worst = Math.max(worst, d); tot += d; }
-      prev = a;
-    }
-    total = Math.max(total, tot);
-    for (let i = 0; i < n - 1; i++) for (let j = i + 2; j < n - 1; j++) if (segX(Pt[i], Pt[i + 1], Pt[j], Pt[j + 1])) cross++;
-  }
-  if (cape.chains.length === 2) {
-    const A = cape.chains[0].p, Bp = cape.chains[1].p, n = A.length;
-    for (let i = 0; i < n - 1; i++) for (let j = 0; j < n - 1; j++) if (segX(A[i], A[i + 1], Bp[j], Bp[j + 1])) cross++;   // THE TWO EDGES SHOULD NEVER CROSS
-    let pos = 0, neg = 0; for (let i = 0; i < n - 1; i++) { if (quadArea(A, Bp, i) > 0) pos++; else neg++; }
-    twist = Math.min(pos, neg);                             // QUADS FACING THE MINORITY WAY = A TWIST IN THE STRIP
-  }
-  return { worst: worst * 180 / Math.PI, total: total * 180 / Math.PI, cross, twist };
-}
-/* SIM:END */
+const { TAU, wrapA, capeReset, capeMirror, capeRefDir, capeStep, capeMetrics, quadArea } = CapeSim;
 
 /* =====================================================================
    BLOB + WORLD STATE
@@ -902,6 +740,8 @@ function applyBody(b) {
   imgOK = false; img.src = b.src;
   const d = b.defaults || (b.id === BUILTIN_ID ? { scale: DEFAULTS.B.scale, segLen: DEFAULTS.C.segLen, segments: DEFAULTS.C.segments, w1: DEFAULTS.L.w1, hangDeg: DEFAULTS.C.hangDeg } : null);
   if (d) { if (d.scale) B.scale = d.scale; if (d.segLen) C.segLen = d.segLen; if (d.segments) C.segments = d.segments; if (d.w1) L.w1 = d.w1; if (d.hangDeg != null) C.hangDeg = d.hangDeg; }
+  bodySpace = b.space || "view";
+  if (b.sim && b.sim.C) { Object.assign(C, b.sim.C); if (b.sim.L) Object.assign(L, b.sim.L); if (b.sim.scale > 0) B.scale = b.sim.scale; }   // THE SIM SETTINGS PLAY IS USING FOR THIS CHARACTER (SAVED BY "SAVE CAPE TO CHARACTER")
   document.getElementById("bodyName").textContent = String(b.name || b.id).toUpperCase();
   if (bodySel) bodySel.value = b.id;
   syncUI(); resetAll();
@@ -922,28 +762,39 @@ function measureArt(url) { // SIZE, OPAQUE BOUNDING BOX AND FEET PIVOT (CENTRE O
   });
 }
 async function loadBody(id) {
-  if (id === BUILTIN_ID) { applyBody(BUILTIN_BODY); return true; }
+  if (id === BUILTIN_ID) { applyBody(Object.assign({}, BUILTIN_BODY, { space: "sprite" })); return true; }
   try {
     const sheet = await OSWClient.library.character.get(id), cp = (sheet && sheet.cape) || {}, view = cp.view || "right";
+    if (cp.space === "sprite") {                          // SAVED FROM NOVA2: THE PINS ARE IN SPRITE-SHEET PIXELS, SO SHOW THEM ON THE NOVA2 ART, NOT THE 800 PX VIEW
+      const old = bodyObjUrl; bodyObjUrl = null; if (old) URL.revokeObjectURL(old);
+      applyBody({ id, name: (sheet && sheet.info && sheet.info.name) || id, src: BODY_SRC, art: BUILTIN_BODY.art, box: BUILTIN_BODY.box, colliders: (cp.colliders && cp.colliders.length) ? cp.colliders : BUILTIN_BODY.colliders, pins: cp.pins || BUILTIN_BODY.pins, defaults: cp.defaults || null, sim: cp.sim || null, space: "sprite" });
+      flash("BODY: " + id.toUpperCase() + " (SPRITE SPACE)"); return true;
+    }
     const png = await OSWClient.library.readImage(id + "." + view), url = URL.createObjectURL(png), m = await measureArt(url);
     const bw = m.box[2] - m.box[0], bh = m.box[3] - m.box[1], cx = (m.box[0] + m.box[2]) / 2;
     const pins = cp.pins || { ax: Math.round(m.box[0] + bw * 0.04), ay: Math.round(m.box[1] + bh * 0.16), bx: Math.round(m.box[0] + bw * 0.06), by: Math.round(m.box[1] + bh * 0.34) };
     const cols = (cp.colliders && cp.colliders.length) ? cp.colliders : [{ x: Math.round(cx), y: Math.round(m.box[1] + bh * 0.11), r: Math.round(bh * 0.08) }, { x: Math.round(cx), y: Math.round(m.box[1] + bh * 0.37), r: Math.round(bh * 0.07) }];
     const old = bodyObjUrl; bodyObjUrl = url;
-    applyBody({ id, name: (sheet && sheet.info && sheet.info.name) || id, src: url, art: { w: m.w, h: m.h, px: m.px, py: m.py }, box: m.box, colliders: cols, pins, defaults: cp.defaults || null });
+    applyBody({ id, name: (sheet && sheet.info && sheet.info.name) || id, src: url, art: { w: m.w, h: m.h, px: m.px, py: m.py }, box: m.box, colliders: cols, pins, defaults: cp.defaults || null, sim: cp.sim || null, space: "view" });
     if (old) URL.revokeObjectURL(old);
-    flash(cp.pins ? "BODY: " + id.toUpperCase() : "NO CAPE PINS SAVED FOR " + id.toUpperCase() + " YET - PRESS G AND DRAG THEM, THEN SAVE PINS");
+    flash(cp.pins ? "BODY: " + id.toUpperCase() : "NO CAPE PINS SAVED FOR " + id.toUpperCase() + " YET - PRESS G AND DRAG THEM, THEN SAVE CAPE TO CHARACTER");
     return true;
   } catch (e) { flash("COULD NOT LOAD BODY " + id + ": " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); if (bodySel) bodySel.value = bodyId; return false; }
 }
-async function savePinsToCharacter() {
-  if (bodyId === BUILTIN_ID) { flash("NOVA2 IS THE BUILT-IN TEST BODY (NO CHARACTER SHEET) - PICK A CHARACTER BODY TO SAVE PINS"); return; }
+async function savePinsToCharacter() {   // WRITES THE PINS, BODY COLLIDERS AND THE WHOLE SIM + LOOK SETTINGS INTO THE CHARACTER'S SHEET. PLAY READS THEM FROM THERE, SO IT UPDATES LIVE.
+  const builtin = bodyId === BUILTIN_ID, target = builtin ? (targetSel && targetSel.value) : bodyId;
+  if (!target) { flash("PICK THE CHARACTER TO SAVE TO (THE LIST UNDER THE BODY LIST)"); return; }
   try {
-    const sheet = await OSWClient.library.character.get(bodyId); if (!sheet) { flash("NO CHARACTER SHEET FOR " + bodyId); return; }
-    const prev = sheet.cape || {};
-    sheet.cape = Object.assign({}, prev, { version: 1, view: prev.view || "right", pins: { ax: PIN.ax, ay: PIN.ay, bx: PIN.bx, by: PIN.by }, colliders: COLLIDERS_ART.map((c) => ({ x: c.x, y: c.y, r: c.r })),
-      defaults: { scale: B.scale, segLen: C.segLen, segments: C.segments, w1: L.w1, hangDeg: C.hangDeg } });   // prev KEEPS BLOCKS OTHER TOOLS OWN (play: {...} IS PLAY'S)
-    await OSWClient.library.character.save(bodyId, sheet); bodyPins = { ...sheet.cape.pins }; flash("PINS SAVED TO " + bodyId.toUpperCase());
+    const sheet = await OSWClient.library.character.get(target); if (!sheet) { flash("NO CHARACTER SHEET FOR " + target); return; }
+    const prev = sheet.cape || {}, space = bodySpace, clone = (o) => JSON.parse(JSON.stringify(o));
+    const play = Object.assign({}, prev.play); if ((prev.space || "view") !== space) delete play.ref;   // play.ref IS IN THE OLD SPACE'S PIXELS, SO IT NO LONGER APPLIES
+    if (space === "sprite" && !play.ref) play.ref = { x: (PIN.ax + PIN.bx) / 2, y: (PIN.ay + PIN.by) / 2 };   // FIRST SAVE IN SPRITE SPACE: PLAY'S HAND-TUNED POSE ROOTS STAY WHERE THEY ARE NOW; MOVING THE PINS LATER MOVES THEM BY THE DIFFERENCE
+    sheet.cape = Object.assign({}, prev, { version: 2, view: prev.view || "right", space, pins: { ax: PIN.ax, ay: PIN.ay, bx: PIN.bx, by: PIN.by }, colliders: COLLIDERS_ART.map((c) => ({ x: c.x, y: c.y, r: c.r })),
+      defaults: { scale: B.scale, segLen: C.segLen, segments: C.segments, w1: L.w1, hangDeg: C.hangDeg },
+      sim: { scale: B.scale, C: clone(C), L: clone(L) } });   // prev KEEPS BLOCKS OTHER TOOLS OWN (play: {...} IS PLAY'S). sim.scale = THE BODY SCALE THE NUMBERS WERE TUNED AT, SO PLAY CAN CONVERT THEM
+    if (space === "sprite") sheet.cape.art = { px: ART.px, py: ART.py }; else delete sheet.cape.art;
+    if (Object.keys(play).length) sheet.cape.play = play; else delete sheet.cape.play;
+    await OSWClient.library.character.save(target, sheet); if (!builtin) bodyPins = { ...sheet.cape.pins }; flash("CAPE SAVED TO " + target.toUpperCase() + " - PLAY UPDATES LIVE");
   } catch (e) { flash("SAVE FAILED: " + String((e && e.message) || e).replace(/^[A-Z_]+: /, "")); }
 }
 
@@ -952,12 +803,17 @@ function buildLibrary() { // ONLY WHEN HOSTED IN THE WIZARD
   const s = section("Library (Wizard)", true); s.id = "lib";
   panel.insertBefore(s, panel.children[1] || null);   // RIGHT UNDER PRESETS, NOT BURIED AT THE BOTTOM
   hint(s, "SAVES THE CAPE SETTINGS TO library/capes/<name>.json SO PLAY AND THE CHARACTER CAN USE THEM LATER.");
-  hint(s, "BODY: WHICH CHARACTER'S SIDE VIEW THE CAPE HANGS OFF. SAVE PINS WRITES THE PINS, BODY COLLIDERS AND CAPE SIZE INTO THAT CHARACTER'S SHEET (character.json).");
+  hint(s, "BODY: NOVA2 (THE BUILT-IN TEST BODY, AT PLAY'S SPRITE SCALE) OR A CHARACTER'S SIDE VIEW. SAVE CAPE TO CHARACTER WRITES THE PINS, BODY COLLIDERS AND ALL THE SIM / LOOK SETTINGS INTO A CHARACTER'S SHEET (character.json); PLAY RUNS THE SAME SIM ON THEM. WHEN THE BODY IS NOVA2, THE SECOND LIST PICKS WHICH CHARACTER GETS THEM.");
   bodySel = document.createElement("select"); bodySel.id = "bodySel"; s.appendChild(bodySel);
-  OSWClient.library.character.list().then((names) => { bodySel.innerHTML = ""; for (const n of [BUILTIN_ID, ...names]) { const o = document.createElement("option"); o.value = o.textContent = n; bodySel.appendChild(o); } bodySel.value = bodyId; }).catch(() => {});
+  targetSel = document.createElement("select"); targetSel.id = "saveTarget"; targetSel.title = "WHICH CHARACTER 'SAVE CAPE TO CHARACTER' WRITES TO WHEN THE BODY IS NOVA2"; s.appendChild(targetSel);
+  OSWClient.library.character.list().then((names) => {
+    bodySel.innerHTML = ""; for (const n of [BUILTIN_ID, ...names]) { const o = document.createElement("option"); o.value = o.textContent = n; bodySel.appendChild(o); } bodySel.value = bodyId;
+    targetSel.innerHTML = ""; for (const n of names) { const o = document.createElement("option"); o.value = n; o.textContent = "save to: " + n; targetSel.appendChild(o); }
+    if (names.includes("nova")) targetSel.value = "nova";
+  }).catch(() => {});
   bodySel.addEventListener("change", () => loadBody(bodySel.value));
   const bb = document.createElement("div"); bb.className = "btns"; s.appendChild(bb);
-  button(bb, "SAVE PINS TO CHARACTER", savePinsToCharacter);
+  button(bb, "SAVE CAPE TO CHARACTER", savePinsToCharacter);
   const nm = document.createElement("input"); nm.type = "text"; nm.id = "libName"; nm.maxLength = 40; nm.placeholder = "cape name (a-z 0-9 - _)"; s.appendChild(nm);
   const sel = document.createElement("select"); sel.id = "libSel";
   const fill = async (keep) => {

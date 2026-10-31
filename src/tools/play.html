@@ -6,6 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="js/tileset.js"></script>
 <script src="js/oswClient.js"></script>  <!-- OSW: BRIDGE TO THE SHELL (CHARACTER PHYSICS FROM THE LIBRARY) -->
+<script src="js/capeSim.js"></script>  <!-- THE VERLET CLOTH SIM, THE SAME CODE CAPE LAB RUNS -->
 <title>PLAY - Sprite Playground</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#030013}
@@ -676,7 +677,7 @@ function stepDissolve(dt) {
 /* ---------- CAPE (PORTED FROM THE KAPLAY BUILD: V CYCLES THE 3 MODES, G TOGGLES THE GHOST-TAIL DISSOLVE) ----------
    0 sprites  - THE HAND-DRAWN 4-FRAME CLOAK (cloakBottom BEHIND THE BODY, cloakTop IN FRONT), RUN ONLY
    1 spring   - SAME ART: A DAMPED SPRING SWINGS IT, STRIPS RIPPLE WITH A TRAVELLING WAVE
-   2 verlet   - NO ART: A VERLET CHAIN DRAWN AS A TAPERED NEON RIBBON BEHIND THE BODY (DEFAULT)
+   2 verlet   - NO ART: THE SHARED CLOTH SIM (js/capeSim.js, THE SAME CODE CAPE LAB RUNS) DRAWN AS A NEON STRIP BETWEEN ITS TWO EDGE CHAINS, BEHIND THE BODY (DEFAULT)
    IDLE, THE SPELL CAST AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
    EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
 const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
@@ -685,29 +686,37 @@ const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'wa
 const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'wallSlide', 'doubleJump']);
 const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
 const CAPE_SPRING = { stiffness: 150, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
-const CAPE_CLOTH = { segments: 14, segLen: 8, gravity: 900, drag: 5.6, lift: 0.2, flutter: 100, backBias: 700, iterations: 2, bend: 0.5, step: 1 / 120, maxSteps: 6, w0: 40, w1: 8, ripple: 0.1, rootOffset: { x: -110, y: -180 }, hangX: 0.35, hangY: 0.93 };
-const CAPE_COLORS = ['#0000ff', '#0000ff', '#0000ff'], CAPE_EDGE = '#0000ff', CAPE_EDGE_GLOW = '#0000ff';
+const CAPE_ROOT_OFFSET = { x: -110, y: -180 };   // THE RUN POSE'S ROOT = CLOAK_POSE.run + THIS (SPRITE ART PX)
+/* THE SIM SETTINGS. CAPE_SIM_DEFAULT = CAPE LAB'S DEFAULTS FOR NOVA2 (WHICH IS AT PLAY'S SCALE, SO THEY ARE PLAY WORLD PX AS THEY ARE) + THE LOOK THIS CAPE ALWAYS HAD.
+   A CHARACTER SHEET'S cape.sim (WRITTEN BY CAPE LAB'S "SAVE CAPE TO CHARACTER") REPLACES THEM. C = THE SIM, L = THE LOOK (SEE CAPE LAB FOR WHAT EACH ONE DOES). */
+const CAPE_SIM_DEFAULT = {
+  C: { segments: 12, segLen: 7.5, gravity: 1800, drag: 1.2, nDrag: 9, tDrag: 0.4, lift: 0.55, flutter: 260, backBias: 0, wind: 0, hangDeg: 17, sag: 0.55, vRef: 500, restPull: 45, iterations: 8, bend: 0.35, step: 1 / 120, maxSteps: 6, spanMin: 0.5, maxBendDeg: 28, collide: true, thick: 6, groundPad: 14, groundFric: 0.35, shear: 1, rung: 0.3 },
+  L: { w1: 53, taper: 1, top: '#0000ff', bottom: '#0000ff', rim: '#0000ff', dark: '#0000ff', dis: true, disStart: 0.6, disAmt: 0.3, disCell: 15, disEdge: 0, disFlow: 5, disSpeed: 0.1, disFade: 0.9, disGlow: 0.2, disColA: '#1C90D6', disColB: '#8D2EC2' },
+};
+const CAPE_CLOTH = {}, CAPE_LOOK = {};   // THE LIVE SIM / LOOK SETTINGS IN PLAY WORLD PX (FILLED BY applyCapeProfile, FROM CAPE_SIM_DEFAULT OR THE SHEET)
+const CAPE_PIN_DEFAULT = { a: { x: -16, y: 0 }, b: { x: 16, y: 0 } };   // WHERE THE TWO PINS SIT AROUND THE ROOT WITHOUT A SHEET (SPRITE ART PX; x MIRRORS WITH FACING)
 const CAPE_DISSOLVE = { enabled: true, start: 0.6, amount: 0.3, cell: 15, edge: 0, flow: 5, speed: 0.1, fade: 0.9, glow: 0.2, edgeFade: 0.9 };
-const DISSOLVE_EDGE_INNER = '#1C90D6', DISSOLVE_EDGE_OUTER = '#8D2EC2';
 const IDLE_CAPE = { enabled: true, root: { x: 20, y: -185 }, rootBob: [0, -2, -3, -4, -3, -2], blendRate: 5, backBias: 550, gust: 1050, gustHz: 0.35, flutter: 150, layered: false, topWidth: 0, liningShift: 0.12, liningColors: ['#0000FF', '#0000FF', '#0000FF'], liningEdge: '#1061C6', liningGlow: '#0A0568' };
 const ATTACK_CAPE = { enabled: true, root: { x: 0, y: -185 }, blendRate: 20, backBias: 600, flutter: 250, gust: 7000, gustLift: 0.7, gustTime: 0.6 };
 const JUMP_CAPE = { roots: { jumpStart: { x: 14, y: -205 }, jump: { x: 8, y: -215 }, fall: { x: 20, y: -244 }, land: { x: 26, y: -238 } }, blendRate: 16, rootEase: 30 };
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mixRgb = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 const rgbCss = (c, a) => 'rgba(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ',' + a + ')';
-const CAPE_RGB = CAPE_COLORS.map(hexRgb), CAPE_EDGE_RGB = hexRgb(CAPE_EDGE), CAPE_GLOW_RGB = hexRgb(CAPE_EDGE_GLOW);
+let CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, EDGE_A, EDGE_B;   // FILLED FROM THE LOOK SETTINGS BY applyCapeProfile
 const LINING_RGB = IDLE_CAPE.liningColors.map(hexRgb), LINING_EDGE_RGB = hexRgb(IDLE_CAPE.liningEdge), LINING_GLOW_RGB = hexRgb(IDLE_CAPE.liningGlow);
-const EDGE_A = hexRgb(DISSOLVE_EDGE_INNER), EDGE_B = hexRgb(DISSOLVE_EDGE_OUTER);
 const cape = { mode: 2, spring: { a: 0, v: 0 }, hVel: 0, prevX: null, speed: 0, wave: 0, dirSmooth: 1, jumpBlend: 0, jumpRoot: { x: 0, y: 0, set: false }, attackBlend: 0, idleBlend: 1, cloakFrame: 0, cloakT: 0 };
-const cloth = { p: [], need: true, t: 0, acc: 0, lastRoot: null, dormant: false, gustT: 0 };
-/* ----- CAPE FROM THE CHARACTER SHEET (character.json "cape" BLOCK, WRITTEN BY CAPE LAB'S SAVE PINS TO CHARACTER) -----
-   THE BLOCK IS IN THE POINTS OF THE CHARACTER'S SIDE VIEW (THE RIG ART FRAME). PLAY'S ART IS THE 400 PX SPRITE SHEETS, SO A SCALE k CONVERTS RIG PX -> SPRITE ART PX:
-   k = (THE IDLE SPRITE'S FIGURE HEIGHT) / (THE SIDE VIEW'S FIGURE HEIGHT), OR cape.play.scale WHEN THE SHEET SETS IT. WHAT PLAY TAKES FROM THE BLOCK:
-   - ROOT: THE HAND-TUNED PER-POSE ROOTS ABOVE STAY, MOVED BY HOW FAR THE PIN MIDPOINT IS FROM cape.play.ref (THE MIDPOINT THEY WERE TUNED AGAINST). NO ref = NO SHIFT.
-   - SIZE: ROOT WIDTH = THE DISTANCE BETWEEN THE PINS; defaults (segments, segLen, w1, hangDeg) ARE CAPE LAB WORLD PX AT ITS BODY SCALE, CONVERTED TO PLAY WORLD PX.
-   - BODY: THE COLLIDER CIRCLES KEEP THE CHAIN OUT OF THE BODY IN IDLE ONLY (cape.play.collide: false TURNS IT OFF). F3 TOGGLES THE WHOLE THING SO YOU CAN COMPARE. VISUAL ONLY, LIKE THE REST OF THE CAPE. */
-const CAPE_CLOTH_BASE = Object.assign({}, CAPE_CLOTH), CAPE_BODY = { pad: 0 };
-const capeProf = { on: true, data: null, note: 'none' };   // data = { k, shift:{x,y}, cols:[{x,y,r}] (SPRITE ART PX FROM THE FEET), look:{...CAPE_CLOTH FIELDS}, collide }
+const cloth = { sim: { t: 0, acc: 0 }, need: true, dormant: false, gustT: 0, vy: 0 };   // sim = THE SHARED SIM'S STATE ({ chains, last, acc, t }); gustT = THE CAST GUST TIMER; vy = SMOOTHED VERTICAL SPEED FOR THE SIM'S WIND
+/* ----- CAPE FROM THE CHARACTER SHEET (character.json "cape" BLOCK, WRITTEN BY CAPE LAB'S "SAVE CAPE TO CHARACTER") -----
+   WHAT THE SHEET GIVES PLAY:
+   - cape.sim ({ scale, C, L }): THE WHOLE SIM + LOOK SETTINGS, AS TUNED IN CAPE LAB AT BODY SCALE sim.scale. LENGTHS, ACCELERATIONS AND SPEEDS ARE CONVERTED TO PLAY WORLD PX BY rr = (k * SCALE) / sim.scale
+     (SEE scaleSim); RATES, RATIOS AND COUNTS ARE USED AS THEY ARE. NO cape.sim (AN OLDER SHEET) = CAPE_SIM_DEFAULT WITH ONLY THE SHEET'S defaults (segments, segLen, w1, hangDeg) ON TOP.
+   - pins (A, B) + colliders, IN THE PIXELS OF cape.space: "view" = THE CHARACTER'S 800 PX SIDE VIEW PNG, k = (IDLE SPRITE FIGURE HEIGHT) / (SIDE VIEW FIGURE HEIGHT), OR cape.play.scale;
+     "sprite" = NOVA2 / SPRITE-SHEET PIXELS (CAPE LAB'S BUILT-IN BODY), k = 1.
+   - THE TWO PINS ARE THE TWO EDGES OF THE CAPE'S ROOT: THEIR MIDPOINT IS THE ROOT (THE HAND-TUNED PER-POSE ROOTS BELOW STAY, ALL MOVED BY HOW FAR THE MIDPOINT IS FROM cape.play.ref; NO ref = NO SHIFT)
+     AND THEIR OFFSETS FROM THE MIDPOINT ARE KEPT, SO THE ROOT STAYS THE SAME WIDTH AND TILT IN EVERY POSE.
+   - BODY: THE COLLIDER CIRCLES KEEP THE CHAIN OUT OF THE BODY IN IDLE ONLY (cape.play.collide: false TURNS IT OFF). F3 SWITCHES THE WHOLE SHEET CAPE OFF SO YOU CAN COMPARE WITH CAPE_SIM_DEFAULT. VISUAL ONLY, LIKE THE REST OF THE CAPE. */
+const CAPE_BODY = { pad: 0 };
+const capeProf = { on: true, data: null, note: 'none' };   // data = { k, shift:{x,y}, cols:[{x,y,r}] (SPRITE ART PX FROM THE FEET), collide, pinOff:{a:{x,y},b:{x,y}} (SPRITE ART PX FROM THE ROOT), sim:{C,L} (PLAY WORLD PX) }
 function alphaScan(src, sx, sw, sh, thr) {   // BOUNDING BOX + FEET CENTRE (LOWEST 30 ROWS) OF ONE CELL; null IF EMPTY
   const c = document.createElement('canvas'); c.width = sw; c.height = sh; const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(src, sx, 0, sw, sh, 0, 0, sw, sh); const d = g.getImageData(0, 0, sw, sh).data;
@@ -716,37 +725,58 @@ function alphaScan(src, sx, sw, sh, thr) {   // BOUNDING BOX + FEET CENTRE (LOWE
   let f0 = sw, f1 = -1; for (let y = Math.max(y0, y1 - 30); y <= y1; y++) for (let x = 0; x < sw; x++) if (d[(y * sw + x) * 4 + 3] > thr) { if (x < f0) f0 = x; if (x > f1) f1 = x; }
   return { y0, y1, h: y1 - y0, fx: (f0 + f1) / 2 };
 }
+function scaleSim(C, L, rr) {   // CAPE LAB WORLD PX -> PLAY WORLD PX. LENGTHS (px), ACCELERATIONS (px/s^2) AND SPEEDS (px/s) SCALE WITH rr; RATES (1/s), RATIOS, ANGLES AND COUNTS DON'T
+  const c = Object.assign({}, C), l = Object.assign({}, L);
+  for (const key of ['segLen', 'gravity', 'flutter', 'backBias', 'wind', 'vRef', 'thick', 'groundPad']) if (Number.isFinite(c[key])) c[key] *= rr;
+  for (const key of ['w1', 'disCell', 'disFlow']) if (Number.isFinite(l[key])) l[key] *= rr;
+  return { C: c, L: l };
+}
 async function loadCapeProfile(slug, sheet) {
   const before = JSON.stringify(capeProf.data), cp = sheet && sheet.cape;
-  capeProf.data = null; capeProf.note = slug ? 'no cape block in ' + slug + '/character.json (PLAY constants)' : 'PLAY constants';
+  capeProf.data = null; capeProf.note = slug ? 'no cape block in ' + slug + '/character.json (PLAY defaults)' : 'PLAY defaults';
   if (cp && cp.pins && [cp.pins.ax, cp.pins.ay, cp.pins.bx, cp.pins.by].every(Number.isFinite)) {
     try {
-      const png = await OSWClient.library.readImage(slug + '.' + (cp.view || 'right')), url = URL.createObjectURL(png);
-      let im; try { im = await loadImg(url); } finally { URL.revokeObjectURL(url); }
-      const idle = IMG.idle, cw = Math.floor(idle.naturalWidth / PLAYER_SHEETS.idle.frames);
-      const rig = alphaScan(im, 0, im.naturalWidth, im.naturalHeight, 16), spr = alphaScan(idle, 0, cw, idle.naturalHeight, FOOT_ALPHA_MIN);
+      const sprite = cp.space === 'sprite', idle = IMG.idle, cw = Math.floor(idle.naturalWidth / PLAYER_SHEETS.idle.frames), spr = alphaScan(idle, 0, cw, idle.naturalHeight, FOOT_ALPHA_MIN);
+      let rig;
+      if (sprite) { const a = cp.art || {}; rig = { fx: Number.isFinite(a.px) ? a.px : 235, y1: Number.isFinite(a.py) ? a.py : 399, h: 0 }; }   // THE PINS ARE ALREADY IN SPRITE-SHEET PIXELS (NOVA2.png: FEET CENTRE x, LOWEST ROW y)
+      else {
+        const png = await OSWClient.library.readImage(slug + '.' + (cp.view || 'right')), url = URL.createObjectURL(png);
+        let im; try { im = await loadImg(url); } finally { URL.revokeObjectURL(url); }
+        rig = alphaScan(im, 0, im.naturalWidth, im.naturalHeight, 16);
+      }
       if (!rig || !spr) throw new Error('empty art');
-      const play = cp.play || {}, k = Number(play.scale) > 0 ? Number(play.scale) : spr.h / rig.h, off = spr.fx - cw / 2;   // off: THE IDLE FIGURE SITS THIS FAR RIGHT OF ITS CELL CENTRE
-      const p = cp.pins, d = cp.defaults || {}, ws = k * SCALE, rr = d.scale > 0 ? ws / d.scale : 1;
+      const play = cp.play || {}, k = sprite ? 1 : (Number(play.scale) > 0 ? Number(play.scale) : spr.h / rig.h), off = spr.fx - cw / 2;   // off: THE IDLE FIGURE SITS THIS FAR RIGHT OF ITS CELL CENTRE
+      const p = cp.pins, d = cp.defaults || {}, sim = cp.sim && cp.sim.C ? cp.sim : null, tuned = sim ? sim.scale : d.scale, rr = tuned > 0 ? k * SCALE / tuned : 1;
       const mid = { x: (p.ax + p.bx) / 2, y: (p.ay + p.by) / 2 }, ref = play.ref && Number.isFinite(play.ref.x) && Number.isFinite(play.ref.y) ? play.ref : null;
-      const look = { w0: Math.hypot(p.bx - p.ax, p.by - p.ay) * ws };
-      if (d.segments > 0) look.segments = Math.max(4, Math.min(30, Math.round(d.segments)));
-      if (d.segLen > 0) look.segLen = d.segLen * rr; if (d.w1 > 0) look.w1 = d.w1 * rr;
-      if (Number.isFinite(d.hangDeg)) { look.hangX = Math.sin(d.hangDeg * Math.PI / 180); look.hangY = Math.cos(d.hangDeg * Math.PI / 180); }
+      let simP;
+      if (sim) simP = scaleSim(sim.C, sim.L, rr);
+      else {   // AN OLDER SHEET: ONLY THE SIZE NUMBERS
+        simP = { C: {}, L: {} };
+        if (d.segments > 0) simP.C.segments = d.segments; if (d.segLen > 0) simP.C.segLen = d.segLen * rr; if (Number.isFinite(d.hangDeg)) simP.C.hangDeg = d.hangDeg; if (d.w1 > 0) simP.L.w1 = d.w1 * rr;
+      }
+      if (simP.C.segments > 0) simP.C.segments = Math.max(4, Math.min(30, Math.round(simP.C.segments)));
       capeProf.data = { k, shift: ref ? { x: (mid.x - ref.x) * k, y: (mid.y - ref.y) * k } : { x: 0, y: 0 }, collide: play.collide !== false,
-        cols: (Array.isArray(cp.colliders) ? cp.colliders : []).filter(c => c && [c.x, c.y, c.r].every(Number.isFinite)).map(c => ({ x: (c.x - rig.fx) * k + off, y: (c.y - rig.y1) * k, r: c.r * k })), look };
-      capeProf.note = slug + ' pins (k ' + k.toFixed(3) + (ref ? '' : ', no play.ref: root not shifted') + ')';
+        cols: (Array.isArray(cp.colliders) ? cp.colliders : []).filter(c => c && [c.x, c.y, c.r].every(Number.isFinite)).map(c => ({ x: (c.x - rig.fx) * k + off, y: (c.y - rig.y1) * k, r: c.r * k })),
+        pinOff: { a: { x: (p.ax - mid.x) * k, y: (p.ay - mid.y) * k }, b: { x: (p.bx - mid.x) * k, y: (p.by - mid.y) * k } }, sim: simP };
+      capeProf.note = slug + ' (' + (sprite ? 'sprite space' : 'k ' + k.toFixed(3)) + ', ' + (sim ? 'sim settings from the sheet, x' + rr.toFixed(2) : 'older sheet: size only') + (ref ? '' : ', no play.ref: root not shifted') + ')';
     } catch (e) { capeProf.data = null; capeProf.note = 'cape block unusable: ' + String(e && e.message || e).replace(/^[A-Z_]+: /, '').slice(0, 50); }
   }
   if (JSON.stringify(capeProf.data) !== before) applyCapeProfile();
 }
-function applyCapeProfile() { Object.assign(CAPE_CLOTH, CAPE_CLOTH_BASE, capeProf.on && capeProf.data ? capeProf.data.look : null); cloth.need = true; }
+function applyCapeProfile() {   // SETTINGS = CAPE_SIM_DEFAULT, WITH THE SHEET'S ON TOP WHILE F3 HAS IT ON. THE CHAIN IS REBUILT BECAUSE ITS SIZE MAY HAVE CHANGED
+  const sim = capeProf.on && capeProf.data ? capeProf.data.sim : null, Lk = Object.assign({}, CAPE_SIM_DEFAULT.L, sim && sim.L);
+  for (const key of Object.keys(CAPE_CLOTH)) delete CAPE_CLOTH[key]; Object.assign(CAPE_CLOTH, CAPE_SIM_DEFAULT.C, sim && sim.C);
+  for (const key of Object.keys(CAPE_LOOK)) delete CAPE_LOOK[key]; Object.assign(CAPE_LOOK, Lk);
+  CAPE_RGB = [hexRgb(Lk.top), mixRgb(hexRgb(Lk.top), hexRgb(Lk.bottom), 0.5), hexRgb(Lk.bottom)]; CAPE_EDGE_RGB = hexRgb(Lk.rim); CAPE_GLOW_RGB = hexRgb(Lk.dark); EDGE_A = hexRgb(Lk.disColA); EDGE_B = hexRgb(Lk.disColB);
+  Object.assign(CAPE_DISSOLVE, { enabled: !!Lk.dis, start: Lk.disStart, amount: Lk.disAmt, cell: Lk.disCell, edge: Lk.disEdge, flow: Lk.disFlow, speed: Lk.disSpeed, fade: Lk.disFade, glow: Lk.disGlow });
+  cloth.need = true;
+}
+applyCapeProfile();
 function capeColliders() {   // WORLD CIRCLES FOR THE BODY COLLIDERS (null = NONE). THEY FOLLOW FACING THE SAME WAY THE ROOT DOES
   const d = capeProf.data; if (!(capeProf.on && d && d.collide && d.cols.length) || cape.idleBlend < 0.02) return null;   // IDLE ONLY: THE CIRCLES ARE THE STANDING MANNEQUIN, THE RUN / CAST / JUMP SPRITES LEAN OUT OF THEM AND THE CAPE BUNCHES UP
   const sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth, g = clamp01(cape.idleBlend), gs = g * g * (3 - 2 * g);   // RADIUS GROWS WITH THE IDLE BLEND (SMOOTHSTEP) SO THE CIRCLES DON'T POP ON MID-STOP
   return d.cols.map(c => ({ x: P.x + c.x * dir * sx, y: P.y + (c.y - visualLift) * sy, r: (c.r * SCALE + CAPE_BODY.pad) * gs }));
 }
-function capePush(q, c) { const dx = q.x - c.x, dy = q.y - c.y, d = Math.hypot(dx, dy); if (d < c.r) { if (d < 1e-4) { q.x = c.x - c.r; return; } q.x = c.x + dx / d * c.r; q.y = c.y + dy / d * c.r; } }
 const clamp01 = v => Math.max(0, Math.min(1, v));
 function kickCape(n) { cape.spring.v += CAPE_SPRING.kick * n; }
 function gustCape() { if (ATTACK_CAPE.enabled) cloth.gustT = ATTACK_CAPE.gustTime; }
@@ -772,53 +802,46 @@ function updateCape(dt) {
 function clothActive() { return cape.mode === 2 || (IDLE_CAPE.enabled && currentAnim === 'idle') || (ATTACK_CAPE.enabled && currentAnim === 'attack') || !!JUMP_CAPE.roots[currentAnim]; }
 function clothRoot(px, py) {   // WORLD POSITION OF THE COLLAR PIN (px, py = WHERE TO MEASURE FROM: THE SIM POSITION OR THE INTERPOLATED ONE)
   const pose = CLOAK_POSE[currentAnim] || CLOAK_POSE.run, sx = SCALE * squash.x, sy = SCALE * squash.y, C = cape;
-  let lx = pose.x + CAPE_CLOTH.rootOffset.x, ly = pose.y + CAPE_CLOTH.rootOffset.y - visualLift;
+  let lx = pose.x + CAPE_ROOT_OFFSET.x, ly = pose.y + CAPE_ROOT_OFFSET.y - visualLift;
   if (C.idleBlend > 0.001) { const fr = currentAnim === 'idle' ? P.frame : 0, pl = sheetPlace('idle', fr, false), bob = IDLE_CAPE.rootBob[fr] || 0; lx += (IDLE_CAPE.root.x * pl.s + sheetTweak('idle').offsetX - lx) * C.idleBlend; ly += ((IDLE_CAPE.root.y + bob) * pl.s + pl.oy - ly) * C.idleBlend; }
   if (C.attackBlend > 0.001) { const pl = sheetPlace('attack', 0, false); lx += (ATTACK_CAPE.root.x * pl.s + sheetTweak('attack').offsetX - lx) * C.attackBlend; ly += (ATTACK_CAPE.root.y * pl.s + pl.oy - ly) * C.attackBlend; }
   if (C.jumpBlend > 0.001) { lx += (C.jumpRoot.x - lx) * C.jumpBlend; ly += (C.jumpRoot.y - ly) * C.jumpBlend; }
   if (capeProf.on && capeProf.data) { lx += capeProf.data.shift.x; ly += capeProf.data.shift.y; }   // THE SHEET'S PINS MOVE EVERY POSE'S ROOT TOGETHER
   return { x: px + lx * C.dirSmooth * sx, y: py + ly * sy };
 }
-function resetCloth() {
-  const C = CAPE_CLOTH, r = clothRoot(P.x, P.y), dir = P.flip ? -1 : 1; cloth.p.length = 0;
-  for (let i = 0; i < C.segments; i++) { const x = r.x - dir * i * C.segLen * C.hangX, y = r.y + i * C.segLen * C.hangY; cloth.p.push({ x, y, px: x, py: y }); }
-  cloth.need = false; cloth.acc = 0; cloth.lastRoot = r;
+function capePins(px, py) {   // WORLD POSITIONS OF THE CAPE'S TWO PINS: THE ROOT (clothRoot) PLUS THE SHEET'S PIN OFFSETS, MIRRORED WITH FACING AND SQUASHED WITH THE BODY
+  const r = clothRoot(px, py), po = capeProf.on && capeProf.data ? capeProf.data.pinOff : CAPE_PIN_DEFAULT, sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth;
+  return [{ x: r.x + po.a.x * dir * sx, y: r.y + po.a.y * sy }, { x: r.x + po.b.x * dir * sx, y: r.y + po.b.y * sy }];
 }
-function clothLink(a, b, rest, wA, wB, stiff) {
-  const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.0001, w = wA + wB; if (w === 0) return;
-  const diff = (d - rest) / d * stiff; a.x += dx * diff * (wA / w); a.y += dy * diff * (wA / w); b.x -= dx * diff * (wB / w); b.y -= dy * diff * (wB / w);
+function capeWidths(pins) {   // WIDTH OF THE CLOTH ALONG ITS LENGTH: THE DISTANCE BETWEEN THE PINS AT THE ROOT, TAPERING TO THE HEM WIDTH (SAME AS CAPE LAB)
+  const C = CAPE_CLOTH, n = C.segments, w0 = Math.hypot(pins[1].x - pins[0].x, pins[1].y - pins[0].y), out = [];
+  for (let i = 0; i < n; i++) out.push(w0 + (CAPE_LOOK.w1 - w0) * Math.pow(i / (n - 1), CAPE_LOOK.taper));
+  return out;
+}
+function resetCloth() {
+  const pins = capePins(P.x, P.y); cloth.sim = { t: cloth.sim.t || 0, acc: 0 }; cloth.vy = 0;
+  CapeSim.capeReset(cloth.sim, CAPE_CLOTH, pins, P.flip ? -1 : 1); cloth.need = false;
+}
+function clothEnv(dt) {   // THE SIM'S INPUTS FROM PLAY'S STATE. PLAY'S IDLE / CAST BLENDS (FLUTTER, BACK BIAS, GUSTS) GO IN AS ADDITIONS TO THE SIM'S OWN FORCES, SO WITH NO BLEND THE SIM RUNS EXACTLY AS IN CAPE LAB
+  const C = CAPE_CLOTH, I = IDLE_CAPE, A = ATTACK_CAPE, B = cape.idleBlend, Ab = cape.attackBlend, S = cloth.sim;
+  const pins = capePins(P.x, P.y), speed01 = Math.min(1, Math.abs(cape.hVel) / C.vRef);
+  const gust = 0.5 + 0.5 * Math.sin(S.t * I.gustHz * Math.PI * 2) * (0.6 + 0.4 * Math.sin(S.t * 0.7 + 1));   // IDLE GUST: TWO SLOW SINES, SO THE PEAKS ARE IRREGULAR
+  let gustEnv = 0;   // CAST GUST: SWELLS FAST, PEAKS ~1/4 IN, EASES OFF
+  if (cloth.gustT > 0) { const gp = 1 - cloth.gustT / A.gustTime; gustEnv = Math.sin(Math.PI * Math.sqrt(clamp01(gp))); cloth.gustT = Math.max(0, cloth.gustT - dt); }
+  const flBase = C.flutter * speed01, biasBase = C.backBias;   // WHAT THE SIM APPLIES ON ITS OWN
+  let fl = flBase + (I.flutter - flBase) * B, bias = biasBase + (I.backBias + gust * I.gust - biasBase) * B;
+  fl += (A.flutter - fl) * Ab; bias += (A.backBias - bias) * Ab; bias += A.gust * gustEnv;
+  const lift = 1 - C.lift * speed01, body = capeColliders();
+  return { pins, widths: capeWidths(pins), facing: P.flip ? -1 : 1, vel: { x: cape.hVel, y: cloth.vy }, colliders: body || [], floorAt: (x, y) => Math.min(floorBelow(x, y), FLOOR_MAX),
+    gravMul: Math.max(0, (lift - A.gustLift * gustEnv) / Math.max(0.05, lift)), biasAdd: bias - biasBase, flutterAdd: fl - flBase,
+    keepBehind: B > 0.02 && body ? cape.dirSmooth : 0 };   // RUN -> IDLE: THE CHAIN SWINGS IN FRONT OF THE TORSO AND HOOKS ON THE CIRCLES, SO IT NEVER GETS AHEAD OF THE COLLAR WHILE IDLE IS ACTIVE
 }
 function stepCloth(dt) {
   if (!clothActive()) { cloth.dormant = true; return; }
   if (cloth.dormant) { cloth.dormant = false; cloth.need = true; }
   if (cloth.need) resetCloth();
-  const C = CAPE_CLOTH; cloth.acc = Math.min(cloth.acc + dt, C.maxSteps * C.step);
-  const steps = Math.floor(cloth.acc / C.step); if (steps === 0) return; cloth.acc -= steps * C.step;
-  const Pn = cloth.p, n = Pn.length, rootNow = clothRoot(P.x, P.y), rootPrev = cloth.lastRoot || rootNow, h = C.step, damp = Math.max(0, 1 - C.drag * h), body = capeColliders();
-  const run = Math.min(1, cape.speed), I = IDLE_CAPE, B = cape.idleBlend, A = ATTACK_CAPE, Ab = cape.attackBlend;
-  for (let st = 1; st <= steps; st++) {
-    const gust = 0.5 + 0.5 * Math.sin(cloth.t * I.gustHz * Math.PI * 2) * (0.6 + 0.4 * Math.sin(cloth.t * 0.7 + 1)), f = st / steps;   // IDLE GUST: TWO SLOW SINES, SO THE PEAKS ARE IRREGULAR
-    let gustEnv = 0;   // CAST GUST: SWELLS FAST, PEAKS ~1/4 IN, EASES OFF
-    if (cloth.gustT > 0) { const gp = 1 - cloth.gustT / A.gustTime; gustEnv = Math.sin(Math.PI * Math.sqrt(clamp01(gp))); cloth.gustT = Math.max(0, cloth.gustT - h); }
-    Pn[0].x = rootPrev.x + (rootNow.x - rootPrev.x) * f; Pn[0].y = rootPrev.y + (rootNow.y - rootPrev.y) * f; Pn[0].px = Pn[0].x; Pn[0].py = Pn[0].y;
-    for (let i = 1; i < n; i++) {
-      const q = Pn[i], vx = (q.x - q.px) * damp, vy = (q.y - q.py) * damp; q.px = q.x; q.py = q.y;
-      const tip = i / (n - 1);
-      let fl = C.flutter * run + (I.flutter - C.flutter * run) * B, bias = C.backBias + (I.backBias + gust * I.gust - C.backBias) * B;
-      fl += (A.flutter - fl) * Ab; bias += (A.backBias - bias) * Ab; bias += A.gust * gustEnv; fl *= tip;
-      const ax = Math.sin(cloth.t * 9 + i * 0.8) * fl - cape.dirSmooth * bias * tip, ay = C.gravity * (1 - C.lift * run - A.gustLift * gustEnv) + Math.cos(cloth.t * 7.3 + i * 1.1) * fl;
-      q.x += vx + ax * h * h; q.y += vy + ay * h * h;
-    }
-    for (let it = 0; it < C.iterations; it++) {
-      for (let i = 0; i < n - 1; i++) clothLink(Pn[i], Pn[i + 1], C.segLen, i === 0 ? 0 : 1, 1, 1);
-      for (let i = 0; i < n - 2; i++) clothLink(Pn[i], Pn[i + 2], C.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, C.bend);
-      if (body) for (const c of body) for (let i = 1; i < n; i++) capePush(Pn[i], c);   // KEEP THE CHAIN OUT OF THE BODY CIRCLES
-      if (B > 0.02 && body) for (let i = 1; i < n; i++) if ((Pn[i].x - Pn[0].x) * cape.dirSmooth > 0) Pn[i].x = Pn[0].x;   // RUN -> IDLE: THE CHAIN SWINGS IN FRONT OF THE TORSO AND HOOKS ON THE CIRCLES, SO IT NEVER GETS AHEAD OF THE COLLAR WHILE IDLE IS ACTIVE
-    }
-    for (let i = 1; i < n; i++) { const fl = Math.min(floorBelow(Pn[i].x, Pn[i].y), FLOOR_MAX) - 2; if (Pn[i].y > fl) Pn[i].y = fl; }   // DON'T SINK INTO THE FLOOR
-    cloth.t += h;
-  }
-  cloth.lastRoot = rootNow;
+  cloth.vy += (P.vy - cloth.vy) * Math.min(1, dt * 14);
+  CapeSim.capeStep(cloth.sim, CAPE_CLOTH, clothEnv(dt), dt);
 }
 function stepCape(dt) { updateCape(dt); stepCloth(dt); }
 /* ----- GHOST-TAIL DISSOLVE: THE KAPLAY FRAGMENT SHADER, EVALUATED PER SMALL CELL OF THE RIBBON INSTEAD OF PER PIXEL ----- */
@@ -832,7 +855,7 @@ function vnoise(x, y) {
 const capeDis = { on: false, start: 0, len: 1, wid: 1 };
 function disCell(u, v) {   // -> null (EATEN) OR { rgb | null (= KEEP BASE COLOUR), a (ALPHA MULTIPLIER) }
   const D = CAPE_DISSOLVE, t = clamp01((v - capeDis.start) / Math.max(1 - capeDis.start, 0.001)); if (t <= 0) return { rgb: null, a: 1 };
-  const px = v * capeDis.len - cloth.t * D.flow, py = u * capeDis.wid, cell = Math.max(2, D.cell);
+  const px = v * capeDis.len - cloth.sim.t * D.flow, py = u * capeDis.wid, cell = Math.max(2, D.cell);
   let n = vnoise(px / cell, py / cell) * 0.65 + vnoise(px / (cell * 0.4) + 17, py / (cell * 0.4) + 17) * 0.35; n = clamp01((n - 0.18) / 0.64);
   const edge = Math.max(0.01, D.edge), thr = t * D.amount * (1 + edge) - edge; if (n < thr) return null;
   const keep = 1 - D.fade * t, band = (n - thr) / edge;
@@ -840,23 +863,20 @@ function disCell(u, v) {   // -> null (EATEN) OR { rgb | null (= KEEP BASE COLOU
   return { rgb: null, a: keep };
 }
 function drawCloth(x, y) {
-  if (!clothActive() || cloth.need || cloth.p.length < 3 || CAPE_VERLET_SKIP_ANIMS.has(currentAnim)) return;
+  const S = cloth.sim; if (!clothActive() || cloth.need || !S.chains || CAPE_VERLET_SKIP_ANIMS.has(currentAnim)) return;
   const fade = 1 - dissolveAmount; if (fade <= 0.02) return;   // FADES WITH THE BODY'S DISSOLVE
-  const Pn = cloth.p, r = clothRoot(x, y); Pn[0].x = r.x; Pn[0].y = r.y;   // PIN THE HEAD TO *THIS* FRAME'S FINAL COLLAR SO IT NEVER LAGS THE BODY
+  const pins = capePins(x, y), A = S.chains[0].p, Bp = S.chains[1].p; A[0].x = pins[0].x; A[0].y = pins[0].y; Bp[0].x = pins[1].x; Bp[0].y = pins[1].y;   // PIN THE ROOT EDGE TO *THIS* FRAME'S FINAL COLLAR SO IT NEVER LAGS THE BODY
   const D = CAPE_DISSOLVE; capeDis.on = D.enabled;
-  if (capeDis.on) { capeDis.start = Math.max(0, Math.min(0.98, D.start - D.speed * Math.min(1.5, cape.speed) * 0.5)); capeDis.len = (Pn.length - 1) * CAPE_CLOTH.segLen; capeDis.wid = (CAPE_CLOTH.w0 + CAPE_CLOTH.w1) / 2; }
+  if (capeDis.on) { capeDis.start = Math.max(0, Math.min(0.98, D.start - D.speed * Math.min(1.5, cape.speed) * 0.5)); capeDis.len = (A.length - 1) * CAPE_CLOTH.segLen; capeDis.wid = (Math.hypot(pins[1].x - pins[0].x, pins[1].y - pins[0].y) + CAPE_LOOK.w1) / 2; }
   const layer = IDLE_CAPE.layered ? Math.min(1, cape.idleBlend + cape.attackBlend) : 0;   // IDLE AND CAST SHARE THE LINED LOOK
-  if (layer > 0.02) drawClothRibbon(Pn, 1.05, IDLE_CAPE.liningShift, LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB, layer * fade, false);
-  drawClothRibbon(Pn, 1 + (IDLE_CAPE.topWidth - 1) * layer, 0, CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, fade, true);
+  if (layer > 0.02) drawClothRibbon(A, Bp, 1.05, IDLE_CAPE.liningShift, LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB, layer * fade, false);
+  drawClothRibbon(A, Bp, 1 + (IDLE_CAPE.topWidth - 1) * layer, 0, CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, fade, true);
 }
-function drawClothRibbon(Pn, wMul, shift, rgb, edgeRgb, glowRgb, alpha, folds) {
-  const C = CAPE_CLOTH, n = Pn.length, dir = P.flip ? -1 : 1, L = [], R = [];
+function drawClothRibbon(A, Bp, wMul, shift, rgb, edgeRgb, glowRgb, alpha, folds) {   // THE CLOTH BETWEEN THE TWO EDGE CHAINS. wMul NARROWS / WIDENS IT ABOUT ITS CENTRE, shift SLIDES IT TOWARD THE A EDGE (THE LINING LOOK)
+  const n = A.length, L = [], R = [];
   for (let i = 0; i < n; i++) {
-    const a = Pn[Math.max(0, i - 1)], b = Pn[Math.min(n - 1, i + 1)]; let tx = b.x - a.x, ty = b.y - a.y; const len = Math.hypot(tx, ty) || 1; tx /= len; ty /= len;
-    const nx = -ty * dir, ny = tx * dir, s = i / (n - 1);   // SIDE NORMAL, FLIPPED WITH FACING SO THE "TOP" EDGE IS ALWAYS THE UPPER ONE
-    let w = C.w0 + (C.w1 - C.w0) * Math.pow(s, 0.8); w *= 1 + C.ripple * Math.min(1, cape.speed + 0.3) * Math.sin(cloth.t * 8 - s * 7) * s;
-    const cx = Pn[i].x + nx * w * shift, cy = Pn[i].y + ny * w * shift; w *= wMul;
-    L.push([cx + nx * w / 2, cy + ny * w / 2]); R.push([cx - nx * w / 2, cy - ny * w / 2]);
+    const mx = (A[i].x + Bp[i].x) / 2, my = (A[i].y + Bp[i].y) / 2, dx = A[i].x - Bp[i].x, dy = A[i].y - Bp[i].y, hx = dx / 2 * wMul, hy = dy / 2 * wMul, sx = dx * shift, sy = dy * shift;
+    L.push([mx + hx + sx, my + hy + sy]); R.push([mx - hx + sx, my - hy + sy]);
   }
   const colAt = s => s < 0.5 ? mixRgb(rgb[0], rgb[1], s * 2) : mixRgb(rgb[1], rgb[2], (s - 0.5) * 2);
   ctx.save();
