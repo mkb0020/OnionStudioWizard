@@ -81,8 +81,10 @@ const COLLIDERS_ART = [                                      // CIRCLES THE CAPE
    SETTINGS - EVERY SLIDER LIVES IN ONE OF THESE OBJECTS (COPY SETTINGS EXPORTS THEM)
    ===================================================================== */
 const B = {            // BODY (scale 0.5 = PLAY'S SCALE FOR THE 400 PX SPRITE ART)
-  scale: 0.5, maxSpeed: 560, accel: 3200, friction: 3000, airCtl: 0.8,
-  jumpV: 1000, gravity: 2800, dashMul: 1.7,
+  // MOVEMENT MATCHES PLAY (DEFAULT_PHYS): move 650, jump 1000, gravity 1800, dash 1500 (= 650 x 2.3077), airControl 1.
+  // PLAY SETS ITS SIDEWAYS SPEED DIRECTLY (NO RAMP), SO accel / friction ARE HUGE: ~0.02 S TO TOP SPEED. LOWER THEM TO FEEL A RAMP.
+  scale: 0.5, maxSpeed: 650, accel: 30000, friction: 30000, airCtl: 1,
+  jumpV: 1000, gravity: 1800, dashMul: 1500 / 650, shortHop: false,   // PLAY HAS NO RELEASE-EARLY SHORT HOP
 };
 const C = {            // CAPE SIM (WORLD PX; SEE ALSO anti-curl BLOCK)
   segments: 12, segLen: 7.5, gravity: 1800, drag: 1.2, nDrag: 9, tDrag: 0.4,
@@ -99,7 +101,7 @@ const C = {            // CAPE SIM (WORLD PX; SEE ALSO anti-curl BLOCK)
 };
 const L = {            // LOOK
   w1: 53, taper: 1.0, ripple: 0.06, split: 0.55,
-  top: "#1d54ed", bottom: "#1a4fda", rim: "#1078f0", dark: "#1040b8",
+  top: "#0000FF", bottom: "#0000FF", rim: "#0000FF", dark: "#0000FF",   // SOLID BLUE WHILE TUNING THE SIM (DISSOLVE GLOW COLOURS BELOW STAY)
   rimW: 3, folds: true, layer: "behind",
   // GHOST TAIL (DISSOLVE). disStart: 0 = ROOT, 1 = HEM. disAmt: HOW GONE THE HEM GETS (1 = FULLY).
   dis: true, disStart: 0.62, disAmt: 0.9, disCell: 14, disEdge: 0.22, disFlow: 70, disSpeed: 0.5, disFade: 0.3, disGlow: 1.0,
@@ -282,7 +284,7 @@ function update(dt) {
       const f = B.friction * dt; blob.vx = Math.abs(blob.vx) <= f ? 0 : blob.vx - Math.sign(blob.vx) * f;
     } else blob.vx *= Math.max(0, 1 - 0.4 * dt);
     if (inp.jumpPressed && blob.grounded) { blob.vy = -B.jumpV; blob.grounded = false; blob.sq = 0.26; }
-    if (!inp.jumpHeld && blob.vy < -300) blob.vy *= Math.max(0, 1 - 9 * dt); // RELEASE EARLY = SHORT HOP
+    if (B.shortHop && !inp.jumpHeld && blob.vy < -300) blob.vy *= Math.max(0, 1 - 9 * dt); // RELEASE EARLY = SHORT HOP
     blob.vy += B.gravity * dt;
     blob.x += blob.vx * dt; blob.y += blob.vy * dt;
     if (blob.y >= groundY) {
@@ -713,7 +715,7 @@ function dialog(title, text, onOk) {
 }
 
 // SETTINGS PERSISTENCE: localStorage IS A UI CONVENIENCE ONLY (IT CAN BE WIPED); THE LIBRARY IS THE REAL SAVE (library/capes/<name>.json)
-const SAVE_KEY = "oswCapeLab_v1";
+const SAVE_KEY = "oswCapeLab_v2";
 function settingsObject() { return { format: "osw-cape", version: 1, body: bodyId, B, C, L, PIN }; }
 function applySettings(o) { // ACCEPTS osw-cape FILES AND THE OLD COPY SETTINGS JSON ({B,C,L,PIN})
   if (!o || typeof o !== "object") return false;
@@ -928,9 +930,10 @@ function buildPanel() {
   s = section("Body");
   slider(s, B, "scale", "scale", 0.3, 1, 0.01);
   slider(s, B, "maxSpeed", "max speed", 200, 1200, 10);
-  slider(s, B, "dashMul", "dash multiplier", 1, 3, 0.05);
-  slider(s, B, "accel", "acceleration", 600, 8000, 50);
-  slider(s, B, "friction", "friction", 500, 8000, 50);
+  slider(s, B, "dashMul", "dash multiplier", 1, 3, 0.01);
+  slider(s, B, "accel", "acceleration", 600, 30000, 50);
+  slider(s, B, "friction", "friction", 500, 30000, 50);
+  check(s, B, "shortHop", "short hop (release jump early)");
   slider(s, B, "airCtl", "air control", 0, 1, 0.05);
   slider(s, B, "jumpV", "jump speed", 400, 1600, 10);
   slider(s, B, "gravity", "body gravity", 1200, 6000, 50);
