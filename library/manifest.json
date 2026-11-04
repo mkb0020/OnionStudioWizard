@@ -7,9 +7,9 @@
       "type": "part",
       "name": "nova side calf",
       "file": "parts/nova_side_calf.png",
-      "w": 83,
-      "h": 183,
-      "bytes": 12370,
+      "w": 84,
+      "h": 182,
+      "bytes": 9713,
       "tags": [
         "nova",
         "side"
@@ -23,29 +23,29 @@
           800
         ],
         "origin": [
-          360,
-          581
+          359,
+          582
         ],
         "slot": "calf",
         "view": "side",
         "pivots": {
           "ankle": [
-            385.5,
-            730
+            395,
+            737.5
           ]
         }
       },
       "created": "2026-10-26T01:44:58.672Z",
-      "updated": "2026-10-29T20:56:39.362Z"
+      "updated": "2026-11-04T09:21:48.172Z"
     },
     {
       "id": "nova_side_chest",
       "type": "part",
       "name": "nova side chest",
       "file": "parts/nova_side_chest.png",
-      "w": 64,
-      "h": 92,
-      "bytes": 3596,
+      "w": 68,
+      "h": 86,
+      "bytes": 7039,
       "tags": [
         "nova",
         "side"
@@ -59,49 +59,49 @@
           800
         ],
         "origin": [
-          372,
-          317
+          370,
+          320
         ],
         "slot": "chest",
         "view": "side",
         "pivots": {
           "rib": [
-            404,
-            399.5
+            392.5,
+            383.5
           ],
           "shoulder": [
-            392,
-            332
+            393,
+            336
           ],
           "neck": [
-            387.5,
-            324.5
+            387,
+            333
           ],
           "neckFrom": [
-            392,
-            332
+            383,
+            336
           ],
           "strapTop": [
-            417,
-            342.5
+            415.5,
+            333.5
           ],
           "stomachTo": [
-            407.5,
-            371.5
+            416,
+            361
           ]
         }
       },
       "created": "2026-10-26T01:44:58.207Z",
-      "updated": "2026-10-29T20:56:39.198Z"
+      "updated": "2026-11-04T09:21:47.341Z"
     },
     {
       "id": "nova_side_far_hand",
       "type": "part",
       "name": "nova side far hand",
       "file": "parts/nova_side_far_hand.png",
-      "w": 41,
-      "h": 43,
-      "bytes": 3549,
+      "w": 43,
+      "h": 48,
+      "bytes": 3571,
       "tags": [
         "nova",
         "side"
@@ -115,14 +115,14 @@
           800
         ],
         "origin": [
-          405,
-          464
+          411,
+          473
         ],
         "slot": "handL",
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.523Z",
-      "updated": "2026-10-29T20:40:02.272Z"
+      "updated": "2026-11-04T09:21:47.892Z"
     },
     {
       "id": "nova_side_filler_disc",
@@ -130,8 +130,8 @@
       "name": "nova side filler disc",
       "file": "parts/nova_side_filler_disc.png",
       "w": 93,
-      "h": 94,
-      "bytes": 3438,
+      "h": 95,
+      "bytes": 3631,
       "tags": [
         "nova",
         "side"
@@ -152,16 +152,16 @@
         "view": "side"
       },
       "created": "2026-10-28T23:43:27.974Z",
-      "updated": "2026-10-29T20:40:02.813Z"
+      "updated": "2026-11-04T09:21:48.406Z"
     },
     {
       "id": "nova_side_head",
       "type": "part",
       "name": "nova side head",
       "file": "parts/nova_side_head.png",
-      "w": 173,
-      "h": 203,
-      "bytes": 18739,
+      "w": 143,
+      "h": 525,
+      "bytes": 12868,
       "tags": [
         "nova",
         "side"
@@ -175,15 +175,15 @@
           800
         ],
         "origin": [
-          320,
-          196
+          315,
+          199
         ],
         "slot": "head",
         "view": "side",
         "pivots": {
           "headPivot": [
-            395,
-            288
+            401.5,
+            296.5
           ],
           "neckTo": [
             394,
@@ -192,16 +192,16 @@
         }
       },
       "created": "2026-10-26T01:44:58.123Z",
-      "updated": "2026-10-29T20:56:39.230Z"
+      "updated": "2026-11-04T09:21:47.228Z"
     },
     {
       "id": "nova_side_lower_arm",
       "type": "part",
       "name": "nova side lower arm",
       "file": "parts/nova_side_lower_arm.png",
-      "w": 39,
-      "h": 82,
-      "bytes": 1210,
+      "w": 50,
+      "h": 91,
+      "bytes": 4362,
       "tags": [
         "nova",
         "side"
@@ -215,29 +215,29 @@
           800
         ],
         "origin": [
-          391,
+          390,
           402
         ],
         "slot": "forearm",
         "view": "side",
         "pivots": {
           "wrist": [
-            419.5,
-            473.5
+            423.5,
+            485
           ]
         }
       },
       "created": "2026-10-26T01:44:58.392Z",
-      "updated": "2026-10-29T20:56:39.298Z"
+      "updated": "2026-11-04T09:21:47.673Z"
     },
     {
       "id": "nova_side_near_hand",
       "type": "part",
       "name": "nova side near hand",
       "file": "parts/nova_side_near_hand.png",
-      "w": 45,
-      "h": 58,
-      "bytes": 4664,
+      "w": 46,
+      "h": 48,
+      "bytes": 3629,
       "tags": [
         "nova",
         "side"
@@ -251,23 +251,23 @@
           800
         ],
         "origin": [
-          402,
-          448
+          408,
+          471
         ],
         "slot": "handR",
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.445Z",
-      "updated": "2026-10-29T20:40:02.116Z"
+      "updated": "2026-11-04T09:21:47.782Z"
     },
     {
       "id": "nova_side_pelvis",
       "type": "part",
       "name": "nova side pelvis",
       "file": "parts/nova_side_pelvis.png",
-      "w": 65,
-      "h": 84,
-      "bytes": 2344,
+      "w": 121,
+      "h": 392,
+      "bytes": 8808,
       "tags": [
         "nova",
         "side"
@@ -282,36 +282,36 @@
         ],
         "origin": [
           362,
-          411
+          407
         ],
         "slot": "pelvis",
         "view": "side",
         "pivots": {
           "hip": [
-            399,
-            465
+            388.5,
+            460.5
           ],
           "bagHip": [
-            387.5,
-            449
+            384.5,
+            438
           ],
           "stomachFrom": [
-            403,
+            398,
             434.5
           ]
         }
       },
       "created": "2026-10-26T01:44:58.260Z",
-      "updated": "2026-10-29T20:56:39.161Z"
+      "updated": "2026-11-04T09:21:47.447Z"
     },
     {
       "id": "nova_side_shoe",
       "type": "part",
       "name": "nova side shoe",
       "file": "parts/nova_side_shoe.png",
-      "w": 91,
-      "h": 92,
-      "bytes": 10710,
+      "w": 89,
+      "h": 70,
+      "bytes": 8350,
       "tags": [
         "nova",
         "side"
@@ -325,23 +325,23 @@
           800
         ],
         "origin": [
-          359,
-          706
+          363,
+          726
         ],
         "slot": "shoe",
         "view": "side"
       },
       "created": "2026-10-26T01:44:58.761Z",
-      "updated": "2026-10-29T20:40:02.692Z"
+      "updated": "2026-11-04T09:21:48.288Z"
     },
     {
       "id": "nova_side_thigh",
       "type": "part",
       "name": "nova side thigh",
       "file": "parts/nova_side_thigh.png",
-      "w": 65,
-      "h": 162,
-      "bytes": 4422,
+      "w": 62,
+      "h": 155,
+      "bytes": 9172,
       "tags": [
         "nova",
         "side"
@@ -355,20 +355,20 @@
           800
         ],
         "origin": [
-          362,
-          438
+          367,
+          445
         ],
         "slot": "thigh",
         "view": "side",
         "pivots": {
           "knee": [
-            394.5,
-            588
+            390,
+            588.5
           ]
         }
       },
       "created": "2026-10-26T01:44:58.579Z",
-      "updated": "2026-10-29T20:56:39.330Z"
+      "updated": "2026-11-04T09:21:48.021Z"
     },
     {
       "id": "nova_side_upper_arm",
@@ -376,8 +376,8 @@
       "name": "nova side upper arm",
       "file": "parts/nova_side_upper_arm.png",
       "w": 35,
-      "h": 103,
-      "bytes": 2896,
+      "h": 99,
+      "bytes": 4916,
       "tags": [
         "nova",
         "side"
@@ -392,19 +392,19 @@
         ],
         "origin": [
           379,
-          322
+          326
         ],
         "slot": "upperArm",
         "view": "side",
         "pivots": {
           "elbow": [
-            404.5,
-            411
+            402.5,
+            414
           ]
         }
       },
       "created": "2026-10-26T01:44:58.317Z",
-      "updated": "2026-10-29T20:56:39.264Z"
+      "updated": "2026-11-04T09:21:47.565Z"
     },
     {
       "id": "nova_side_bag",
@@ -443,7 +443,7 @@
       "file": "characters/nova/views/right.png",
       "w": 800,
       "h": 800,
-      "bytes": 68434,
+      "bytes": 61158,
       "tags": [],
       "meta": {
         "character": "nova",
@@ -457,7 +457,7 @@
         "note": "full mannequin, facing right"
       },
       "created": "2026-10-26T01:44:58.000Z",
-      "updated": "2026-10-29T20:40:01.293Z",
+      "updated": "2026-11-04T09:21:47.104Z",
       "character": "nova",
       "view": "right"
     }

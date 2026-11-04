@@ -101,53 +101,129 @@
   },
   "updated": "2026-10-26T02:42:15.669Z",
   "cape": {
-    "version": 1,
+    "version": 2,
     "view": "right",
     "pins": {
-      "ax": 347,
-      "ay": 322.5,
-      "bx": 412,
-      "by": 322.5
+      "ax": 206,
+      "ay": 163,
+      "bx": 239,
+      "by": 163
     },
     "colliders": [
       {
-        "x": 392,
-        "y": 265,
-        "r": 60
+        "x": 228,
+        "y": 116,
+        "r": 36
       },
       {
-        "x": 403,
-        "y": 372,
-        "r": 38
+        "x": 234,
+        "y": 188,
+        "r": 19
       },
       {
-        "x": 398,
-        "y": 452,
-        "r": 30
+        "x": 232,
+        "y": 228,
+        "r": 15
       },
       {
-        "x": 396,
-        "y": 540,
-        "r": 26
+        "x": 231,
+        "y": 272,
+        "r": 13
       },
       {
-        "x": 392,
-        "y": 610,
-        "r": 22
+        "x": 229,
+        "y": 307,
+        "r": 11
       }
     ],
     "defaults": {
-      "scale": 0.55,
-      "segLen": 16,
+      "scale": 0.5,
+      "segLen": 7.5,
       "segments": 12,
-      "w1": 117,
+      "w1": 53,
       "hangDeg": 17
     },
     "play": {
       "ref": {
-        "x": 368.5,
-        "y": 369
+        "x": 222.5,
+        "y": 163
       }
+    },
+    "space": "sprite",
+    "sim": {
+      "scale": 0.5,
+      "C": {
+        "segments": 12,
+        "segLen": 7.5,
+        "gravity": 1800,
+        "drag": 1.2,
+        "nDrag": 9,
+        "tDrag": 0.4,
+        "lift": 0.55,
+        "flutter": 260,
+        "backBias": 0,
+        "wind": 0,
+        "hangDeg": 17,
+        "sag": 0.55,
+        "vRef": 500,
+        "restPull": 45,
+        "iterations": 8,
+        "bend": 0.35,
+        "step": 0.008333333333333333,
+        "maxSteps": 6,
+        "spanMin": 0.5,
+        "maxBendDeg": 28,
+        "collide": true,
+        "thick": 6,
+        "turnMode": "slide",
+        "turnTime": 0.16,
+        "groundPad": 14,
+        "groundFric": 0.35,
+        "attach": "two",
+        "shear": 1,
+        "rung": 0.3
+      },
+      "L": {
+        "w1": 53,
+        "taper": 1,
+        "ripple": 0.06,
+        "split": 0.55,
+        "top": "#0000FF",
+        "bottom": "#0000FF",
+        "rim": "#0000FF",
+        "dark": "#0000FF",
+        "rimW": 3,
+        "folds": true,
+        "layer": "behind",
+        "dis": true,
+        "disStart": 0.62,
+        "disAmt": 0.9,
+        "disCell": 14,
+        "disEdge": 0.22,
+        "disFlow": 70,
+        "disSpeed": 0.5,
+        "disFade": 0.3,
+        "disGlow": 1,
+        "mode": "tendrils",
+        "tCount": 5,
+        "tSplit": 0.4,
+        "tAmp": 28,
+        "tSpeed": 5,
+        "tSpread": 0.45,
+        "tTaper": 0.8,
+        "tOverlap": 0.35,
+        "tLenVar": 0.3,
+        "tWaves": 1.25,
+        "tIdle": 0.45,
+        "tGain": 0.9,
+        "disSparks": 0.3,
+        "disColA": "#c8fcff",
+        "disColB": "#dc4ce8"
+      }
+    },
+    "art": {
+      "px": 235,
+      "py": 399
     }
   }
 }

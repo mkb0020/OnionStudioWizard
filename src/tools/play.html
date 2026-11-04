@@ -681,12 +681,12 @@ function stepDissolve(dt) {
    IDLE, THE SPELL CAST AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
    EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
 const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
-const CLOAK_POSE = { run: { x: 145, y: 20, rot: 0 } };
+const CLOAK_POSE = { run: { x: 135, y: 20, rot: 0 } };
 const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
 const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'wallSlide', 'doubleJump']);
 const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
 const CAPE_SPRING = { stiffness: 150, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
-const CAPE_ROOT_OFFSET = { x: -110, y: -180 };   // THE RUN POSE'S ROOT = CLOAK_POSE.run + THIS (SPRITE ART PX)
+const CAPE_ROOT_OFFSET = { x: -110, y: -200 };   // THE RUN POSE'S ROOT = CLOAK_POSE.run + THIS (SPRITE ART PX)
 /* THE SIM SETTINGS. CAPE_SIM_DEFAULT = CAPE LAB'S DEFAULTS FOR NOVA2 (WHICH IS AT PLAY'S SCALE, SO THEY ARE PLAY WORLD PX AS THEY ARE) + THE LOOK THIS CAPE ALWAYS HAD.
    A CHARACTER SHEET'S cape.sim (WRITTEN BY CAPE LAB'S "SAVE CAPE TO CHARACTER") REPLACES THEM. C = THE SIM, L = THE LOOK (SEE CAPE LAB FOR WHAT EACH ONE DOES). */
 const CAPE_SIM_DEFAULT = {
