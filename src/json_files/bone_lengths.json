@@ -1,39 +1,39 @@
 {
   "meta": {
-    "description": "Bone lengths measured from the redrawn side-view character art (assets/images/nova/mannequins/sideView.png), for use with gait_angles.json.",
+    "description": "Bone lengths measured from the redrawn side-view character art (assets/images/nova/mannequins/sideView.png, redrawn on 1000x1000 frames Nov 4 2026), for use with gait_angles.json.",
     "units": "px",
-    "canvas": { "width": 800, "height": 800 },
-    "method": "Each length is the straight-line distance between two art pivots (the pivots block of rig_config.json, positions in the 800x800 art frame). The rig recomputes these from the pivots at load, so the two files stay in step as long as both are updated together.",
+    "canvas": { "width": 1000, "height": 1000 },
+    "method": "Each length is the straight-line distance between two art pivots (the pivots block of rig_config.json, positions in the 1000x1000 art frame). The rig recomputes these from the pivots at load, so the two files stay in step as long as both are updated together.",
     "symmetry": "Left and right bones are identical. One value is stored per bone.",
     "notes": "Lengths come from the side-view art in its standing pose. Torso values are the hip-to-waist and waist-to-neck distances used by the rig (neckToChest includes the 12 px from shoulder to chest top)."
   },
   "bones": {
-    "thigh": { "length": 126.2, "from": "hip", "to": "knee", "angleKey": "thigh" },
-    "shin": { "length": 132.1, "from": "knee", "to": "ankle", "angleKey": "shin" },
-    "upperArm": { "length": 75.3, "from": "shoulder", "to": "elbow", "angleKey": "upperArm" },
-    "forearm": { "length": 63.0, "from": "elbow", "to": "wrist", "angleKey": "forearm" }
+    "thigh": { "length": 134.1, "from": "hip", "to": "knee", "angleKey": "thigh" },
+    "shin": { "length": 192.0, "from": "knee", "to": "ankle", "angleKey": "shin" },
+    "upperArm": { "length": 80.2, "from": "shoulder", "to": "elbow", "angleKey": "upperArm" },
+    "forearm": { "length": 98.0, "from": "elbow", "to": "wrist", "angleKey": "forearm" }
   },
   "derived": {
-    "legLength": 258.3,
-    "armLength": 138.3,
-    "shinToThighRatio": 1.05,
-    "forearmToUpperArmRatio": 0.84
+    "legLength": 326.1,
+    "armLength": 178.2,
+    "shinToThighRatio": 1.43,
+    "forearmToUpperArmRatio": 1.22
   },
   "torso": {
-    "neckToChest": 85.0,
-    "chestToPelvis": 61.0,
+    "neckToChest": 96.1,
+    "chestToPelvis": 91.9,
     "shoulderToNeck": 12.0
   },
   "referenceJoints": {
-    "note": "Side-view joint centres of the standing art, in px in the 800x800 frame (same numbers as rig_config.json pivots).",
-    "neck": { "x": 395.5, "y": 326 },
-    "rib": { "x": 397, "y": 411 },
-    "shoulder": { "x": 395.5, "y": 338 },
-    "elbow": { "x": 402, "y": 413 },
-    "wrist": { "x": 419.5, "y": 473.5 },
-    "hip": { "x": 398, "y": 472 },
-    "knee": { "x": 391.5, "y": 598 },
-    "ankle": { "x": 385.5, "y": 730 },
-    "headPivot": { "x": 397, "y": 289 }
+    "note": "Side-view joint centres of the standing art, in px in the 1000x1000 frame (same numbers as rig_config.json pivots).",
+    "neck": { "x": 479, "y": 406.5 },
+    "rib": { "x": 524.5, "y": 491 },
+    "shoulder": { "x": 484.5, "y": 417 },
+    "elbow": { "x": 470.5, "y": 496 },
+    "wrist": { "x": 469.5, "y": 594 },
+    "hip": { "x": 511.5, "y": 582 },
+    "knee": { "x": 494.5, "y": 715 },
+    "ankle": { "x": 474.5, "y": 906 },
+    "headPivot": { "x": 474.5, "y": 352 }
   }
 }

@@ -41,26 +41,26 @@
    ====================================================================== */
 const R2D = Math.PI / 180, FPS = 24;
 /* ======================= CHARACTER ART =======================
-   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of twelve 800x800 frames (9600x800): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
-   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe, 11 blue filler disc (not a rig part yet: sliced into the library for the PLAY cape to fill gaps). ART_FRAME maps each part name to its frame.
-   (The bag frame was removed Oct 28 2026: the bag comes from accessories.png.)
+   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of eleven 1000x1000 frames (11000x1000; the first sheet was twelve 800x800 frames): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
+   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe. ART_FRAME maps each part name to its frame.
+   (The bag frame was removed Oct 28 2026: the bag comes from accessories.png. The blue filler disc frame was removed Nov 4 2026 with the 1000px redraw: draw it in code if it is still needed.)
    The page loads that file on start (so redrawing the sheet updates the rig); it must be served over http.
-   Pivots are positions inside the 800x800 frame, measured from the mannequin's gray joint circles; the rig maps each
+   Pivots are positions inside the 1000x1000 frame (FRAME), taken from the green joint dots on the redrawn art; the rig maps each
    part's own pivot-to-pivot axis onto the matching skeleton bone (rotating and stretching it along the bone). */
-const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=9600;   // frame 0 of this sheet is the full mannequin
+const FRAME=1000, SHEET_FRAMES=11;   // art frame size in px, and frames per sheet
+const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=FRAME*SHEET_FRAMES;   // frame 0 of this sheet is the full mannequin
 const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
 const ART_FRAME={"head": 1, "chest": 2, "pelvis": 3, "upperArm": 4, "forearm": 5, "handR": 6, "handL": 7, "thigh": 8, "calf": 9, "shoe": 10};   // frame index of each part in the sheet
-const ART_BOX={"head": [319, 196, 140, 167], "chest": [370, 315, 68, 101], "pelvis": [360, 394, 72, 106], "upperArm": [377, 320, 39, 107], "forearm": [389, 400, 43, 86], "handR": [402, 451, 47, 56], "handL": [403, 462, 45, 47], "thigh": [368, 441, 61, 166], "calf": [362, 578, 50, 166], "shoe": [360, 717, 92, 79]};   // [x,y,w,h] crop of each frame (bbox + 4px margin)
-const FILLER_BOX=[342,305,106,108], FILLER_C=[395,359];   // frame 11 of the sheet: blue disc (bbox + 4px) and its centre; drawn UNDER every part, anchored to the chest, so the PLAY cape never shows a gap
+const ART_BOX={"head": [393, 234, 181, 223], "chest": [468, 397, 100, 110], "pelvis": [467, 510, 93, 102], "upperArm": [454, 397, 51, 115], "forearm": [444, 485, 48, 116], "handR": [448, 572, 51, 63], "handL": [448, 572, 51, 63], "thigh": [467, 557, 82, 187], "calf": [442, 699, 73, 220], "shoe": [445, 889, 120, 91]};   // [x,y,w,h] crop of each frame (bbox + 4px margin; stray specks under 30px ignored)
 const ART_PIV={
-  hip:[398,472], knee:[391.5,598], ankle:[385.5,730],        // hip = centre of the thigh's top cap; knee = centre of the calf's top cap (thigh bottom ends at it); ankle = boot pivot, mid-cuff above the boot dome (sole 61px below, heel 22px behind; redrawn art, Oct 28 2026)
-  shoulder:[395.5,338], elbow:[402,413], wrist:[419.5,473.5],    // shoulder / elbow / wrist = centres of the round caps at the ends of the arm parts
-  rib:[397,411],                                                 // waist joint: on the hip->shoulder line, at the chest bottom
-  neck:[395.5,326], headPivot:[397,289],                         // neck = 12px above the shoulder along the chest; head turns about the skull base
-  neckFrom:[393,328], neckTo:[397,282],                          // neck line: inside the chest top / inside the skull
-  stomachFrom:[403.5,424], stomachTo:[406,385],                  // stomach fill: just inside the pelvis top / just inside the chest bottom (on the torso's centre line)
-  bagHip:[388.5,438.5],                                          // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
-  strapTop:[417,342]                                             // crossbody strap: the apex over the far shoulder (chest art)
+  hip:[511.5,582], knee:[494.5,715], ankle:[474.5,906],        // hip = centre of the thigh's top cap; knee = centre of the calf's top cap (thigh bottom ends at it); ankle = boot pivot, mid-cuff above the boot dome (sole 69.5px below, heel 24.5px behind; 1000px redraw, Nov 4 2026)
+  shoulder:[484.5,417], elbow:[470.5,496], wrist:[469.5,594],    // shoulder / elbow / wrist = centres of the round caps at the ends of the arm parts
+  rib:[524.5,491],                                               // waist joint: the torso's centre line at the chest bottom (the redrawn torso curves, so it is NOT on the hip->shoulder line any more)
+  neck:[479,406.5], headPivot:[474.5,352],                       // neck = 12px above the shoulder along the rib->shoulder axis; head turns about the skull base
+  neckFrom:[480,408], neckTo:[476,346],                          // neck line: inside the chest top / inside the skull
+  stomachFrom:[520,530], stomachTo:[523,492],                    // stomach fill: just inside the pelvis top / just inside the chest bottom (on the torso's centre line)
+  bagHip:[494,540],                                              // crossbody bag: where its two strap loops hang on the near hip (pelvis art)
+  strapTop:[510,413]                                             // crossbody strap: the apex over the far shoulder (chest art)
 };
 /* Pivot edits made in the Pivots menu are remembered in this browser (localStorage). They are discarded automatically if the
    defaults change. The defaults come from json_files/rig_config.json ("pivots"); the block above holds the built-in defaults. */
@@ -99,12 +99,12 @@ async function loadData(){
 const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
   spPassing:1, spTakeoff:.7, spUp:.1, spContact:.35, spDown:.4,
   guides:false, joints:true, floor:true, scroll:1, zoom:1, lineW:6, tint:true,
-  filler:true, fillerScale:1, stomach:true, stomachWChest:44, stomachWPelvis:50, stomachColor:'#210250',
+  stomach:true, stomachWChest:45, stomachWPelvis:45, stomachColor:'#000000',
   bag:true, bagOverArm:false, bagScale:.5, bagSwing:1, bagSurge:.1, bagLean:.6, bagHold:1.2, bagLen:1, bagZ:.25, charmZ:.12,
   strap:true, strapW:10, strapSlack:.08, strapColor:'#37025a', strapEdge:'#170032' };
-/* Measured from the shoe frame of sideView.png (redrawn Oct 28 2026): sole 61px below the ankle pivot, heel back corner 22px behind it,
-   toe front corner 62px ahead (contact length 84, heel fraction .26). Bare mannequin foot (not re-measured, no bare foot in the sheet): sole 39px below, 90px long, heel .22. */
-const FOOT_PRESET={ boot:{soleOff:61,footLen:84,heelFrac:.26}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
+/* Measured from the shoe frame of sideView.png (redrawn on 1000px frames Nov 4 2026): sole 69.5px below the ankle pivot, heel back corner 24.5px behind it,
+   toe front corner 86.5px ahead (contact length 111, heel fraction .22). Bare mannequin foot (not re-measured, no bare foot in the sheet): sole 39px below, 90px long, heel .22. */
+const FOOT_PRESET={ boot:{soleOff:69.5,footLen:111,heelFrac:.22}, bare:{soleOff:39,footLen:90,heelFrac:.22} };
 const CYCLE_DEFAULTS = {
   run: { spineAngle:45, chestAngle:47, cycleSec:2,  airtime:15, twist:14, hipTwist:10, headBob:2,   headJut:3, neckAngle:44, ssAmt:1 },
   walk:{ spineAngle:84, chestAngle:86, cycleSec:1.1, airtime:0,  twist:8,  hipTwist:6,  headBob:1.5, headJut:1, neckAngle:6,  ssAmt:1 }
@@ -162,7 +162,7 @@ const fv=(t,k)=>((FGRIDS[footMode()][S.cycle][t]||{})[k])||0;
    used when the file is missing. "Export config" writes the live slider values in this format;
    "Import config" loads one without needing a server. Missing or invalid keys are skipped, so partial configs are fine. */
 const CFG_GROUPS={
-  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','filler','fillerScale','stomach','stomachWChest','stomachWPelvis','stomachColor'],
+  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','stomach','stomachWChest','stomachWPelvis','stomachColor'],
   motion:['range','lag','footLag'],
   poseSpeed:['spPassing','spTakeoff','spUp','spContact','spDown'],
   feet:['bootOn','soleOff','footLen','heelFrac'],
@@ -491,12 +491,11 @@ function drawLeg(l,col,far){
 }
 
 /* ---------- character art ---------- */
-function partSrc(p){return p.img?[p.img,0,0]:[PARTS._img,p.i*800+p.bx,p.by];}   // [image, sx, sy] of a part: its own library PNG, or its frame in the sheet (crop size is always p.bw x p.bh, drawn at p.bx,p.by)
+function partSrc(p){return p.img?[p.img,0,0]:[PARTS._img,p.i*FRAME+p.bx,p.by];}   // [image, sx, sy] of a part: its own library PNG, or its frame in the sheet (crop size is always p.bw x p.bh, drawn at p.bx,p.by)
 function buildParts(img,label){
   ART_NAMES.forEach((n,i)=>{
     const [bx,by,bw,bh]=ART_BOX[n]; PARTS[n]={i:ART_FRAME[n],bx,by,bw,bh};
   });
-  {const [bx,by,bw,bh]=FILLER_BOX; PARTS.filler=(img.naturalWidth>=9600)?{i:11,bx,by,bw,bh}:null;}
   PARTS._img=img; artLabel=label; partsReady=true; rebuildTints();
 }
 function rebuildTints(){   // far-side copies: darkened toward the background violet; alpha is preserved by source-atop
@@ -512,7 +511,7 @@ function loadArt(){
   return new Promise(res=>{
     const fail=m=>{ artLabel='not found'; showLoadError(new Error(m)); res(); };
     const im=new Image();
-    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===800){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be 9600x800 (twelve 800x800 frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
+    im.onload=()=>{ if(im.naturalWidth===SHEET_W&&im.naturalHeight===FRAME){buildParts(im,SHEET_URL);res();} else fail(SHEET_URL+' must be '+SHEET_W+'x'+FRAME+' ('+SHEET_FRAMES+' '+FRAME+'x'+FRAME+' frames), got '+im.naturalWidth+'x'+im.naturalHeight); };
     im.onerror=()=>fail('could not load '+SHEET_URL);
     im.src=SHEET_URL;
   });
@@ -530,9 +529,9 @@ function recomputeArt(){   // after any pivot change: new bone lengths + neck di
 
 /* ---------- OSW LIBRARY ART ----------
    Inside the Wizard the ART SOURCE menu can switch the ten body parts from the sheet to library parts (type part, meta.view 'side',
-   meta.slot = a name in ART_NAMES, grouped by meta.character). A library PNG is a tight crop drawn on an 800x800 canvas, so it is
+   meta.slot = a name in ART_NAMES, grouped by meta.character). A library PNG is a tight crop drawn on a 1000x1000 canvas (FRAME), so it is
    drawn at meta.origin and every pivot stays valid. A slot the library lacks keeps its sheet art.
-   PIVOT SIDECARS: pivots live in the part's manifest entry as meta.pivots = { pivotName: [x,y] } (800x800 art px, same space as ART_PIV).
+   PIVOT SIDECARS: pivots live in the part's manifest entry as meta.pivots = { pivotName: [x,y] } (1000x1000 art px, same space as ART_PIV).
    Each pivot is owned by ONE part, so two parts never disagree: a part owns the joint at its far end plus the attachment points drawn on it.
    Hands and shoe own none (they hang from the wrist / ankle). Edits in the pivot editor save to the sidecars 0.8 s after the last change. */
 const PIV_OWNER={pelvis:['hip','bagHip','stomachFrom'],chest:['rib','shoulder','neck','neckFrom','strapTop','stomachTo'],head:['headPivot','neckTo'],upperArm:['elbow'],forearm:['wrist'],thigh:['knee'],calf:['ankle']};
@@ -558,7 +557,7 @@ async function libLoad(slug){
   const parts=LIB.chars[slug]; if(!parts) throw new Error('NOT_FOUND: no side-view parts for '+slug);
   const next={}, notes=[];
   for(const s of ART_NAMES){const it=parts[s]; if(!it) continue; const m=it.meta||{};
-    if(m.canvas&&(m.canvas[0]!==800||m.canvas[1]!==800)){notes.push(s+' drawn on '+m.canvas.join('x')+', save it at 800');continue;}
+    if(m.canvas&&(m.canvas[0]!==FRAME||m.canvas[1]!==FRAME)){notes.push(s+' drawn on '+m.canvas.join('x')+', save it at '+FRAME);continue;}
     const o=Array.isArray(m.origin)?m.origin:[0,0], url=URL.createObjectURL(await OSWClient.library.readImage(it.id)), im=new Image();
     try{await new Promise((ok,no)=>{im.onload=ok;im.onerror=()=>no(new Error('BAD_DATA: could not decode '+it.id));im.src=url;});}finally{URL.revokeObjectURL(url);}
     next[s]={i:ART_FRAME[s],img:im,id:it.id,bx:o[0],by:o[1],bw:im.naturalWidth,bh:im.naturalHeight};
@@ -613,7 +612,7 @@ const PIV_INFO=[
  ['bagHip','Bag hang point','where the bag\'s strap loops hang on the near hip (the bag rotates about here; it stays on the pelvis art)'],['strapTop','Strap over shoulder','crossbody strap apex, on the chest art, over the far shoulder']];
 const PIV_COL={hip:'#cc0000',knee:'#cc0000',ankle:'#cc0000',shoulder:'#c71585',elbow:'#c71585',wrist:'#c71585',rib:'#830cde',neck:'#ff6200',headPivot:'#ff6200',neckFrom:'#2f9e2a',neckTo:'#2f9e2a',stomachFrom:'#fecd39',stomachTo:'#fecd39',bagHip:'#0092b3',strapTop:'#764ba2'};
 const PIV_LINES=[['hip','knee'],['knee','ankle'],['shoulder','elbow'],['elbow','wrist'],['hip','rib'],['rib','shoulder'],['neck','headPivot'],['neckFrom','neckTo'],['stomachFrom','stomachTo']];
-const E={z:1,cx:400,cy:420,sel:null,hover:null,drag:null,pan:null,ghost:true,grid:true,ghostImg:null,map:{s:1,tx:0,ty:0},inputs:{},rows:{},txt:null,editBtn:null};
+const E={z:1,cx:FRAME/2,cy:FRAME*.52,sel:null,hover:null,drag:null,pan:null,ghost:true,grid:true,ghostImg:null,map:{s:1,tx:0,ty:0},inputs:{},rows:{},txt:null,editBtn:null};
 function pivSave(){if(LIB.on){libSaveSoon();return;}   // library art: pivots go to the part sidecars, not this browser's localStorage
   try{localStorage.setItem(PIV_KEY,JSON.stringify({base:PIV_DEFAULT,cur:ART_PIV}));}catch(e){}}
 const pivF=v=>+(+v).toFixed(2);
@@ -663,25 +662,25 @@ function buildPivotPanel(pn){
   b2.append(cp,rs);if(libOK())b2.append(sv);pn.appendChild(b2);
   const tx=document.createElement('textarea');tx.className='pvtxt';tx.readOnly=true;tx.spellcheck=false;pn.appendChild(tx);E.txt=tx;
   const nt=document.createElement('div');nt.className='note';
-  nt.textContent='Pivots are positions in the 800×800 art frame (y down). The pivot is the point on a drawing that lands on the joint, so raising x by 5 slides the art 5px left. Bone lengths come from these points, so moving a joint also changes bone length. Edits apply live and are remembered in this browser; paste the copied block over ART_PIV in the file to make them permanent. With library art selected they are saved into the library entries of the parts instead (meta.pivots). In the editor: drag a crosshair, arrow keys nudge 0.5px (Shift 2px, Alt 0.1px), wheel zooms, drag the background to pan.';
+  nt.textContent='Pivots are positions in the 1000×1000 art frame (y down). The pivot is the point on a drawing that lands on the joint, so raising x by 5 slides the art 5px left. Bone lengths come from these points, so moving a joint also changes bone length. Edits apply live and are remembered in this browser; paste the copied block over ART_PIV in the file to make them permanent. With library art selected they are saved into the library entries of the parts instead (meta.pivots). In the editor: drag a crosshair, arrow keys nudge 0.5px (Shift 2px, Alt 0.1px), wheel zooms, drag the background to pan.';
   pn.appendChild(nt);
 }
-function loadGhost(){const im=new Image();im.onload=()=>{if(im.naturalWidth===SHEET_W){const c=document.createElement('canvas');c.width=c.height=800;c.getContext('2d').drawImage(im,0,0,800,800,0,0,800,800);E.ghostImg=c;}};im.src=SHEET_URL;}
+function loadGhost(){const im=new Image();im.onload=()=>{if(im.naturalWidth===SHEET_W){const c=document.createElement('canvas');c.width=c.height=FRAME;c.getContext('2d').drawImage(im,0,0,FRAME,FRAME,0,0,FRAME,FRAME);E.ghostImg=c;}};im.src=SHEET_URL;}
 function drawPivotEditor(r){
-  const barH=40, availH=H-barH, s=(availH-30)/780*E.z, tx=W/2-E.cx*s, ty=barH+availH/2-E.cy*s;
+  const barH=40, availH=H-barH, s=(availH-30)/(FRAME-20)*E.z, tx=W/2-E.cx*s, ty=barH+availH/2-E.cy*s;
   E.map={s,tx,ty,barH,availH};
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.setTransform(s*DPR,0,0,s*DPR,tx*DPR,ty*DPR);
-  ctx.fillStyle='#C4C3D0';ctx.fillRect(0,0,800,800);
+  ctx.fillStyle='#C4C3D0';ctx.fillRect(0,0,FRAME,FRAME);
   if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','upperArm','forearm','handL','handR']){
     const p=PARTS[n], [im,sx,sy]=partSrc(p); ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
-  if(E.ghost&&E.ghostImg){ctx.globalAlpha=.5;ctx.drawImage(E.ghostImg,0,0,800,800);ctx.globalAlpha=1;}
+  if(E.ghost&&E.ghostImg){ctx.globalAlpha=.5;ctx.drawImage(E.ghostImg,0,0,FRAME,FRAME);ctx.globalAlpha=1;}
   if(E.grid){
     ctx.lineWidth=1/s;
-    for(let g=0;g<=800;g+=50){ctx.strokeStyle=g%100===0?'rgba(23,0,50,.28)':'rgba(23,0,50,.12)';ctx.beginPath();ctx.moveTo(g,0);ctx.lineTo(g,800);ctx.moveTo(0,g);ctx.lineTo(800,g);ctx.stroke();}
+    for(let g=0;g<=FRAME;g+=50){ctx.strokeStyle=g%100===0?'rgba(23,0,50,.28)':'rgba(23,0,50,.12)';ctx.beginPath();ctx.moveTo(g,0);ctx.lineTo(g,FRAME);ctx.moveTo(0,g);ctx.lineTo(FRAME,g);ctx.stroke();}
     ctx.fillStyle='rgba(23,0,50,.85)';ctx.font=(10/s)+'px Consolas,monospace';
     const vx=Math.max(0,-tx/s), vy=Math.max(0,(barH-ty)/s);
-    for(let g=0;g<=800;g+=100){ctx.fillText(g,g+2/s,vy+11/s);ctx.fillText(g,vx+3/s,g-2/s);}
+    for(let g=0;g<=FRAME;g+=100){ctx.fillText(g,g+2/s,vy+11/s);ctx.fillText(g,vx+3/s,g-2/s);}
   }
   ctx.lineWidth=1.5/s;ctx.strokeStyle='rgba(23,0,50,.6)';ctx.setLineDash([4/s,3/s]);
   PIV_LINES.forEach(([a,b])=>{ctx.beginPath();ctx.moveTo(ART_PIV[a][0],ART_PIV[a][1]);ctx.lineTo(ART_PIV[b][0],ART_PIV[b][1]);ctx.stroke();});
@@ -697,7 +696,7 @@ function drawPivotEditor(r){
       ctx.font=(11/s)+'px Consolas,monospace';ctx.lineJoin='round';ctx.lineWidth=3/s;ctx.strokeStyle='rgba(255,255,255,.9)';ctx.strokeText(t,x+(rr+8/s),y-(rr+3/s));
       ctx.fillStyle=c;ctx.fillText(t,x+(rr+8/s),y-(rr+3/s));}
   });
-  ctx.strokeStyle='rgba(23,0,50,.8)';ctx.lineWidth=2/s;ctx.strokeRect(0,0,800,800);
+  ctx.strokeStyle='rgba(23,0,50,.8)';ctx.lineWidth=2/s;ctx.strokeRect(0,0,FRAME,FRAME);
   /* live preview of the animated rig, so a pivot change can be judged in motion */
   const iw=250, ih=330, ix=14, iy=H-ih-52, sp=.45;
   ctx.setTransform(DPR,0,0,DPR,0,0);ctx.save();
@@ -730,7 +729,7 @@ cv.addEventListener('pointerup',pivEnd);cv.addEventListener('pointercancel',pivE
 cv.addEventListener('wheel',ev=>{
   if(!S.edit) return; ev.preventDefault(); const q=pivPoint(ev), m=E.map;
   E.z=Math.min(8,Math.max(.4,E.z*Math.exp(-ev.deltaY*.0015)));
-  const s2=(m.availH-30)/780*E.z; E.cx=q.ax-(q.px-W/2)/s2; E.cy=q.ay-(q.py-(m.barH+m.availH/2))/s2;
+  const s2=(m.availH-30)/(FRAME-20)*E.z; E.cx=q.ax-(q.px-W/2)/s2; E.cy=q.ay-(q.py-(m.barH+m.availH/2))/s2;
 },{passive:false});
 /* place one part: its pivot lands on atRig, it is rotated by rot (rad, clockwise) and stretched by s along axis (art-space unit vector) */
 function placePart(name,pivot,atRig,rot,s,axis,far){
@@ -794,9 +793,6 @@ function drawCharacter(r){
     limbPart('calf',V.knee,V.ankle,l.knee,l.ankle,far);
     limbPart('thigh',V.hip,V.knee,l.hip,l.knee,far);
   };
-  if(P.filler&&PARTS.filler){   // blue filler disc: first thing drawn, centred on a chest point so it follows the chest's rotation and stretch
-    const f=PARTS.filler, c=chestPt(r,FILLER_C), rot=limbRot(V.rib,V.shoulder,r.rib,add(r.shTop,[Math.cos(P.chestAngle*R2D),-Math.sin(P.chestAngle*R2D)],-12)), [im,sx,sy]=partSrc(f);
-    ctx.save();ctx.translate(c[0],c[1]);ctx.rotate(rot);ctx.scale(P.fillerScale,P.fillerScale);ctx.translate(-FILLER_C[0],-FILLER_C[1]);ctx.imageSmoothingEnabled=true;ctx.drawImage(im,sx,sy,f.bw,f.bh,f.bx,f.by,f.bw,f.bh);ctx.restore();}
   /* far arm (hand, forearm, upper arm) */
   {const a=A.L; const fr=Math.atan2(V.wrist[0]-V.elbow[0],V.wrist[1]-V.elbow[1])-Math.atan2(a.wrist[0]-a.elbow[0],a.wrist[1]-a.elbow[1]);
    placePart('handL',V.wrist,a.wrist,fr,1,null,false);
@@ -964,8 +960,6 @@ const MENUS={
   {k:'neckLen',l:'Neck length',min:8,max:50,step:1},
   {k:'headR',l:'Head radius',min:16,max:42,step:1},
   {head:'STOMACH'},
-  {k:'filler',l:'Blue filler disc (under body)',check:1},
-  {k:'fillerScale',l:'Filler disc size',min:.5,max:1.6,step:.01},
   {k:'stomach',l:'Stomach fill',check:1},
   {k:'stomachWChest',l:'Width at chest',min:10,max:90,step:1},
   {k:'stomachWPelvis',l:'Width at pelvis',min:10,max:90,step:1},
@@ -1236,7 +1230,7 @@ function buildFramesPanel(pn){
   const go=document.createElement('button');go.id='expGo';go.className='btn';go.textContent='⬇ Export frames (.zip)';go.onclick=e=>{exportFrames();e.target.blur();};
   const st=document.createElement('div');st.id='expStatus';st.className='note';
   const nt=document.createElement('div');nt.className='note';
-  nt.textContent='Exports the current cycle (Run or Walk) as numbered transparent PNGs on one fixed canvas, plus anchors.json (neck, hands, feet, foot contact). It uses everything as set here: bag, strap, boots, sliders and speed. Floor line and pelvis sit on the same pixel in every frame, so the frames stack as layers. Frames: blank = about 24 fps, rounded so every key pose lands exactly on a frame (the first frame is the first key pose). Scale is a whole number of the 800 px art grid; pick 2× or more to paint over.';
+  nt.textContent='Exports the current cycle (Run or Walk) as numbered transparent PNGs on one fixed canvas, plus anchors.json (neck, hands, feet, foot contact). It uses everything as set here: bag, strap, boots, sliders and speed. Floor line and pelvis sit on the same pixel in every frame, so the frames stack as layers. Frames: blank = about 24 fps, rounded so every key pose lands exactly on a frame (the first frame is the first key pose). Scale is a whole number of the art grid; pick 2× or more to paint over.';
   pn.append(go,st,nt);
 }
 

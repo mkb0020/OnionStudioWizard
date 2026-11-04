@@ -625,7 +625,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <div class="onion-row" id="libViewRow"><span class="lbl4">VIEW</span>
           <select id="libView" style="flex:1;min-width:0"><option value="left">left</option><option value="left-front">left-front</option><option value="front">front</option><option value="right-front">right-front</option><option value="right">right</option><option value="right-back">right-back</option><option value="back">back</option><option value="left-back">left-back</option></select></div>
         <div class="onion-row"><span class="lbl4">SIZE</span>
-          <input type="number" id="libSize" value="800" min="16" max="1000" step="16"><span class="unit">px</span>
+          <input type="number" id="libSize" value="1000" min="16" max="1000" step="16"><span class="unit">px</span>
           <button class="tgl on" id="libCrop" style="width:auto;flex:1" title="Trim empty space around the art (position is remembered)">CROP</button></div>
         <button class="btn" id="libSaveBtn" style="width:100%">SAVE TO LIBRARY</button>
         <p class="note" id="libInfo" style="margin-top:6px"></p>
@@ -645,8 +645,8 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <div class="libhr"></div>
         <h2>Side-view sheet <span class="sub">assets/images/nova/mannequins/sideView.png</span></h2>
         <div class="onion-row"><span class="lbl4">CHAR</span><input type="text" id="pmChar" class="libtxt" maxlength="40" value="nova">
-          <button class="btn sm" id="pmSheetBtn" title="Slice the 12-frame sheet into library parts and the full right-facing view">SLICE INTO LIBRARY</button></div>
-        <p class="note">Saves each part cropped, with its position on the 800&times;800 canvas, so it lands where it was drawn. Running it again overwrites the same items.</p>
+          <button class="btn sm" id="pmSheetBtn" title="Slice the 11-frame sheet into library parts and the full right-facing view">SLICE INTO LIBRARY</button></div>
+        <p class="note">Saves each part cropped, with its position on the 1000&times;1000 canvas, so it lands where it was drawn. Running it again overwrites the same items.</p>
       </div>
   </div>
 
@@ -4441,11 +4441,11 @@ const Engine = (() => {
      OSW LIBRARY: SAVE TO LIBRARY (Export menu) + PARTS MENU
 
      Conventions (see BRIEFME.md):
-       - The drawing canvas is 1000x1000; rig art lives on an 800x800 canvas. Library art is saved at SIZE (default 800)
+       - The drawing canvas is 1000x1000 and so is the rig art frame (it was 800x800 before the Nov 4 2026 redraw). Library art is saved at SIZE (default 1000)
          so it is already the right scale and never needs redrawing.
        - Parts and accessories are cropped to their content. meta.canvas = [W,H] of the canvas they were drawn on and
          meta.origin = [x,y] of the crop inside it, so a part can be put back exactly where it was drawn and pivots
-         (measured in the 800x800 frame) stay valid. Adding one to a drawing scales that by project.width / canvas[0].
+         (measured in the 1000x1000 frame) stay valid. Adding one to a drawing scales that by project.width / canvas[0].
        - meta.slot = the Rig Lab part name (head, chest, pelvis, upperArm, forearm, handR, handL, thigh, calf, shoe).
        - Views are saved uncropped. The id is <character>.<view>; saving again overwrites that view.
      ===================================================================== */
@@ -4614,8 +4614,8 @@ const Engine = (() => {
   }
 
   /* ----- slice the side-view sheet into the library ----- */
-  const SHEET_URL = 'assets/images/nova/mannequins/sideView.png';
-  // Frame order of sideView.png (see BRIEFME.md). `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
+  const SHEET_URL = 'assets/images/nova/mannequins/sideView.png', SHEET_FR = 1000;   // frame size in px (must match FRAME in animatedRig.html)
+  // Frame order of sideView.png (see BRIEFME.md): eleven 1000x1000 frames. `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
   const SHEET_FRAMES = [
     { i: 0, type: 'view', view: 'right' },            // the full mannequin; it faces right (toe toward +x), like the rig
     { i: 1, type: 'part', label: 'head', slot: 'head' },
@@ -4627,9 +4627,8 @@ const Engine = (() => {
     { i: 7, type: 'part', label: 'far hand', slot: 'handL' },
     { i: 8, type: 'part', label: 'thigh', slot: 'thigh' },
     { i: 9, type: 'part', label: 'calf', slot: 'calf' },
-    { i: 10, type: 'part', label: 'shoe', slot: 'shoe' },
-    { i: 11, type: 'part', label: 'filler disc', slot: 'filler' }   // BLUE DISC UNDER THE BODY PARTS: FILLS GAPS BEHIND THE PLAY CAPE (EXPERIMENT)
-  ];   // THE BAG FRAME WAS REMOVED OCT 28 2026: THE BAG COMES FROM accessories.png
+    { i: 10, type: 'part', label: 'shoe', slot: 'shoe' }
+  ];   // THE BAG FRAME WAS REMOVED OCT 28 2026 (THE BAG COMES FROM accessories.png); THE FILLER DISC FRAME WAS REMOVED NOV 4 2026
   // RE-SAVING A PART REPLACES ITS META, SO CARRY OVER THE PIVOT SIDECAR RIG LAB WROTE (meta.pivots) OR IT WOULD BE LOST
   const keepPivots = async (meta, id) => { try { const ex = await OSWClient.library.get(id); if (ex && ex.meta && ex.meta.pivots) meta.pivots = ex.meta.pivots; } catch (e) { /* NEW ITEM */ } return meta; };
   const loadImg = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + url)); im.src = url; });
@@ -4641,11 +4640,11 @@ const Engine = (() => {
     let saved = 0;
     try {
       const sheet = await loadImg(SHEET_URL);
-      if (sheet.naturalWidth !== 9600 || sheet.naturalHeight !== 800) throw new Error(SHEET_URL + ' must be 9600×800 (twelve 800×800 frames), got ' + sheet.naturalWidth + '×' + sheet.naturalHeight);
+      if (sheet.naturalWidth !== SHEET_FR * SHEET_FRAMES.length || sheet.naturalHeight !== SHEET_FR) throw new Error(SHEET_URL + ' must be ' + SHEET_FR * SHEET_FRAMES.length + '×' + SHEET_FR + ' (' + SHEET_FRAMES.length + ' ' + SHEET_FR + '×' + SHEET_FR + ' frames), got ' + sheet.naturalWidth + '×' + sheet.naturalHeight);
       for (const f of SHEET_FRAMES) {
         setBusyMsg(`Slicing… ${++saved} / ${SHEET_FRAMES.length}`);
-        let cv = mkCv(800, 800); cv.getContext('2d').drawImage(sheet, f.i * 800, 0, 800, 800, 0, 0, 800, 800);
-        const meta = { character: ch, source: 'sideView.png', frame: f.i, canvas: [800, 800] };
+        let cv = mkCv(SHEET_FR, SHEET_FR); cv.getContext('2d').drawImage(sheet, f.i * SHEET_FR, 0, SHEET_FR, SHEET_FR, 0, 0, SHEET_FR, SHEET_FR);
+        const meta = { character: ch, source: 'sideView.png', frame: f.i, canvas: [SHEET_FR, SHEET_FR] };
         if (f.type === 'view') {
           meta.view = f.view; meta.note = 'full mannequin, facing right';
           await OSWClient.library.save({ type: 'view', name: f.view, character: ch, view: f.view, blob: await toBlob(cv), meta });

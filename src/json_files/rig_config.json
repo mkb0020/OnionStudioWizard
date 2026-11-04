@@ -14,16 +14,14 @@
       "waistTrim": 8,
       "pelvisTilt": 0.75,
       "headFollow": 0.3,
-      "filler": false,
-      "fillerScale": 0.89,
       "stomach": true,
-      "stomachWChest": 38,
-      "stomachWPelvis": 36,
-      "stomachColor": "#1c0142"
+      "stomachWChest": 45,
+      "stomachWPelvis": 45,
+      "stomachColor": "#000000"
     },
     "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
     "poseSpeed": { "spPassing": 1.2, "spTakeoff": 0.6, "spUp": 0, "spContact": 0.35, "spDown": 0.4 },
-    "feet": { "bootOn": true, "soleOff": 59.6, "footLen": 10, "heelFrac": 0.09 },
+    "feet": { "bootOn": true, "soleOff": 69.5, "footLen": 10, "heelFrac": 0.09 },
     "art": { "art": true, "skel": false, "farTint": 0.6, "nearLegOver": false },
     "view": {
       "bgLight": true,
@@ -34,7 +32,7 @@
       "joints": true,
       "floor": true,
       "scroll": 1,
-      "zoom": 1.25,
+      "zoom": 1,
       "lineW": 6,
       "tint": true
     },
@@ -95,7 +93,7 @@
     }
   },
   "footPresets": {
-    "boot": { "soleOff": 61, "footLen": 84, "heelFrac": 0.26 },
+    "boot": { "soleOff": 69.5, "footLen": 111, "heelFrac": 0.22 },
     "bare": { "soleOff": 39, "footLen": 90, "heelFrac": 0.22 }
   },
   "squashStretch": {
@@ -143,20 +141,20 @@
     }
   },
   "pivots": {
-    "hip": [388.5, 460.5],
-    "knee": [390, 588.5],
-    "ankle": [395, 737.5],
-    "shoulder": [393, 336],
-    "elbow": [402.5, 414],
-    "wrist": [423.5, 485],
-    "rib": [392.5, 383.5],
-    "neck": [387, 333],
-    "headPivot": [401.5, 296.5],
-    "neckFrom": [383, 336],
-    "neckTo": [394, 284],
-    "stomachFrom": [398, 434.5],
-    "stomachTo": [416, 361],
-    "bagHip": [384.5, 438],
-    "strapTop": [415.5, 333.5]
+    "hip": [511.5, 582],
+    "knee": [494.5, 715],
+    "ankle": [474.5, 906],
+    "shoulder": [484.5, 417],
+    "elbow": [470.5, 496],
+    "wrist": [469.5, 594],
+    "rib": [524.5, 491],
+    "neck": [479, 406.5],
+    "headPivot": [474.5, 352],
+    "neckFrom": [480, 408],
+    "neckTo": [476, 346],
+    "stomachFrom": [520, 530],
+    "stomachTo": [523, 492],
+    "bagHip": [494, 540],
+    "strapTop": [510, 413]
   }
 }
