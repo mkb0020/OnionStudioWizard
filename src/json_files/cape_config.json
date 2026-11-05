@@ -5,7 +5,7 @@
   },
   "sim": {
     "C": {
-      "segments": 12, "segLen": 7.5, "gravity": 1800, "drag": 1.2, "nDrag": 9, "tDrag": 0.4, "lift": 0.55, "flutter": 260,
+      "segments": 10, "segLen": 7.5, "gravity": 1800, "drag": 1.2, "nDrag": 9, "tDrag": 0.4, "lift": 0.55, "flutter": 260,
       "backBias": 0, "wind": 0, "hangDeg": 17, "sag": 0.55, "vRef": 500, "restPull": 45, "iterations": 8, "bend": 0.35,
       "step": 0.008333333333333333, "maxSteps": 6, "spanMin": 0.5, "maxBendDeg": 28, "collide": true, "thick": 6,
       "groundPad": 14, "groundFric": 0.35, "shear": 1, "rung": 0.3
