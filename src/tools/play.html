@@ -703,6 +703,14 @@ const CAPE_SIM_DEFAULT = {
 };
 const CAPE_CLOTH = {}, CAPE_LOOK = {};   // THE LIVE SIM / LOOK SETTINGS IN PLAY WORLD PX (FILLED BY applyCapeProfile, FROM CAPE_SIM_DEFAULT OR THE SHEET)
 const CAPE_PIN_DEFAULT = { a: { x: -16, y: 0 }, b: { x: 16, y: 0 } };   // WHERE THE TWO PINS SIT AROUND THE ROOT WITHOUT A SHEET (SPRITE ART PX; x MIRRORS WITH FACING)
+/* PER-POSE PIN LAYOUT. THE TWO PINS ALWAYS SIT EITHER SIDE OF THE ROOT; A POSE SAYS HOW FAR APART THEY ARE (span, SPRITE ART PX) AND WHICH WAY THE LINE FROM PIN A TO PIN B POINTS (angle, DEGREES):
+   0 = SIDE BY SIDE AT THE SAME HEIGHT (A BEHIND, B IN FRONT), 90 = STACKED, A ON TOP AND B BELOW (LIKE A FLAG ON A POLE), 120 = STACKED WITH B A LITTLE BEHIND, -90 = B ABOVE A. THE ANGLE IS MIRRORED WITH FACING.
+   POSES: run (THE BASE FOR EVERYTHING ELSE), idle, attack (THE SPELL CAST), jumpStart, jump, fall, land. A POSE NEEDS ONLY THE KEYS IT CHANGES; A POSE WITH NO ENTRY USES run, AND run WITH NO ENTRY USES THE
+   PINS FROM THE SHEET (OR CAPE_PIN_DEFAULT). IDLE, CAST AND JUMP BLEND IN AND OUT WITH THE SAME BLENDS AS THEIR ROOTS. SOURCES, LOWEST TO HIGHEST: THE BASE PINS, cape_config.json "pinPoses", THE SHEET'S cape.play.pinPoses. */
+const CAPE_PIN_POSE_NAMES = ['run', 'idle', 'attack', 'jumpStart', 'jump', 'fall', 'land'];
+const CAPE_PIN_POSES = {};   // THE CONFIG FILE'S ENTRIES, { poseName: { span?, angle? } } (EMPTY = NO CHANGE). FILLED BY capeCfgApply
+const capePinCache = {};   // poseName -> { span, ang } WITH EVERY MISSING KEY FILLED IN (REBUILT BY rebuildCapePins WHENEVER THE PROFILE OR THE CONFIG CHANGES)
+const pinNow = { span: 32, ang: 0 };   // SCRATCH FOR THE BLEND IN capePins (NO PER-FRAME ALLOCATION)
 const CAPE_DISSOLVE = { enabled: true, start: 0.6, amount: 0.3, cell: 15, edge: 0, flow: 5, speed: 0.1, fade: 0.9, glow: 0.2, edgeFade: 0.9 };
 const IDLE_CAPE = { enabled: true, root: { x: 20, y: -185 }, rootBob: [0, -2, -3, -4, -3, -2], blendRate: 5, backBias: 550, gust: 1050, gustHz: 0.35, flutter: 150, layered: false, topWidth: 0, liningShift: 0.12, liningColors: ['#0000FF', '#0000FF', '#0000FF'], liningEdge: '#1061C6', liningGlow: '#0A0568' };
 const ATTACK_CAPE = { enabled: true, root: { x: 0, y: -185 }, blendRate: 20, backBias: 600, flutter: 250, gust: 7000, gustLift: 0.7, gustTime: 0.6 };
@@ -714,7 +722,7 @@ let CAPE_RGB, CAPE_EDGE_RGB, CAPE_GLOW_RGB, EDGE_A, EDGE_B;   // FILLED FROM THE
 let LINING_RGB, LINING_EDGE_RGB, LINING_GLOW_RGB;   // FILLED FROM IDLE_CAPE BY refreshLiningColors (ALSO RUN WHEN A CAPE CONFIG LOADS)
 function refreshLiningColors() { LINING_RGB = IDLE_CAPE.liningColors.map(hexRgb); LINING_EDGE_RGB = hexRgb(IDLE_CAPE.liningEdge); LINING_GLOW_RGB = hexRgb(IDLE_CAPE.liningGlow); }
 refreshLiningColors();
-const cape = { mode: 2, spring: { a: 0, v: 0 }, hVel: 0, prevX: null, speed: 0, wave: 0, dirSmooth: 1, jumpBlend: 0, jumpRoot: { x: 0, y: 0, set: false }, attackBlend: 0, idleBlend: 1, cloakFrame: 0, cloakT: 0 };
+const cape = { mode: 2, spring: { a: 0, v: 0 }, hVel: 0, prevX: null, speed: 0, wave: 0, dirSmooth: 1, jumpBlend: 0, jumpRoot: { x: 0, y: 0, set: false }, attackBlend: 0, idleBlend: 1, jumpPin: { span: 32, ang: 0, set: false }, cloakFrame: 0, cloakT: 0 };
 const cloth = { sim: { t: 0, acc: 0 }, need: true, dormant: false, gustT: 0, vy: 0 };   // sim = THE SHARED SIM'S STATE ({ chains, last, acc, t }); gustT = THE CAST GUST TIMER; vy = SMOOTHED VERTICAL SPEED FOR THE SIM'S WIND
 /* ----- CAPE FROM THE CHARACTER SHEET (character.json "cape" BLOCK, WRITTEN BY CAPE LAB'S "SAVE CAPE TO CHARACTER") -----
    WHAT THE SHEET GIVES PLAY:
@@ -767,7 +775,7 @@ async function loadCapeProfile(slug, sheet) {
       if (simP.C.segments > 0) simP.C.segments = Math.max(4, Math.min(30, Math.round(simP.C.segments)));
       capeProf.data = { k, shift: ref ? { x: (mid.x - ref.x) * k, y: (mid.y - ref.y) * k } : { x: 0, y: 0 }, collide: play.collide !== false,
         cols: (Array.isArray(cp.colliders) ? cp.colliders : []).filter(c => c && [c.x, c.y, c.r].every(Number.isFinite)).map(c => ({ x: (c.x - rig.fx) * k + off, y: (c.y - rig.y1) * k, r: c.r * k })),
-        pinOff: { a: { x: (p.ax - mid.x) * k, y: (p.ay - mid.y) * k }, b: { x: (p.bx - mid.x) * k, y: (p.by - mid.y) * k } }, sim: simP };
+        pinOff: { a: { x: (p.ax - mid.x) * k, y: (p.ay - mid.y) * k }, b: { x: (p.bx - mid.x) * k, y: (p.by - mid.y) * k } }, sim: simP, pinPoses: capePinPoseClean(play.pinPoses) };
       capeProf.note = slug + ' (' + (sprite ? 'sprite space' : 'k ' + k.toFixed(3)) + ', ' + (sim ? 'sim settings from the sheet, x' + rr.toFixed(2) : 'older sheet: size only') + (ref ? '' : ', no play.ref: root not shifted') + ')';
     } catch (e) { capeProf.data = null; capeProf.note = 'cape block unusable: ' + String(e && e.message || e).replace(/^[A-Z_]+: /, '').slice(0, 50); }
   }
@@ -779,7 +787,26 @@ function applyCapeProfile() {   // SETTINGS = CAPE_SIM_DEFAULT, WITH THE SHEET'S
   for (const key of Object.keys(CAPE_LOOK)) delete CAPE_LOOK[key]; Object.assign(CAPE_LOOK, Lk);
   CAPE_RGB = [hexRgb(Lk.top), mixRgb(hexRgb(Lk.top), hexRgb(Lk.bottom), 0.5), hexRgb(Lk.bottom)]; CAPE_EDGE_RGB = hexRgb(Lk.rim); CAPE_GLOW_RGB = hexRgb(Lk.dark); EDGE_A = hexRgb(Lk.disColA); EDGE_B = hexRgb(Lk.disColB);
   Object.assign(CAPE_DISSOLVE, { enabled: !!Lk.dis, start: Lk.disStart, amount: Lk.disAmt, cell: Lk.disCell, edge: Lk.disEdge, flow: Lk.disFlow, speed: Lk.disSpeed, fade: Lk.disFade, glow: Lk.disGlow });
-  cloth.need = true;
+  rebuildCapePins(); cloth.need = true;
+}
+function capePinPoseClean(src, warn, where) {   // { poseName: { span?, angle? } } -> ONLY THE VALID PARTS (span >= 0 AND angle FINITE). warn (OPTIONAL) COLLECTS WHAT WAS SKIPPED
+  const out = {}, bad = w => { if (warn) warn.push(w); };
+  if (!src || typeof src !== 'object' || Array.isArray(src)) { if (src !== undefined && src !== null) bad(where || 'pinPoses'); return out; }
+  for (const name of Object.keys(src)) {
+    const e = src[name], at = (where || 'pinPoses') + '.' + name;
+    if (!CAPE_PIN_POSE_NAMES.includes(name) || !e || typeof e !== 'object' || Array.isArray(e)) { bad(at); continue; }
+    const o = {};
+    for (const key of Object.keys(e)) { if (key === 'span' && Number.isFinite(e.span) && e.span >= 0) o.span = e.span; else if (key === 'angle' && Number.isFinite(e.angle)) o.angle = e.angle; else bad(at + '.' + key); }
+    if (Object.keys(o).length) out[name] = o;
+  }
+  return out;
+}
+function rebuildCapePins() {   // BASE = THE SHEET'S PINS (WHILE F3 HAS THEM ON) OR CAPE_PIN_DEFAULT; THEN run, THEN EVERY OTHER POSE ON TOP OF run; THE CONFIG FILE'S ENTRIES FIRST, THE SHEET'S ON TOP
+  const d = capeProf.on && capeProf.data, po = d ? d.pinOff : CAPE_PIN_DEFAULT, sheet = d && d.pinPoses || {};
+  const base = { span: Math.hypot(po.b.x - po.a.x, po.b.y - po.a.y), ang: Math.atan2(po.b.y - po.a.y, po.b.x - po.a.x) * 180 / Math.PI };
+  const pick = (name, from) => { const o = { span: from.span, ang: from.ang }; for (const s of [CAPE_PIN_POSES[name], sheet[name]]) if (s) { if (s.span !== undefined) o.span = s.span; if (s.angle !== undefined) o.ang = s.angle; } return o; };
+  capePinCache.run = pick('run', base);
+  for (const name of CAPE_PIN_POSE_NAMES) if (name !== 'run') capePinCache[name] = pick(name, capePinCache.run);
 }
 applyCapeProfile();
 /* ----- CAPE CONFIG (json_files/cape_config.json) -----
@@ -787,7 +814,7 @@ applyCapeProfile();
    THE FILE (OR THE CAPE IMPORT BUTTON IN THE HEADER) OVERLAYS THEM, THE SAME IDEA AS RIG LAB'S rig_config.json. EVERY LOAD STARTS FROM THE BUILT-INS, SO A VERSION NEVER INHERITS
    KEYS FROM THE ONE BEFORE. MISSING, UNKNOWN OR WRONGLY TYPED KEYS ARE SKIPPED (ONE CONSOLE WARNING). sim.C / sim.L ALSO TAKE NEW KEYS, SO A BLOCK FROM CAPE LAB CAN BE PASTED IN.
    A CHARACTER SHEET'S cape.sim STILL GOES ON TOP OF sim (applyCapeProfile), AS BEFORE. EXPORT WRITES THE LIVE NUMBERS IN THE SAME FORMAT, AS A TEMPLATE OR A SAVED VERSION. */
-const CAPE_CFG_GROUPS = { sim: CAPE_SIM_DEFAULT, pins: CAPE_PIN_DEFAULT, rootOffset: CAPE_ROOT_OFFSET, spring: CAPE_SPRING, idle: IDLE_CAPE, attack: ATTACK_CAPE, jump: JUMP_CAPE };
+const CAPE_CFG_GROUPS = { sim: CAPE_SIM_DEFAULT, pins: CAPE_PIN_DEFAULT, pinPoses: CAPE_PIN_POSES, rootOffset: CAPE_ROOT_OFFSET, spring: CAPE_SPRING, idle: IDLE_CAPE, attack: ATTACK_CAPE, jump: JUMP_CAPE };
 const capeCfgClone = o => JSON.parse(JSON.stringify(o));
 const capeCfgHas = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const CAPE_CFG_BUILTIN = capeCfgClone(CAPE_CFG_GROUPS);   // SNAPSHOT OF THE BUILT-INS, TAKEN BEFORE ANY FILE IS APPLIED
@@ -824,6 +851,7 @@ function capeCfgApply(c) {   // false = NOT A CAPE CONFIG (NOTHING CHANGED)
     if (g === 'meta') continue;
     if (!capeCfgHas(CAPE_CFG_GROUPS, g)) { warn.push(g); continue; }
     if (g === 'sim') { const s = c.sim && typeof c.sim === 'object' && !Array.isArray(c.sim) ? c.sim : {}; for (const part of Object.keys(s)) { if (part === 'C' || part === 'L') capeCfgMerge(CAPE_SIM_DEFAULT[part], s[part], 'sim.' + part, warn, true); else warn.push('sim.' + part); } }
+    else if (g === 'pinPoses') Object.assign(CAPE_PIN_POSES, capePinPoseClean(c.pinPoses, warn, 'pinPoses'));   // { poseName: { span?, angle? } }, SEE CAPE_PIN_POSE_NAMES
     else capeCfgMerge(CAPE_CFG_GROUPS[g], c[g], g, warn, false);
   }
   CAPE_SIM_DEFAULT.C.segments = Math.max(4, Math.min(30, Math.round(CAPE_SIM_DEFAULT.C.segments)));   // THE SAME LIMITS A CHARACTER SHEET GETS
@@ -873,7 +901,8 @@ function capeColliders() {   // WORLD CIRCLES FOR THE BODY COLLIDERS (null = NON
 const clamp01 = v => Math.max(0, Math.min(1, v));
 function kickCape(n) { cape.spring.v += CAPE_SPRING.kick * n; }
 function gustCape() { if (ATTACK_CAPE.enabled) cloth.gustT = ATTACK_CAPE.gustTime; }
-function resetCape() { cape.spring.a = cape.spring.v = 0; cape.hVel = 0; cape.prevX = null; cape.speed = 0; cape.jumpBlend = 0; cape.jumpRoot.set = false; cape.attackBlend = 0; cape.idleBlend = 1; cape.dirSmooth = P.flip ? -1 : 1; cloth.need = true; cloth.gustT = 0; }
+const angDiff = (from, to) => ((((to - from) % 360) + 540) % 360) - 180;   // SHORTEST TURN FROM ONE ANGLE (DEGREES) TO ANOTHER, -180..180
+function resetCape() { cape.spring.a = cape.spring.v = 0; cape.hVel = 0; cape.prevX = null; cape.speed = 0; cape.jumpBlend = 0; cape.jumpRoot.set = false; cape.jumpPin.set = false; cape.attackBlend = 0; cape.idleBlend = 1; cape.dirSmooth = P.flip ? -1 : 1; cloth.need = true; cloth.gustT = 0; }
 function updateCape(dt) {
   const dir = P.flip ? -1 : 1, C = cape;
   const dx = C.prevX === null ? 0 : P.x - C.prevX; C.prevX = P.x;   // SIDEWAYS SPEED FROM DISTANCE TRAVELLED (P.mx IS ZERO IN THE AIR AFTER A WALL KICK ETC.)
@@ -884,8 +913,10 @@ function updateCape(dt) {
   const jr = JUMP_CAPE.roots[currentAnim]; C.jumpBlend += ((jr ? 1 : 0) - C.jumpBlend) * Math.min(1, dt * JUMP_CAPE.blendRate);
   if (jr) {
     const pl = sheetPlace('jump', P.frame, false), tx = jr.x * pl.s + pl.ox, ty = jr.y * pl.s + pl.oy;
-    if (!C.jumpRoot.set) { C.jumpRoot.x = tx; C.jumpRoot.y = ty; C.jumpRoot.set = true; } else { const e = Math.min(1, dt * JUMP_CAPE.rootEase); C.jumpRoot.x += (tx - C.jumpRoot.x) * e; C.jumpRoot.y += (ty - C.jumpRoot.y) * e; }
-  } else if (C.jumpBlend < 0.001) C.jumpRoot.set = false;
+    const jp = capePinCache[currentAnim] || capePinCache.run, jpp = C.jumpPin;   // THE PIN LAYOUT EASES BETWEEN THE JUMP SHEET'S POSES THE SAME WAY THE ROOT DOES
+    if (!C.jumpRoot.set) { C.jumpRoot.x = tx; C.jumpRoot.y = ty; C.jumpRoot.set = true; jpp.span = jp.span; jpp.ang = jp.ang; jpp.set = true; }
+    else { const e = Math.min(1, dt * JUMP_CAPE.rootEase); C.jumpRoot.x += (tx - C.jumpRoot.x) * e; C.jumpRoot.y += (ty - C.jumpRoot.y) * e; jpp.span += (jp.span - jpp.span) * e; jpp.ang += angDiff(jpp.ang, jp.ang) * e; }
+  } else if (C.jumpBlend < 0.001) { C.jumpRoot.set = false; C.jumpPin.set = false; }
   const rel = Math.max(-1.6, Math.min(1.6, C.hVel * dir / PHYS.move)), fall = Math.max(-1, Math.min(1, P.vy / 1000));   // MODE 1: THE SPRING CHASES A TARGET SWING
   const target = CAPE_SPRING.runAngle * rel + CAPE_SPRING.fallAngle * fall, h = Math.min(dt, 1 / 30);
   C.spring.v += (-CAPE_SPRING.stiffness * (C.spring.a - target) - CAPE_SPRING.damping * C.spring.v) * h; C.spring.a += C.spring.v * h;
@@ -902,9 +933,15 @@ function clothRoot(px, py) {   // WORLD POSITION OF THE COLLAR PIN (px, py = WHE
   if (capeProf.on && capeProf.data) { lx += capeProf.data.shift.x; ly += capeProf.data.shift.y; }   // THE SHEET'S PINS MOVE EVERY POSE'S ROOT TOGETHER
   return { x: px + lx * C.dirSmooth * sx, y: py + ly * sy };
 }
-function capePins(px, py) {   // WORLD POSITIONS OF THE CAPE'S TWO PINS: THE ROOT (clothRoot) PLUS THE SHEET'S PIN OFFSETS, MIRRORED WITH FACING AND SQUASHED WITH THE BODY
-  const r = clothRoot(px, py), po = capeProf.on && capeProf.data ? capeProf.data.pinOff : CAPE_PIN_DEFAULT, sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth;
-  return [{ x: r.x + po.a.x * dir * sx, y: r.y + po.a.y * sy }, { x: r.x + po.b.x * dir * sx, y: r.y + po.b.y * sy }];
+function pinMix(to, t) { pinNow.span += (to.span - pinNow.span) * t; pinNow.ang += angDiff(pinNow.ang, to.ang) * t; }
+function capePins(px, py) {   // WORLD POSITIONS OF THE CAPE'S TWO PINS: THE ROOT (clothRoot) +- HALF THE POSE'S span ALONG ITS angle, MIRRORED WITH FACING AND SQUASHED WITH THE BODY
+  const r = clothRoot(px, py), sx = SCALE * squash.x, sy = SCALE * squash.y, dir = cape.dirSmooth, C = cape, Q = capePinCache;
+  pinNow.span = Q.run.span; pinNow.ang = Q.run.ang;   // run IS THE BASE; IDLE, CAST AND JUMP BLEND IN WITH THE SAME BLENDS AS THEIR ROOTS (clothRoot)
+  if (C.idleBlend > 0.001) pinMix(Q.idle, C.idleBlend);
+  if (C.attackBlend > 0.001) pinMix(Q.attack, C.attackBlend);
+  if (C.jumpBlend > 0.001 && C.jumpPin.set) pinMix(C.jumpPin, C.jumpBlend);
+  const rad = pinNow.ang * Math.PI / 180, hx = Math.cos(rad) * pinNow.span / 2, hy = Math.sin(rad) * pinNow.span / 2;
+  return [{ x: r.x - hx * dir * sx, y: r.y - hy * sy }, { x: r.x + hx * dir * sx, y: r.y + hy * sy }];
 }
 function capeWidths(pins) {   // WIDTH OF THE CLOTH ALONG ITS LENGTH: THE DISTANCE BETWEEN THE PINS AT THE ROOT, TAPERING TO THE HEM WIDTH (SAME AS CAPE LAB)
   const C = CAPE_CLOTH, n = C.segments, w0 = Math.hypot(pins[1].x - pins[0].x, pins[1].y - pins[0].y), out = [];
@@ -1241,7 +1278,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { capeProf, loadCapeProfile, CAPE_CLOTH, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>

@@ -1,7 +1,7 @@
 {
   "meta": {
     "name": "default",
-    "description": "PLAY's cape tuning: the sim + look, pose roots, idle / cast / jump behaviour. Edit values here, or Import another version from the PLAY header (CAPE buttons). Missing keys fall back to the built-in numbers in play.html."
+    "description": "PLAY's cape tuning: the sim + look, pose roots, idle / cast / jump behaviour. Edit values here, or Import another version from the PLAY header (CAPE buttons). Missing keys fall back to the built-in numbers in play.html. pinPoses (empty = no change): per-pose pin layout, e.g. { \"idle\": { \"span\": 40, \"angle\": 0 }, \"run\": { \"span\": 30, \"angle\": 100 } }. span = distance between the two pins in sprite px; angle = direction from pin A to pin B in degrees (0 = side by side, 90 = stacked A over B, 120 = stacked with B a little behind). Poses: run, idle, attack, jumpStart, jump, fall, land; a pose with no entry uses run."
   },
   "sim": {
     "C": {
@@ -17,6 +17,7 @@
     }
   },
   "pins": { "a": { "x": -16, "y": 0 }, "b": { "x": 16, "y": 0 } },
+  "pinPoses": {},
   "rootOffset": { "x": -110, "y": -200 },
   "spring": { "stiffness": 150, "damping": 80, "runAngle": 0, "fallAngle": 12, "kick": 260, "strips": 50, "ampMin": 6, "ampMax": 24, "freqMin": 1, "freqMax": 3, "phase": 5 },
   "idle": {
