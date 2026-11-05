@@ -64,14 +64,14 @@ const SHEET_DIR = 'assets/images/nova/sprites/';
 const PLAYER_SHEETS = {
   run:        { src: 'run.png',        frames: 8 },
   idle:       { src: 'idle.png',       frames: 6 },
-  jump:       { src: 'jump.png',       frames: 5 },   // 0 START, 1 RISE, 2 FLIP (DOUBLE JUMP BALL), 3 FALL, 4 LAND
+  jump:       { src: 'jump.png',       frames: 7 },   // 0 START, 1 RISE, 2 FLIP IN (TUCK), 3 FLIP (DOUBLE JUMP BALL), 4 FLIP OUT (UNTUCK), 5 FALL, 6 LAND
   wall_slide: { src: 'wall_slide.png', frames: 1 },
   attack:     { src: 'attack.png',     frames: 1 },
   kick:       { src: 'kick.png',       frames: 6 },
   airKick:    { src: 'airKick.png',    frames: 8 },
 };
 const RUN = { from: 0, to: 7 };
-const JUMP_FRAME = { start: 0, rise: 1, flip: 2, fall: 3, land: 4 };
+const JUMP_FRAME = { start: 0, rise: 1, flipIn: 2, flip: 3, flipOut: 4, fall: 5, land: 6 };
 const JUMP_START_TIME = 0.05, JUMP_LAND_TIME = 0.07, JUMP_LAND_TIME_MOVING = 0.05, JUMP_LAND_MIN_IMPACT = 250;
 const PLAYER_SHEET_TWEAKS = {   // VISUAL ONLY. snapFeet DROPS EACH FRAME BY ITS FOOT GAP; snapFrames DOES IT FOR THE LISTED FRAMES ONLY
   idle: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: true },
@@ -95,6 +95,7 @@ const AIR_KICK = { enabled: true, holdTime: 0.32, holds: [1, 1, 1, 1, 1.4, 1.4, 
   ghostInterval: 0.016, ghostLife: 0.4, ghostAlpha: 0.6, ghostDrift: 160, ghostDrag: 3, ghostGrow: 0.15,
   burst: 16, burstSpeed: [200, 520], burstSpread: 70, burstLife: [0.3, 0.55], burstSize: [3, 6], burstOffset: { x: 70, y: -150 } };
 const DOUBLE_JUMP = { enabled: true, spinTime: 0.45, turns: 2, pivotY: 207, squash: { x: 0.9, y: 1.12 },
+  inTime: 0.04, outTime: 0.05,   // SECONDS THE UPRIGHT TRANSITION FRAMES SHOW BEFORE / AFTER THE SPIN (0 = SKIP THAT FRAME). THE SPIN ITSELF STILL TAKES spinTime
   ghostInterval: 0.02, ghostLife: 0.5, ghostAlpha: 0.6, ghostSpeed: 230, ghostDrag: 2.2, ghostInherit: 0.5, ghostSpin: 0.6, ghostGrow: 0.2, ghostCell: 26,
   arms: 3, moteInterval: 0.016, moteSpeed: [170, 340], moteLife: [0.35, 0.6], moteSize: [3, 6], moteDrag: 2.2, swirl: 0.55, startRadius: 26, burst: 22,
   moteColors: ['#00ffff', '#dc4ce8', '#A55AFF', '#c4b5fd', '#ff69b4'] };
@@ -283,7 +284,7 @@ let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0
 let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpReady = true, airKickReady = true;
 let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
 const airKick = { t: 0, dir: 1, hit: false, ghostAcc: 0, ghostN: 0 };
-const doubleJump = { t: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };
+const doubleJump = { t: 0, pre: 0, post: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };   // pre / post = TIME LEFT ON THE flipIn / flipOut FRAMES (t = TIME LEFT ON THE SPIN)
 const spells = [], swooshes = [];
 const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET, fy: GROUND_Y - CAM_Y_OFFSET };   // fy = THE HEIGHT THE DEAD ZONE IS CENTRED ON (cam.y EASES TOWARD IT)
 let showHitboxes = false, physSource = 'defaults (Kaplay values)';
@@ -292,7 +293,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
-  airKick.t = 0; doubleJump.t = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
+  airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
 }
@@ -363,16 +364,21 @@ function tryDash() {
 }
 function startDoubleJump() {
   airJumpReady = false; dashTimer = 0; P.vy = -PHYS.doubleJump; jumpStartTimer = 0; landTimer = 0;
-  doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.angle = 0; doubleJump.angVel = 0; doubleJump.dir = P.flip ? -1 : 1; doubleJump.ghostAcc = doubleJump.moteAcc = doubleJump.ghostN = 0;
-  playAnim('doubleJump'); kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1); spawnDoubleJumpBurst();
+  doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.pre = DOUBLE_JUMP.inTime; doubleJump.post = 0; doubleJump.angle = 0; doubleJump.angVel = 0; doubleJump.dir = P.flip ? -1 : 1; doubleJump.ghostAcc = doubleJump.moteAcc = doubleJump.ghostN = 0;
+  playAnim('doubleJump'); P.frame = doubleJump.pre > 0 ? JUMP_FRAME.flipIn : JUMP_FRAME.flip; kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1); spawnDoubleJumpBurst();
 }
 function updateDoubleJump(dt) {
   const D = DOUBLE_JUMP;
-  if (doubleJump.t <= 0 || currentAnim !== 'doubleJump') { doubleJump.t = 0; P.spin = 0; return; }
+  if (currentAnim !== 'doubleJump' || (doubleJump.pre <= 0 && doubleJump.t <= 0 && doubleJump.post <= 0)) { doubleJump.t = doubleJump.pre = doubleJump.post = 0; P.spin = 0; return; }
+  // THREE PHASES: flipIn (UPRIGHT TUCK) -> flip (THE SPINNING BALL) -> flipOut (UPRIGHT UNTUCK). THE ANIM STAYS 'doubleJump' THROUGHOUT; ONLY P.frame CHANGES
+  if (doubleJump.pre > 0) { doubleJump.pre = Math.max(0, doubleJump.pre - dt); P.spin = 0; P.frame = JUMP_FRAME.flipIn; return; }
+  if (doubleJump.t <= 0) { doubleJump.post = Math.max(0, doubleJump.post - dt); P.spin = 0; P.frame = JUMP_FRAME.flipOut; return; }
+  P.frame = JUMP_FRAME.flip;
   doubleJump.t = Math.max(0, doubleJump.t - dt);
   const u = 1 - doubleJump.t / D.spinTime, ease = 1 - (1 - u) * (1 - u);   // easeOutQuad: FAST OUT OF THE LAUNCH, ENDS EXACTLY UPRIGHT
   const prev = doubleJump.angle; doubleJump.angle = 360 * D.turns * ease; doubleJump.angVel = (doubleJump.angle - prev) / dt;
   const ang = doubleJump.angle * doubleJump.dir; P.spin = ang;
+  if (doubleJump.t <= 0) doubleJump.post = D.outTime;   // SPIN DONE (UPRIGHT): THE flipOut FRAME TAKES OVER NEXT STEP
   if (!FX.on) return;   // THE SPIRAL: GHOSTS + MOTES SHOT OUT ALONG THE BALL'S CURRENT SPIN ANGLE, SO SUCCESSIVE ONES FAN INTO ARMS
   const c = doubleJumpCenter(); doubleJump.ghostAcc += dt; doubleJump.moteAcc += dt;
   while (doubleJump.ghostAcc >= D.ghostInterval) { doubleJump.ghostAcc -= D.ghostInterval; spawnSpiralGhost(ang); }
@@ -447,7 +453,7 @@ function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
     playAnim('wallSlide');
   } else if (!grounded) {
     wallSlideHOffset = 0; landTimer = 0;
-    if (doubleJump.t > 0) playAnim('doubleJump'); else if (P.vy > FALL_VEL_THRESHOLD) playAnim('fall'); else playAnim(jumpStartTimer > 0 ? 'jumpStart' : 'jump');
+    if (doubleJump.t > 0 || doubleJump.pre > 0 || doubleJump.post > 0) playAnim('doubleJump'); else if (P.vy > FALL_VEL_THRESHOLD) playAnim('fall'); else playAnim(jumpStartTimer > 0 ? 'jumpStart' : 'jump');
     if (jumpStartTimer > 0) jumpStartTimer -= dt;
   } else if (landTimer > 0) { wallSlideHOffset = 0; landTimer -= dt; playAnim('land'); }
   else if (moving) { wallSlideHOffset = 0; playAnim('run'); }
