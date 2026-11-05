@@ -25,6 +25,7 @@
   - Step 9: Cape Lab tool (CAPE//BLOB verlet cloth + ghost-tail dissolve), settings save to `library/capes/<name>.json`
   - Step 10: Nova's own cape pins (Cape Lab BODY dropdown, pins and body colliders saved in `character.json`)
   - Step 11: PLAY reads a character's cape block (root shift from the pins, cape size, idle body circles); F3 compares with the old constants
+  - Step 14: PLAY's cape tuning constants moved to `json_files/cape_config.json` (edit by hand, or swap versions with the CAPE import / export buttons in PLAY's header)
   - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
@@ -152,6 +153,7 @@
       - tools.js
     - json_files/
       - bone_lengths.json
+      - cape_config.json
       - gait_angles.json
       - rig_config.json
     - tools/
@@ -356,6 +358,14 @@
 - **Still PLAY-only (hand-tuned in PLAY world px, written for the old sim):** `IDLE_CAPE` / `ATTACK_CAPE` flutter, back bias and gusts, `JUMP_CAPE`, the per-pose roots, idle-only body circles. The new sim has stronger drag than the old one, so these may want a retune.
 - **Checks (headless Chrome with a stubbed OSWClient, not the real Tauri app):** lab and PLAY load with no console errors; lab-saved sheet -> PLAY round trip (gravity, segLen, pin tilt, colours, live update on `library.changed`, F3); Nova's current (older) sheet loads through the legacy path with the same `k` and root shift as before; idle / run cape looks close to the old one. Needs a first look in the real app.
 - **Next (planned):** a shared animation-data module (sheets, frame holds, per-pose roots, foot snap), then Cape Lab drawing PLAY's real sprites with looped poses (run, jump, attack) and per-pose pin editing saved under `cape.play`.
+
+### Step 14 as built (PLAY's cape numbers live in `json_files/cape_config.json`)
+- **What moved:** PLAY's hand-tuned cape constants (`CAPE_SIM_DEFAULT` sim `C` + look `L`, `CAPE_PIN_DEFAULT`, `CAPE_ROOT_OFFSET`, `CAPE_SPRING`, `IDLE_CAPE`, `ATTACK_CAPE`, `JUMP_CAPE`) can now be edited in `src/json_files/cape_config.json`, the same idea as Rig Lab's `rig_config.json`. The constants in `play.html` stay as the built-in defaults, so a missing or broken file changes nothing. The file ships with the same numbers as the constants (checked: identical).
+- **Format:** `{ meta{name,description}, sim{C,L}, pins{a,b}, rootOffset, spring, idle, attack, jump }`. Missing, unknown or wrongly typed keys are skipped (one console warning); hex colours must stay `#rrggbb`; `sim.C` / `sim.L` also accept new keys (so a block from Cape Lab can be pasted in); `sim.C.segments` is clamped 4..30.
+- **Versions:** the header has `CAPE` export / import buttons next to the CHARACTER and MAP dropdowns. Import loads any saved `.json` without a restart; export writes the live numbers in the same format (a template, or a saved version; a `meta.name` other than `default` downloads as `cape_config_<name>.json`). Every load restarts from the built-ins, so a version never inherits keys from the one before. The HUD shows which config is active ("cape config: ...").
+- **Layering (unchanged order):** built-ins, then `cape_config.json`, then a character sheet's `cape.sim` on top (F3 still switches the sheet off). The file is read before the character, so a sheet always wins.
+- **Not covered:** the mode 0 / 1 sprite-cloak numbers (`CLOAK`, `CLOAK_POSE`) stay in code. Cape Lab keeps its own `PRESETS` / `DEFAULTS` in `capeLab.html`; its named versions already save to `library/capes/<name>.json`.
+- **Checks (headless Chrome, 17 pass):** file loads and equals the built-ins; edits apply to the live chain and look; wrong-typed keys skipped; versions don't leak into each other; non-cape JSON rejected; `__proto__` keys ignored; export / import round trip and both buttons; missing file falls back; run / jump / cast keep running after a swap. Needs a first look in the real app.
 
 ### Things to watch
 - **Art sheet (updated Oct 28 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, an 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm, 6 near hand, 7 far hand, 8 thigh, 9 calf, 10 shoe. The bag frame is gone; the bag comes from `accessories.png`. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops (bbox + 4px).
