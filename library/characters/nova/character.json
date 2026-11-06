@@ -104,10 +104,10 @@
     "version": 2,
     "view": "right",
     "pins": {
-      "ax": 167.5,
-      "ay": 175.5,
-      "bx": 232.5,
-      "by": 167.5
+      "ax": 170,
+      "ay": 130,
+      "bx": 210,
+      "by": 160
     },
     "colliders": [
       {
@@ -137,10 +137,10 @@
       }
     ],
     "defaults": {
-      "scale": 1,
-      "segLen": 11,
-      "segments": 13,
-      "w1": 150,
+      "scale": 0.57,
+      "segLen": 9,
+      "segments": 10,
+      "w1": 550,
       "hangDeg": 23
     },
     "play": {
@@ -151,10 +151,10 @@
     },
     "space": "sprite",
     "sim": {
-      "scale": 1,
+      "scale": 0.57,
       "C": {
-        "segments": 13,
-        "segLen": 11,
+        "segments": 10,
+        "segLen": 9,
         "gravity": 540,
         "drag": 2.6,
         "nDrag": 1,
@@ -162,7 +162,7 @@
         "lift": 0.3,
         "flutter": 2500,
         "backBias": 800,
-        "wind": -800,
+        "wind": -400,
         "hangDeg": 23,
         "sag": 0.55,
         "vRef": 300,
@@ -188,10 +188,10 @@
         "taper": 0.3,
         "ripple": 0,
         "split": 0.1,
-        "top": "#001eff",
-        "bottom": "#0011ff",
-        "rim": "#0077ff",
-        "dark": "#1040b8",
+        "top": "#0000FF",
+        "bottom": "#0000FF",
+        "rim": "#0000FF",
+        "dark": "#0000FF",
         "rimW": 0,
         "folds": false,
         "layer": "front",
