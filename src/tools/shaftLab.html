@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">  <!-- OSW: RESOLVES assets/ FROM src/ WHETHER RUN IN THE APP OR OPENED FROM src/tools/ -->
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SHAFT//LAB - Shaft Lab</title>
+<style>
+:root{
+  --bg:#170032; --panel:#1d0340; --panel2:#37025a; --line:#830cde; --hi:#A55AFF;
+  --soft:#c4b5fd; --pink:#dc4ce8; --hot:#ff69b4; --cyan:#00ffff; --mint:#67FEBD;
+  --gold:#fecd39; --mute:#9090C0;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:
+    repeating-linear-gradient(0deg,rgba(131,12,222,.05) 0 1px,transparent 1px 3px),
+    radial-gradient(1200px 700px at 30% -10%,#37025a 0%,#170032 55%,#0c001f 100%);
+  color:var(--soft);
+  font:13px/1.45 ui-monospace,"Cascadia Code",Consolas,Menlo,monospace;
+  display:flex;flex-direction:column;
+}
+header{
+  padding:10px 18px;border-bottom:1px solid var(--line);
+  display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
+  background:linear-gradient(90deg,rgba(131,12,222,.25),transparent);
+}
+h1{margin:0;font-size:20px;letter-spacing:.18em;color:var(--cyan);text-shadow:0 0 12px rgba(0,255,255,.55)}
+h1 span{color:var(--hot)}
+header p{margin:0;color:var(--mute);font-size:12px}
+main{flex:1;display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:14px;padding:14px;min-height:0}
+@media (max-width:900px){main{grid-template-columns:1fr}}
+#stage{
+  border:1px solid var(--line);border-radius:6px;background:#0c001f;
+  box-shadow:0 0 22px rgba(131,12,222,.45), inset 0 0 30px rgba(0,0,0,.6);
+  overflow:hidden;position:relative;min-height:300px;
+}
+canvas#view{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+canvas#view.drag{cursor:grabbing}
+#status{
+  position:absolute;left:0;right:0;bottom:0;padding:5px 10px;font-size:12px;color:var(--mint);
+  background:rgba(12,0,31,.88);border-top:1px solid var(--line);pointer-events:none;
+}
+aside{display:flex;flex-direction:column;gap:12px;overflow:auto;min-height:0}
+.box{border:1px solid var(--line);border-radius:6px;background:rgba(29,3,64,.85);padding:10px 12px}
+.box h2{margin:0 0 8px;font-size:11px;letter-spacing:.2em;color:var(--hot)}
+.box p.hint{margin:6px 0 0;color:var(--mute);font-size:11px}
+label.row{display:flex;align-items:center;gap:8px;margin:3px 0;cursor:pointer}
+input[type=checkbox]{accent-color:#A55AFF}
+input[type=range]{width:100%;accent-color:#dc4ce8}
+.sl{display:flex;flex-direction:column;margin:6px 0}
+.sl b{font-weight:normal;color:var(--mute);font-size:11px;display:flex;justify-content:space-between}
+.sl b i{font-style:normal;color:var(--cyan)}
+button{
+  background:#37025a;color:var(--cyan);border:1px solid var(--hi);border-radius:4px;
+  padding:6px 10px;font:inherit;cursor:pointer;margin:2px 4px 2px 0;
+}
+button:hover{background:#830cde;color:#fff}
+button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
+.layer{display:flex;align-items:center;gap:8px;margin:4px 0}
+.layer .sw{width:10px;height:10px;border-radius:2px;flex:none}
+.layer .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.layer .nm small{color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+  <h1>SHAFT<span>//</span>LAB</h1>
+  <p>Looping wall depth test. Back layer, front layer over it, shared climb speed, separate sideways speeds. Drag the stage to scrub.</p>
+</header>
+<main>
+  <div id="stage">
+    <canvas id="view"></canvas>
+    <div id="status">LOADING...</div>
+  </div>
+  <aside>
+    <div class="box">
+      <h2>LAYERS</h2>
+      <div class="layer">
+        <input type="checkbox" id="showBack" checked>
+        <span class="sw" style="background:var(--cyan)"></span>
+        <span class="nm">BACK <small id="nmBack">background00.png</small></span>
+        <button id="loadBack">LOAD</button>
+      </div>
+      <div class="layer">
+        <input type="checkbox" id="showFront" checked>
+        <span class="sw" style="background:var(--hot)"></span>
+        <span class="nm">FRONT <small id="nmFront">background01.png</small></span>
+        <button id="loadFront">LOAD</button>
+      </div>
+      <input type="file" id="fileBack" accept="image/*" hidden>
+      <input type="file" id="fileFront" accept="image/*" hidden>
+      <button id="reload">RELOAD ART FROM DISK</button>
+    </div>
+
+    <div class="box">
+      <h2>MOTION</h2>
+      <div>
+        <button id="up">&#9650; CLIMB</button>
+        <button id="down">&#9660; DESCEND</button>
+        <button id="pause">PAUSE</button>
+      </div>
+      <div class="sl"><b>CLIMB SPEED (BOTH LAYERS) <i id="vV"></i></b><input type="range" id="vel" min="-300" max="300" step="1" value="90"></div>
+      <div class="sl"><b>SIDEWAYS SPEED, BACK <i id="vH"></i></b><input type="range" id="hspd" min="-300" max="300" step="1" value="40"></div>
+      <div class="sl"><b>FRONT SIDEWAYS = BACK x <i id="vR"></i></b><input type="range" id="ratio" min="0" max="2" step="0.05" value="0.7"></div>
+      <p class="hint">Under 1.00: front layer drifts slower than the back (your setup). Over 1.00: front moves faster, like classic parallax. Try both.</p>
+    </div>
+
+    <div class="box">
+      <h2>VIEW</h2>
+      <div class="sl"><b>ZOOM <i id="vZ"></i></b><input type="range" id="zoom" min="0.5" max="3" step="0.05" value="1"></div>
+      <div class="sl"><b>BACK DIM (DEPTH TINT) <i id="vD"></i></b><input type="range" id="dim" min="0" max="0.6" step="0.01" value="0"></div>
+      <label class="row"><input type="checkbox" id="seams"> SHOW TILE SEAM GUIDES (BACK = CYAN, FRONT = PINK)</label>
+      <button id="fit">FIT HEIGHT</button>
+      <button id="resetPos">RESET POSITION</button>
+    </div>
+  </aside>
+</main>
+
+<script>
+'use strict';
+// SHAFT LAB - FIRST TEST: TWO LOOPING WALL LAYERS, NO PLAYER, NO COLUMN YET.
+// OFFSETS ARE IN ART PIXELS. camY IS SHARED (THE CLIMB). camXA / camXB ARE THE SIDEWAYS POSITIONS OF THE BACK / FRONT LAYER.
+// CLIMBING UP = camY GOING UP = THE TEXTURE MOVES DOWN ON SCREEN.
+
+const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front: 'assets/images/map/spiralShaftTest/background01.png' };
+const S = {
+  camY: 0, camXA: 0, camXB: 0,
+  vel: 90, hspd: 40, ratio: 0.7,
+  zoom: 1, dim: 0, paused: false,
+  showBack: true, showFront: true, seams: false,
+  img: { back: null, front: null }, name: { back: 'background00.png', front: 'background01.png' },
+  custom: { back: false, front: false },
+};
+
+const $ = (id) => document.getElementById(id);
+const cv = $('view'), ctx = cv.getContext('2d'), stage = $('stage'), status = $('status');
+let DPR = 1, CW = 0, CH = 0;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  const r = stage.getBoundingClientRect();
+  CW = Math.max(1, Math.round(r.width * DPR)); CH = Math.max(1, Math.round(r.height * DPR));
+  cv.width = CW; cv.height = CH;
+}
+addEventListener('resize', resize);
+
+const mod = (a, n) => ((a % n) + n) % n;
+
+// DRAW ONE LAYER TILED IN BOTH DIRECTIONS. EVERYTHING IS INTEGER DEVICE PIXELS SO NEIGHBOURING TILES NEVER SHOW A HAIRLINE GAP.
+function drawLayer(img, camX, camY, guideColor) {
+  if (!img) return;
+  const s = S.zoom * DPR, tw = Math.max(1, Math.round(img.naturalWidth * s)), th = Math.max(1, Math.round(img.naturalHeight * s));
+  const x0 = mod(-Math.round(camX * s), tw) - tw;   // camX UP = TEXTURE MOVES LEFT
+  const y0 = mod(Math.round(camY * s), th) - th;    // camY UP = TEXTURE MOVES DOWN
+  for (let y = y0; y < CH; y += th) for (let x = x0; x < CW; x += tw) {
+    ctx.drawImage(img, x, y, tw, th);
+    if (S.seams) {
+      ctx.strokeStyle = guideColor; ctx.lineWidth = Math.max(1, DPR);
+      ctx.strokeRect(x + 0.5, y + 0.5, tw - 1, th - 1);
+    }
+  }
+}
+
+function render() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0c001f'; ctx.fillRect(0, 0, CW, CH);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+  if (S.showBack) {
+    drawLayer(S.img.back, S.camXA, S.camY, '#00ffff');
+    if (S.dim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + S.dim + ')'; ctx.fillRect(0, 0, CW, CH); }   // DIM ONLY THE BACK SO THE FRONT STANDS OFF IT
+  }
+  if (S.showFront) drawLayer(S.img.front, S.camXB, S.camY, '#ff69b4');
+  const f = (n) => n.toFixed(0).padStart(5, ' ');
+  status.textContent = S.paused ? 'PAUSED' : (S.vel > 0 ? 'CLIMBING' : S.vel < 0 ? 'DESCENDING' : 'STILL');
+  status.textContent += '   Y ' + f(S.camY) + '   BACK X ' + f(S.camXA) + '   FRONT X ' + f(S.camXB) + '   (ART PX)';
+}
+
+let last = performance.now();
+function step(dt) {
+  if (S.paused) return;
+  S.camY += S.vel * dt;
+  S.camXA += S.hspd * dt;
+  S.camXB += S.hspd * S.ratio * dt;
+}
+function frame(now) {
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  step(dt); render(); requestAnimationFrame(frame);
+}
+
+// ---------- ART LOADING ----------
+const loadImg = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });
+async function loadDefaults() {
+  const bust = '?t=' + Date.now(), errs = [];
+  for (const k of ['back', 'front']) {
+    if (S.custom[k]) continue;
+    try { S.img[k] = await loadImg(SRC[k] + bust); S.name[k] = SRC[k].split('/').pop(); } catch (e) { errs.push(e.message); }
+  }
+  $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front;
+  if (errs.length) status.textContent = errs.join('  |  ');
+}
+function pickFile(k, file) {
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(k === 'back' ? 'nmBack' : 'nmFront').textContent = file.name; })
+    .catch((e) => { status.textContent = e.message; });
+}
+$('loadBack').onclick = () => $('fileBack').click();
+$('loadFront').onclick = () => $('fileFront').click();
+$('fileBack').onchange = (e) => { pickFile('back', e.target.files[0]); e.target.value = ''; };
+$('fileFront').onchange = (e) => { pickFile('front', e.target.files[0]); e.target.value = ''; };
+$('reload').onclick = () => { S.custom.back = S.custom.front = false; loadDefaults(); };
+
+// ---------- CONTROLS (ALL MOUSE / PEN: NO KEYBOARD NEEDED) ----------
+function bindRange(id, key, outId, fmt) {
+  const el = $(id), out = $(outId);
+  const sync = () => { S[key] = parseFloat(el.value); out.textContent = fmt(S[key]); };
+  el.addEventListener('input', sync); sync();
+}
+bindRange('vel', 'vel', 'vV', (v) => v.toFixed(0));
+bindRange('hspd', 'hspd', 'vH', (v) => v.toFixed(0));
+bindRange('ratio', 'ratio', 'vR', (v) => v.toFixed(2));
+bindRange('zoom', 'zoom', 'vZ', (v) => v.toFixed(2) + 'x');
+bindRange('dim', 'dim', 'vD', (v) => Math.round(v * 100) + '%');
+$('showBack').onchange = (e) => { S.showBack = e.target.checked; };
+$('showFront').onchange = (e) => { S.showFront = e.target.checked; };
+$('seams').onchange = (e) => { S.seams = e.target.checked; };
+
+function setVel(v) { $('vel').value = v; $('vel').dispatchEvent(new Event('input')); markDir(); }
+function markDir() { $('up').classList.toggle('on', S.vel > 0); $('down').classList.toggle('on', S.vel < 0); }
+$('up').onclick = () => setVel(Math.abs(S.vel) || 90);
+$('down').onclick = () => setVel(-(Math.abs(S.vel) || 90));
+$('vel').addEventListener('input', markDir); markDir();
+$('pause').onclick = () => { S.paused = !S.paused; $('pause').classList.toggle('on', S.paused); $('pause').textContent = S.paused ? 'RESUME' : 'PAUSE'; };
+$('resetPos').onclick = () => { S.camY = S.camXA = S.camXB = 0; };
+function fitHeight() {
+  const im = S.img.back || S.img.front; if (!im) return;
+  const z = Math.min(3, Math.max(0.5, (CH / DPR) / im.naturalHeight));
+  $('zoom').value = z.toFixed(2); $('zoom').dispatchEvent(new Event('input'));
+}
+$('fit').onclick = fitHeight;
+
+// DRAG TO SCRUB: THE FRONT LAYER FOLLOWS AT ITS OWN RATIO, SO YOU CAN FEEL THE DEPTH BY HAND
+let drag = null;
+cv.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY }; cv.setPointerCapture(e.pointerId); cv.classList.add('drag'); });
+cv.addEventListener('pointermove', (e) => {
+  if (!drag) return;
+  const dx = (e.clientX - drag.x) / S.zoom, dy = (e.clientY - drag.y) / S.zoom; drag.x = e.clientX; drag.y = e.clientY;
+  S.camXA -= dx; S.camXB -= dx * S.ratio; S.camY += dy;
+});
+const endDrag = (e) => { drag = null; cv.classList.remove('drag'); try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ALREADY RELEASED */ } };
+cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
+
+// TEST HOOK (HEADLESS CHECKS)
+window.__shaft = { S, step, render, drawLayer };
+
+resize();
+loadDefaults().then(() => { fitHeight(); last = performance.now(); requestAnimationFrame(frame); });
+</script>
+</body>
+</html>

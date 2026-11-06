@@ -11,6 +11,7 @@ export const TOOLS = [
   { id: 'vectors',   group: 'FX',        label: 'Spells',  title: 'Vector Spell Lab',   icon: 'spark', src: null },
   { id: 'cape',      group: 'FX',        label: 'Cape',    title: 'Cape Lab',           icon: 'cape',  src: 'tools/capeLab.html' },
   { id: 'tiles',     group: 'WORLD',     label: 'Tiles',   title: 'Tile Lab',           icon: 'grid',  src: 'tools/tileLab.html', status: '#status' },
+  { id: 'shaft',     group: 'WORLD',     label: 'Shaft',   title: 'Shaft Lab',          icon: 'shaft', src: 'tools/shaftLab.html' },
   { id: 'play',      group: 'PLAY',      label: 'Play',    title: 'Sprite Playground',  icon: 'play',  src: 'tools/play.html' },
 ];
 
@@ -23,6 +24,7 @@ export const ICONS = {
   spark: '<path d="M11 3l1.8 5.2L18 10l-5.2 1.8L11 17l-1.8-5.2L4 10l5.2-1.8z"/><path d="M19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"/>',
   cape:  '<path d="M7 4h10l2 15c-2 1.5-4.5 1.5-7 0-2.5 1.5-5 1.5-7 0z"/><path d="M9 4c0 2 1.3 3 3 3s3-1 3-3"/>',
   grid:  '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/>',
+  shaft: '<ellipse cx="12" cy="5.5" rx="6" ry="2.5"/><path d="M6 5.5v13c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-13"/><path d="M6 10.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5M6 15.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/>',
   play:  '<path d="M7 4l13 8-13 8z"/>',
   library: '<path d="M12 3l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/>',
 };

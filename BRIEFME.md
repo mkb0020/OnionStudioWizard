@@ -27,6 +27,7 @@
   - Step 11: PLAY reads a character's cape block (root shift from the pins, cape size, idle body circles); F3 compares with the old constants
   - Step 14: PLAY's cape tuning constants moved to `json_files/cape_config.json` (edit by hand, or swap versions with the CAPE import / export buttons in PLAY's header)
   - Step 15: per-pose cape pin layouts in PLAY (span + angle per pose: run, idle, cast, jump poses), from `cape_config.json` `pinPoses` or a sheet's `cape.play.pinPoses`
+  - Step 16: Shaft Lab tool (WORLD group): first test of the spiral-shaft inside wall, two looping layers (back `background00.png`, front `background01.png`) with a shared climb speed and separate sideways speeds, to see whether layered depth reads
   - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
@@ -40,6 +41,8 @@
  - [x] Tile Lab (TILE//LAB) as a Wizard tool, first pass. (tested in a headless browser; needs a first look in the real app)
  - [x] Maps drive PLAY: save a Tile Lab map to the library, pick it in PLAY (Step 8).
  - [x] Cape Lab as a Wizard tool, first pass (Step 9). (tested in a headless browser; needs a first look in the real app)
+- [x] Shaft Lab first pass: two looping wall layers with parallax (Step 16). (tested in headless Chrome; needs a first look in the real app)
+- [ ] Shaft Lab next: draw the spiral column and the band, add the curved strip-slice effect, then bring in Nova.
 - [ ] Remaining tools (Static Rig, Spells), then PLAY's polish (see Step 6).
 
 
@@ -377,6 +380,15 @@
 - **Blending:** idle, cast and jump layouts blend in and out with the same rates as their roots (`IDLE_CAPE.blendRate`, `ATTACK_CAPE.blendRate`, `JUMP_CAPE.blendRate`); the four jump poses ease into each other at `JUMP_CAPE.rootEase`. Span blends linearly and angle takes the shortest way round (170 to -170 goes through 180).
 - **Not done yet:** no editor for it. Cape Lab does not show or save `pinPoses` yet (hand-edit `cape_config.json` or the sheet), and kicks, air kick, wall slide and the flip have no verlet cape, so they have no pose. The idea of drawing PLAY's real sprites in Cape Lab with per-pose pin dragging is still the planned way to set these by eye.
 - **Checks (headless Chrome, 28 pass):** defaults unchanged in every pose; run / idle / cast / jump layouts at full blend; half-way blend maths and the 170 to -170 seam; mirroring when facing left; partial entries inherit `run`; bad entries and `__proto__` skipped with one warning; a version without `pinPoses` resets them; export / import round trip; sheet beats file, sheet pins are the base, F3 drops them; live idle to run to jump to cast with poses set, no errors. Needs a first look in the real app.
+
+### Step 16 as built (Shaft Lab, first test)
+- **File:** `src/tools/shaftLab.html`, one plain-JS Canvas 2D file, registered in `js/tools.js` (WORLD group, `shaft` icon). Loads in an iframe like the other tools; no library or bridge use yet.
+- **Why:** to test whether layered, looping art gives the feel of passing through floors of a labyrinth, before drawing the real spiral column. Art: `assets/images/map/spiralShaftTest/background00.png` (back) and `background01.png` (front, about two thirds transparent so the back shows through its windows). Both are 650x450.
+- **Motion:** both layers share one vertical position (the climb; climbing up moves the texture down). Sideways, the back layer moves at its own speed and the front at back x RATIO (default 0.7, so the front drifts slower; the slider goes to 2.0 so classic parallax, front faster, can be compared).
+- **Looping:** both layers tile in both directions on integer device pixels (no hairline gaps). Checked: one tile of scroll across or up gives a pixel-identical frame for each layer and for both.
+- **Controls (all mouse / pen, no keyboard):** CLIMB / DESCEND / PAUSE, climb speed, sideways speed, front ratio, zoom, FIT HEIGHT, back dim (a depth tint on the back only), tile seam guides (back cyan, front pink), RESET POSITION, per-layer visibility, per-layer LOAD (swap in any image), RELOAD ART FROM DISK. Dragging the stage scrubs both layers at their own ratios.
+- **Seams in the current art:** `background00.png` top and bottom edges differ a lot (arch stones at the top, a dark floor strip at the bottom), which reads as the floor change you drew; its left and right edges differ slightly. `background01.png` matches closely on both axes.
+- **Not done yet:** the spiral column and band, the curved strip-slice effect for the column, the player, and a shared `shaftSim.js` (the scroll maths is inline for now; move it out when PLAY needs it).
 
 ### Things to watch
 - **Art sheet (updated Oct 28 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, an 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm, 6 near hand, 7 far hand, 8 thigh, 9 calf, 10 shoe. The bag frame is gone; the bag comes from `accessories.png`. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops (bbox + 4px).
