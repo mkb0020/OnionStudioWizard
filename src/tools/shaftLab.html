@@ -131,6 +131,7 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
       <h2>VIEW</h2>
       <div class="sl"><b>ZOOM <i id="vZ"></i></b><input type="range" id="zoom" min="0.5" max="3" step="0.05" value="1"></div>
       <div class="sl"><b>BACK DIM (DEPTH TINT) <i id="vD"></i></b><input type="range" id="dim" min="0" max="0.6" step="0.01" value="0"></div>
+      <div class="sl"><b>FRONT WALL BULGE <i id="vBu"></i></b><input type="range" id="bulge" min="0" max="0.6" step="0.01" value="0.15"></div>
       <label class="row"><input type="checkbox" id="seams"> SHOW TILE SEAM GUIDES (BACK = CYAN, FRONT = PINK)</label>
       <button id="fit">FIT HEIGHT</button>
       <button id="resetPos">RESET POSITION</button>
@@ -148,7 +149,7 @@ const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front:
 const S = {
   camY: 0, camXA: 0, camXB: 0,
   vel: 90, hspd: 40, ratio: 0.7,
-  zoom: 1, dim: 0, paused: false,
+  zoom: 1, dim: 0, bulge: 0.15, paused: false,
   showBack: true, showFront: true, seams: false,
   // COLUMN: A CYLINDER DOWN THE MIDDLE. colRot = TEXTURE PX AROUND THE CIRCUMFERENCE, colW = ON-SCREEN DIAMETER IN ART PX.
   showCol: true, colOver: true, colW: 163, colSpin: 60, colShade: 0.55, colRot: 0, colTex: null,
@@ -170,9 +171,37 @@ addEventListener('resize', resize);
 
 const mod = (a, n) => ((a % n) + n) % n;
 
+// BULGE: A HORIZONTAL-ONLY SQUEEZE TOWARD THE SCREEN EDGES (MIDDLE MAGNIFIED, VERTICAL LINES STAY STRAIGHT).
+// SCREEN x (DEVICE PX) -> TEXTURE u (ART PX, NOT WRAPPED). n = -1..1 ACROSS THE STAGE; d(n) = (n + k n^3) / (1 + k) KEEPS BOTH SCREEN EDGES EXACTLY WHERE THEY WERE,
+// SO k = 0 IS THE PLAIN LAYER AND THE MIDDLE IS MAGNIFIED BY (1 + k). SLOPE AT THE CENTRE = 1 / (1 + k), AT THE EDGES = (1 + 3k) / (1 + k).
+// THIS IS THE ONE FUNCTION TO PORT TO A SHADER LATER (UV.x = CAM + (H + H * d(n)) / SCALE).
+function warpU(x, camX, k) {
+  const s = S.zoom * DPR, h = CW / 2, n = (x - h) / h;
+  return camX + (h + h * (n + k * n * n * n) / (1 + k)) / s;
+}
+// THE WARP IS SMOOTH, SO ~24 DEVICE-PX SEGMENTS (EACH A STRAIGHT STRETCH OF THE IMAGE) LOOK THE SAME AS ONE SLICE PER PIXEL AT ~1/24 OF THE DRAW CALLS.
+// tex IS THE LAYER IMAGE TWICE AS WIDE (SEE prepLayerTex), SO A SEGMENT THAT CROSSES THE IMAGE EDGE NEEDS NO SPECIAL CASE.
+function drawLayerWarped(img, camX, camY, guideColor, k, tex) {
+  const s = S.zoom * DPR, TW = img.naturalWidth, IH = img.naturalHeight, th = Math.max(1, Math.round(IH * s));
+  const N = Math.max(8, Math.min(64, Math.round(CW / 24))), xs = [], us = [];
+  for (let j = 0; j <= N; j++) { xs.push(Math.round(j * CW / N)); us.push(warpU(xs[j], camX, k)); }
+  for (let j = 0; j < N; j++) if (us[j + 1] - us[j] >= TW) return false;   // IMAGE TOO NARROW FOR THIS SEGMENT SIZE: USE THE PLAIN PATH
+  const y0 = mod(Math.round(camY * s), th) - th;
+  for (let y = y0; y < CH; y += th) {
+    for (let j = 0; j < N; j++) {
+      const dw = xs[j + 1] - xs[j]; if (dw <= 0) continue;
+      ctx.drawImage(tex, mod(us[j], TW), 0, us[j + 1] - us[j], IH, xs[j], y, dw, th);
+      if (S.seams && Math.floor(us[j + 1] / TW) !== Math.floor(us[j] / TW)) { ctx.fillStyle = guideColor; ctx.fillRect(xs[j], y, Math.max(1, Math.round(DPR)), th); }
+    }
+    if (S.seams) { ctx.fillStyle = guideColor; ctx.fillRect(0, y, CW, Math.max(1, Math.round(DPR))); }
+  }
+  return true;
+}
+
 // DRAW ONE LAYER TILED IN BOTH DIRECTIONS. EVERYTHING IS INTEGER DEVICE PIXELS SO NEIGHBOURING TILES NEVER SHOW A HAIRLINE GAP.
-function drawLayer(img, camX, camY, guideColor) {
+function drawLayer(img, camX, camY, guideColor, bulge, tex) {
   if (!img) return;
+  if (bulge > 0 && tex && drawLayerWarped(img, camX, camY, guideColor, bulge, tex)) return;
   const s = S.zoom * DPR, tw = Math.max(1, Math.round(img.naturalWidth * s)), th = Math.max(1, Math.round(img.naturalHeight * s));
   const x0 = mod(-Math.round(camX * s), tw) - tw;   // camX UP = TEXTURE MOVES LEFT
   const y0 = mod(Math.round(camY * s), th) - th;    // camY UP = TEXTURE MOVES DOWN
@@ -190,6 +219,13 @@ function drawLayer(img, camX, camY, guideColor) {
 // THE STRIP IS REBUILT ONLY WHEN SPIN / WIDTH / ZOOM / SHADING CHANGE, THEN TILED UP AND DOWN WITH THE SHARED CLIMB.
 const NM = { back: 'nmBack', front: 'nmFront', col: 'nmCol' };
 const colCache = { key: null, cv: null };
+const layerTex = { back: null, front: null };   // EACH WALL IMAGE DRAWN TWICE SIDE BY SIDE (FOR THE BULGE PATH)
+function prepLayerTex(k) {
+  const im = S.img[k]; if (!im) { layerTex[k] = null; return; }
+  const t = document.createElement('canvas'); t.width = im.naturalWidth * 2; t.height = im.naturalHeight;
+  const g = t.getContext('2d'); g.drawImage(im, 0, 0); g.drawImage(im, im.naturalWidth, 0);
+  layerTex[k] = t;
+}
 function prepCol() {
   const im = S.img.col; colCache.key = null;
   if (!im) { S.colTex = null; return; }
@@ -235,11 +271,11 @@ function render() {
   ctx.fillStyle = '#0c001f'; ctx.fillRect(0, 0, CW, CH);
   ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
   if (S.showBack) {
-    drawLayer(S.img.back, S.camXA, S.camY, '#00ffff');
+    drawLayer(S.img.back, S.camXA, S.camY, '#00ffff', 0, layerTex.back);
     if (S.dim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + S.dim + ')'; ctx.fillRect(0, 0, CW, CH); }   // DIM ONLY THE BACK SO THE FRONT STANDS OFF IT
   }
   if (S.showCol && !S.colOver) drawCol();   // BETWEEN THE WALLS
-  if (S.showFront) drawLayer(S.img.front, S.camXB, S.camY, '#ff69b4');
+  if (S.showFront) drawLayer(S.img.front, S.camXB, S.camY, '#ff69b4', S.bulge, layerTex.front);
   if (S.showCol && S.colOver) drawCol();    // OVER BOTH WALLS
   const f = (n) => n.toFixed(0).padStart(5, ' ');
   status.textContent = S.paused ? 'PAUSED' : (S.vel > 0 ? 'CLIMBING' : S.vel < 0 ? 'DESCENDING' : 'STILL');
@@ -268,13 +304,13 @@ async function loadDefaults() {
     try { S.img[k] = await loadImg(SRC[k] + bust); S.name[k] = SRC[k].split('/').pop(); } catch (e) { errs.push(e.message); }
   }
   $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front; $('nmCol').textContent = S.name.col;
-  prepCol();
+  prepCol(); prepLayerTex('back'); prepLayerTex('front');
   if (errs.length) status.textContent = errs.join('  |  ');
 }
 function pickFile(k, file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
-  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(NM[k]).textContent = file.name; if (k === 'col') prepCol(); })
+  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(NM[k]).textContent = file.name; if (k === 'col') prepCol(); else prepLayerTex(k); })
     .catch((e) => { status.textContent = e.message; });
 }
 $('loadBack').onclick = () => $('fileBack').click();
@@ -296,6 +332,7 @@ bindRange('hspd', 'hspd', 'vH', (v) => v.toFixed(0));
 bindRange('ratio', 'ratio', 'vR', (v) => v.toFixed(2));
 bindRange('zoom', 'zoom', 'vZ', (v) => v.toFixed(2) + 'x');
 bindRange('dim', 'dim', 'vD', (v) => Math.round(v * 100) + '%');
+bindRange('bulge', 'bulge', 'vBu', (v) => Math.round(v / 0.6 * 100) + '%');   // SLIDER SHOWS % OF THE MAX k (0.6)
 bindRange('colW', 'colW', 'vCW', (v) => v.toFixed(0));
 bindRange('colSpin', 'colSpin', 'vCS', (v) => v.toFixed(0));
 bindRange('colShade', 'colShade', 'vCSh', (v) => Math.round(v * 100) + '%');
@@ -336,7 +373,7 @@ const endDrag = (e) => { drag = null; cv.classList.remove('drag'); try { cv.rele
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
 // TEST HOOK (HEADLESS CHECKS)
-window.__shaft = { S, step, render, drawLayer, buildCol, drawCol, colCache };
+window.__shaft = { S, step, render, drawLayer, buildCol, drawCol, colCache, warpU, layerTex };
 
 resize();
 loadDefaults().then(() => { fitHeight(); last = performance.now(); requestAnimationFrame(frame); });
