@@ -91,7 +91,7 @@ const RUN_CYCLE = RUN_POSE_ORDER.map((pose, i) => ({ frame: RUN.from + i, hold: 
 const WALL_JUMP_LOCK_TIME = 0.18;
 const DASH_TIME = 0.16, DASH_COOLDOWN = 0.45;
 const ATTACK_HOLD_TIME = 0.35, ATTACK_KICK_HOLD_TIME = 0.25;
-const KICK_FRAME_HOLDS = [1.3, 0.4, 0.3, 0.4, 2.7, 0.3];
+const KICK_FRAME_HOLDS = [1, 1, 1.3, 1, 1.5, 1];
 const AIR_KICK = { enabled: true, holdTime: 0.32, holds: [1, 1, 1, 1, 1.4, 1.4, 1.4, 1], oncePerAirtime: true, lunge: 520, gravityScale: 0.3, vyKeep: 0.25,
   squash: { x: 1.1, y: 0.92 }, impactFrame: 4, shakeTime: 0.14, shakeStrength: 8, hitStop: 0.06,
   ghostInterval: 0.016, ghostLife: 0.4, ghostAlpha: 0.6, ghostDrift: 160, ghostDrag: 3, ghostGrow: 0.15,
