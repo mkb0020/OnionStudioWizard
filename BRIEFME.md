@@ -27,7 +27,7 @@
   - Step 11: PLAY reads a character's cape block (root shift from the pins, cape size, idle body circles); F3 compares with the old constants
   - Step 14: PLAY's cape tuning constants moved to `json_files/cape_config.json` (edit by hand, or swap versions with the CAPE import / export buttons in PLAY's header)
   - Step 15: per-pose cape pin layouts in PLAY (span + angle per pose: run, idle, cast, jump poses), from `cape_config.json` `pinPoses` or a sheet's `cape.play.pinPoses`
-  - Step 16: Shaft Lab tool (WORLD group): first test of the spiral-shaft inside wall, two looping layers (back `background00.png`, front `background01.png`) with a shared climb speed and separate sideways speeds, to see whether layered depth reads
+  - Step 16: Shaft Lab tool (WORLD group): first test of the spiral-shaft inside wall, two looping layers (back `background00.png`, front `background01.png`) with a shared climb speed and separate sideways speeds, to see whether layered depth reads; then a cylinder column (`shaft.png`) down the middle
   - Drawing tool: built-in color picker (square + hue + hex) replaces the native color dialog for ink and paper; new eyedropper tool in the toolbar (Q) that samples the visible canvas. Tested in a headless browser; needs a first look in the real app
 
  ## Todo Items
@@ -42,7 +42,8 @@
  - [x] Maps drive PLAY: save a Tile Lab map to the library, pick it in PLAY (Step 8).
  - [x] Cape Lab as a Wizard tool, first pass (Step 9). (tested in a headless browser; needs a first look in the real app)
 - [x] Shaft Lab first pass: two looping wall layers with parallax (Step 16). (tested in headless Chrome; needs a first look in the real app)
-- [ ] Shaft Lab next: draw the spiral column and the band, add the curved strip-slice effect, then bring in Nova.
+- [x] Shaft Lab column: `shaft.png` wrapped round a cylinder through the middle (strip-slice curve, spin, edge shading). Tested in headless Chrome; needs a first look in the real app.
+- [ ] Shaft Lab next: tweak the column art as needed, draw the spiral band (front/back halves around the player), then bring in Nova.
 - [ ] Remaining tools (Static Rig, Spells), then PLAY's polish (see Step 6).
 
 
@@ -388,7 +389,10 @@
 - **Looping:** both layers tile in both directions on integer device pixels (no hairline gaps). Checked: one tile of scroll across or up gives a pixel-identical frame for each layer and for both.
 - **Controls (all mouse / pen, no keyboard):** CLIMB / DESCEND / PAUSE, climb speed, sideways speed, front ratio, zoom, FIT HEIGHT, back dim (a depth tint on the back only), tile seam guides (back cyan, front pink), RESET POSITION, per-layer visibility, per-layer LOAD (swap in any image), RELOAD ART FROM DISK. Dragging the stage scrubs both layers at their own ratios.
 - **Seams in the current art:** `background00.png` top and bottom edges differ a lot (arch stones at the top, a dark floor strip at the bottom), which reads as the floor change you drew; its left and right edges differ slightly. `background01.png` matches closely on both axes.
-- **Not done yet:** the spiral column and band, the curved strip-slice effect for the column, the player, and a shared `shaftSim.js` (the scroll maths is inline for now; move it out when PLAY needs it).
+- **Column (added Nov 6 2026):** `assets/images/map/spiralShaftTest/shaft.png` (512x512, fully opaque, vertical panels with circuit lines) is wrapped once round a cylinder drawn as a strip down the exact middle of the stage. Each 1px slice of the strip samples the image at angle `asin(x / R)`, so the middle is full size and the edges are squeezed (one edge pixel covers about 12.8 image px, the middle exactly 1). The strip is rebuilt only when spin, width, zoom or shading change, then tiled up and down with the shared climb, so it costs one canvas build per change rather than per frame.
+- **Column controls:** WIDTH (default 163 art px, which is image width / pi, the width with no sideways stretch; NATURAL WIDTH button resets it), SPIN (image px per second round the circumference, default 60), EDGE SHADING (darkens by 1 - cos(angle), default 55%), OVER BOTH WALLS / BETWEEN WALLS order, per-layer show and LOAD. Dragging the stage also turns the cylinder, with its middle following the pointer. Seam guides add gold lines: tile top/bottom, and where the image's left/right edge sits on the cylinder.
+- **Column seams in the current art:** left/right wrap is nearly invisible (mean difference 3.5 of 255), so the spin loops cleanly. Top/bottom has a faint brightness step (mean 2.2, worst 16 of 255 in a few columns near x=2, 3, 129, 130, 443), visible only when enlarged. One full turn of spin and one image height of climb give pixel-identical frames (checked).
+- **Not done yet:** the spiral band (collision path plus front/back halves drawn above and below the player), the player, and a shared `shaftSim.js` (the scroll and cylinder maths are inline for now; move them out when PLAY needs them).
 
 ### Things to watch
 - **Art sheet (updated Oct 28 2026):** Rig Lab loads `assets/images/nova/mannequins/sideView.png`, an 9600x800 sheet of twelve 800x800 frames: 0 full mannequin (used as the pivot-editor ghost), 1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm, 6 near hand, 7 far hand, 8 thigh, 9 calf, 10 shoe. The bag frame is gone; the bag comes from `accessories.png`. `ART_FRAME` in `animatedRig.html` maps part names to frames; `ART_BOX` holds the crops (bbox + 4px).

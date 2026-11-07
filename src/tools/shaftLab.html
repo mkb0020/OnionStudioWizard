@@ -67,7 +67,7 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
 <body>
 <header>
   <h1>SHAFT<span>//</span>LAB</h1>
-  <p>Looping wall depth test. Back layer, front layer over it, shared climb speed, separate sideways speeds. Drag the stage to scrub.</p>
+  <p>Looping depth test. Two wall layers plus a cylinder column through the middle, shared climb speed, separate sideways speeds and spin. Drag the stage to scrub.</p>
 </header>
 <main>
   <div id="stage">
@@ -89,6 +89,13 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
         <span class="nm">FRONT <small id="nmFront">background01.png</small></span>
         <button id="loadFront">LOAD</button>
       </div>
+      <div class="layer">
+        <input type="checkbox" id="showCol" checked>
+        <span class="sw" style="background:var(--gold)"></span>
+        <span class="nm">COLUMN <small id="nmCol">shaft.png</small></span>
+        <button id="loadCol">LOAD</button>
+      </div>
+      <input type="file" id="fileCol" accept="image/*" hidden>
       <input type="file" id="fileBack" accept="image/*" hidden>
       <input type="file" id="fileFront" accept="image/*" hidden>
       <button id="reload">RELOAD ART FROM DISK</button>
@@ -108,6 +115,19 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
     </div>
 
     <div class="box">
+      <h2>COLUMN (CYLINDER)</h2>
+      <div class="sl"><b>WIDTH (ART PX) <i id="vCW"></i></b><input type="range" id="colW" min="60" max="400" step="1" value="163"></div>
+      <div class="sl"><b>SPIN (TEXTURE PX / SEC) <i id="vCS"></i></b><input type="range" id="colSpin" min="-300" max="300" step="1" value="60"></div>
+      <div class="sl"><b>EDGE SHADING <i id="vCSh"></i></b><input type="range" id="colShade" min="0" max="1" step="0.01" value="0.55"></div>
+      <div>
+        <button id="ordOver" class="on">OVER BOTH WALLS</button>
+        <button id="ordBetween">BETWEEN WALLS</button>
+        <button id="colNatural">NATURAL WIDTH</button>
+      </div>
+      <p class="hint">The image wraps once around the cylinder, so its left and right edges meet at the back. NATURAL WIDTH is the width where nothing is stretched sideways (image width / pi). Gold seam guide = where the image edge sits on the cylinder.</p>
+    </div>
+
+    <div class="box">
       <h2>VIEW</h2>
       <div class="sl"><b>ZOOM <i id="vZ"></i></b><input type="range" id="zoom" min="0.5" max="3" step="0.05" value="1"></div>
       <div class="sl"><b>BACK DIM (DEPTH TINT) <i id="vD"></i></b><input type="range" id="dim" min="0" max="0.6" step="0.01" value="0"></div>
@@ -124,14 +144,16 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
 // OFFSETS ARE IN ART PIXELS. camY IS SHARED (THE CLIMB). camXA / camXB ARE THE SIDEWAYS POSITIONS OF THE BACK / FRONT LAYER.
 // CLIMBING UP = camY GOING UP = THE TEXTURE MOVES DOWN ON SCREEN.
 
-const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front: 'assets/images/map/spiralShaftTest/background01.png' };
+const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front: 'assets/images/map/spiralShaftTest/background01.png', col: 'assets/images/map/spiralShaftTest/shaft.png' };
 const S = {
   camY: 0, camXA: 0, camXB: 0,
   vel: 90, hspd: 40, ratio: 0.7,
   zoom: 1, dim: 0, paused: false,
   showBack: true, showFront: true, seams: false,
-  img: { back: null, front: null }, name: { back: 'background00.png', front: 'background01.png' },
-  custom: { back: false, front: false },
+  // COLUMN: A CYLINDER DOWN THE MIDDLE. colRot = TEXTURE PX AROUND THE CIRCUMFERENCE, colW = ON-SCREEN DIAMETER IN ART PX.
+  showCol: true, colOver: true, colW: 163, colSpin: 60, colShade: 0.55, colRot: 0, colTex: null,
+  img: { back: null, front: null, col: null }, name: { back: 'background00.png', front: 'background01.png', col: 'shaft.png' },
+  custom: { back: false, front: false, col: false },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -163,6 +185,51 @@ function drawLayer(img, camX, camY, guideColor) {
   }
 }
 
+// ---------- COLUMN: THE IMAGE WRAPPED ONCE AROUND A CYLINDER ----------
+// EACH 1px-WIDE SLICE OF THE STRIP SAMPLES THE TEXTURE AT ANGLE asin(x/R), SO THE MIDDLE IS FULL-SIZE AND THE EDGES ARE SQUEEZED.
+// THE STRIP IS REBUILT ONLY WHEN SPIN / WIDTH / ZOOM / SHADING CHANGE, THEN TILED UP AND DOWN WITH THE SHARED CLIMB.
+const NM = { back: 'nmBack', front: 'nmFront', col: 'nmCol' };
+const colCache = { key: null, cv: null };
+function prepCol() {
+  const im = S.img.col; colCache.key = null;
+  if (!im) { S.colTex = null; return; }
+  const t = document.createElement('canvas'); t.width = im.naturalWidth * 2; t.height = im.naturalHeight;   // DOUBLED SO A SLICE THAT CROSSES THE IMAGE EDGE NEEDS NO SPECIAL CASE
+  const g = t.getContext('2d'); g.drawImage(im, 0, 0); g.drawImage(im, im.naturalWidth, 0);
+  S.colTex = t;
+}
+function buildCol() {
+  const im = S.img.col, tex = S.colTex; if (!im || !tex) return null;
+  const s = S.zoom * DPR, W = Math.max(8, Math.round(S.colW * s)), TH = Math.max(1, Math.round(im.naturalHeight * s));
+  const key = [W, TH, Math.round(S.colRot * 100), S.colShade, S.seams].join('|');
+  if (colCache.key === key) return colCache;
+  const c = colCache.cv || (colCache.cv = document.createElement('canvas'));
+  if (c.width !== W || c.height !== TH) { c.width = W; c.height = TH; }
+  const g = c.getContext('2d'); g.clearRect(0, 0, W, TH);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  const TW = im.naturalWidth, R = W / 2, K = TW / (Math.PI * 2);
+  const uAt = (i) => S.colRot + TW / 2 + K * Math.asin(Math.max(-1, Math.min(1, (i - R) / R)));
+  for (let i = 0; i < W; i++) {
+    const u1 = uAt(i), u2 = uAt(i + 1);
+    g.drawImage(tex, mod(u1, TW), 0, Math.max(0.5, u2 - u1), im.naturalHeight, i, 0, 1, TH);
+    if (S.seams && Math.floor(u2 / TW) !== Math.floor(u1 / TW)) { g.fillStyle = '#fecd39'; g.fillRect(i, 0, 1, TH); }
+  }
+  if (S.colShade > 0) {   // DARKEN TOWARD THE EDGES BY (1 - cos(angle)) SO THE FORM READS AS ROUND
+    const gr = g.createLinearGradient(0, 0, W, 0), N = 16;
+    for (let k = 0; k <= N; k++) { const nx = -1 + 2 * k / N; gr.addColorStop(k / N, 'rgba(14,0,34,' + (S.colShade * (1 - Math.sqrt(Math.max(0, 1 - nx * nx)))).toFixed(3) + ')'); }
+    g.fillStyle = gr; g.fillRect(0, 0, W, TH);
+  }
+  colCache.key = key; return colCache;
+}
+function drawCol() {
+  const b = buildCol(); if (!b) return;
+  const W = b.cv.width, TH = b.cv.height, x = Math.round((CW - W) / 2);   // ALWAYS CENTRED
+  const y0 = mod(Math.round(S.camY * S.zoom * DPR), TH) - TH;
+  for (let y = y0; y < CH; y += TH) {
+    ctx.drawImage(b.cv, x, y);
+    if (S.seams) { ctx.fillStyle = '#fecd39'; ctx.fillRect(x, y, W, Math.max(1, Math.round(DPR))); }
+  }
+}
+
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0c001f'; ctx.fillRect(0, 0, CW, CH);
@@ -171,10 +238,12 @@ function render() {
     drawLayer(S.img.back, S.camXA, S.camY, '#00ffff');
     if (S.dim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + S.dim + ')'; ctx.fillRect(0, 0, CW, CH); }   // DIM ONLY THE BACK SO THE FRONT STANDS OFF IT
   }
+  if (S.showCol && !S.colOver) drawCol();   // BETWEEN THE WALLS
   if (S.showFront) drawLayer(S.img.front, S.camXB, S.camY, '#ff69b4');
+  if (S.showCol && S.colOver) drawCol();    // OVER BOTH WALLS
   const f = (n) => n.toFixed(0).padStart(5, ' ');
   status.textContent = S.paused ? 'PAUSED' : (S.vel > 0 ? 'CLIMBING' : S.vel < 0 ? 'DESCENDING' : 'STILL');
-  status.textContent += '   Y ' + f(S.camY) + '   BACK X ' + f(S.camXA) + '   FRONT X ' + f(S.camXB) + '   (ART PX)';
+  status.textContent += '   Y ' + f(S.camY) + '   BACK X ' + f(S.camXA) + '   FRONT X ' + f(S.camXB) + (S.img.col ? '   COLUMN ' + f(mod(S.colRot, S.img.col.naturalWidth)) : '') + '   (ART PX)';
 }
 
 let last = performance.now();
@@ -183,6 +252,7 @@ function step(dt) {
   S.camY += S.vel * dt;
   S.camXA += S.hspd * dt;
   S.camXB += S.hspd * S.ratio * dt;
+  S.colRot += S.colSpin * dt;
 }
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
@@ -193,24 +263,27 @@ function frame(now) {
 const loadImg = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });
 async function loadDefaults() {
   const bust = '?t=' + Date.now(), errs = [];
-  for (const k of ['back', 'front']) {
+  for (const k of ['back', 'front', 'col']) {
     if (S.custom[k]) continue;
     try { S.img[k] = await loadImg(SRC[k] + bust); S.name[k] = SRC[k].split('/').pop(); } catch (e) { errs.push(e.message); }
   }
-  $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front;
+  $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front; $('nmCol').textContent = S.name.col;
+  prepCol();
   if (errs.length) status.textContent = errs.join('  |  ');
 }
 function pickFile(k, file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
-  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(k === 'back' ? 'nmBack' : 'nmFront').textContent = file.name; })
+  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(NM[k]).textContent = file.name; if (k === 'col') prepCol(); })
     .catch((e) => { status.textContent = e.message; });
 }
 $('loadBack').onclick = () => $('fileBack').click();
 $('loadFront').onclick = () => $('fileFront').click();
 $('fileBack').onchange = (e) => { pickFile('back', e.target.files[0]); e.target.value = ''; };
 $('fileFront').onchange = (e) => { pickFile('front', e.target.files[0]); e.target.value = ''; };
-$('reload').onclick = () => { S.custom.back = S.custom.front = false; loadDefaults(); };
+$('loadCol').onclick = () => $('fileCol').click();
+$('fileCol').onchange = (e) => { pickFile('col', e.target.files[0]); e.target.value = ''; };
+$('reload').onclick = () => { S.custom.back = S.custom.front = S.custom.col = false; loadDefaults(); };
 
 // ---------- CONTROLS (ALL MOUSE / PEN: NO KEYBOARD NEEDED) ----------
 function bindRange(id, key, outId, fmt) {
@@ -223,6 +296,14 @@ bindRange('hspd', 'hspd', 'vH', (v) => v.toFixed(0));
 bindRange('ratio', 'ratio', 'vR', (v) => v.toFixed(2));
 bindRange('zoom', 'zoom', 'vZ', (v) => v.toFixed(2) + 'x');
 bindRange('dim', 'dim', 'vD', (v) => Math.round(v * 100) + '%');
+bindRange('colW', 'colW', 'vCW', (v) => v.toFixed(0));
+bindRange('colSpin', 'colSpin', 'vCS', (v) => v.toFixed(0));
+bindRange('colShade', 'colShade', 'vCSh', (v) => Math.round(v * 100) + '%');
+$('showCol').onchange = (e) => { S.showCol = e.target.checked; };
+function setOrder(over) { S.colOver = over; $('ordOver').classList.toggle('on', over); $('ordBetween').classList.toggle('on', !over); }
+$('ordOver').onclick = () => setOrder(true);
+$('ordBetween').onclick = () => setOrder(false);
+$('colNatural').onclick = () => { if (!S.img.col) return; $('colW').value = Math.round(S.img.col.naturalWidth / Math.PI); $('colW').dispatchEvent(new Event('input')); };
 $('showBack').onchange = (e) => { S.showBack = e.target.checked; };
 $('showFront').onchange = (e) => { S.showFront = e.target.checked; };
 $('seams').onchange = (e) => { S.seams = e.target.checked; };
@@ -248,12 +329,14 @@ cv.addEventListener('pointermove', (e) => {
   if (!drag) return;
   const dx = (e.clientX - drag.x) / S.zoom, dy = (e.clientY - drag.y) / S.zoom; drag.x = e.clientX; drag.y = e.clientY;
   S.camXA -= dx; S.camXB -= dx * S.ratio; S.camY += dy;
+  if (S.img.col) S.colRot -= dx * S.img.col.naturalWidth / (Math.PI * S.colW);   // DRAG TURNS THE CYLINDER SO ITS MIDDLE FOLLOWS THE POINTER
+
 });
 const endDrag = (e) => { drag = null; cv.classList.remove('drag'); try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ALREADY RELEASED */ } };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
 // TEST HOOK (HEADLESS CHECKS)
-window.__shaft = { S, step, render, drawLayer };
+window.__shaft = { S, step, render, drawLayer, buildCol, drawCol, colCache };
 
 resize();
 loadDefaults().then(() => { fitHeight(); last = performance.now(); requestAnimationFrame(frame); });
