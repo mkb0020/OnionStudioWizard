@@ -95,6 +95,13 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
         <span class="nm">COLUMN <small id="nmCol">shaft.png</small></span>
         <button id="loadCol">LOAD</button>
       </div>
+      <div class="layer">
+        <input type="checkbox" id="showBand" checked>
+        <span class="sw" style="background:var(--mint)"></span>
+        <span class="nm">BAND <small id="nmBand">stairs.png</small></span>
+        <button id="loadBand">LOAD</button>
+      </div>
+      <input type="file" id="fileBand" accept="image/*" hidden>
       <input type="file" id="fileCol" accept="image/*" hidden>
       <input type="file" id="fileBack" accept="image/*" hidden>
       <input type="file" id="fileFront" accept="image/*" hidden>
@@ -108,7 +115,7 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
         <button id="down">&#9660; DESCEND</button>
         <button id="pause">PAUSE</button>
       </div>
-      <div class="sl"><b>CLIMB SPEED (BOTH LAYERS) <i id="vV"></i></b><input type="range" id="vel" min="-300" max="300" step="1" value="90"></div>
+      <div class="sl"><b>CLIMB SPEED (BOTH LAYERS) <i id="vV"></i></b><input type="range" id="vel" min="-300" max="300" step="1" value="50"></div>
       <div class="sl"><b>SIDEWAYS SPEED, BACK <i id="vH"></i></b><input type="range" id="hspd" min="-300" max="300" step="1" value="40"></div>
       <div class="sl"><b>FRONT SIDEWAYS = BACK x <i id="vR"></i></b><input type="range" id="ratio" min="0" max="2" step="0.05" value="0.7"></div>
       <p class="hint">Under 1.00: front layer drifts slower than the back (your setup). Over 1.00: front moves faster, like classic parallax. Try both.</p>
@@ -117,7 +124,7 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
     <div class="box">
       <h2>COLUMN (CYLINDER)</h2>
       <div class="sl"><b>WIDTH (ART PX) <i id="vCW"></i></b><input type="range" id="colW" min="60" max="400" step="1" value="163"></div>
-      <div class="sl"><b>SPIN (TEXTURE PX / SEC) <i id="vCS"></i></b><input type="range" id="colSpin" min="-300" max="300" step="1" value="60"></div>
+      <div class="sl"><b>EXTRA SPIN (TEXTURE PX / SEC) <i id="vCS"></i></b><input type="range" id="colSpin" min="-300" max="300" step="1" value="0"></div>
       <div class="sl"><b>EDGE SHADING <i id="vCSh"></i></b><input type="range" id="colShade" min="0" max="1" step="0.01" value="0.55"></div>
       <div>
         <button id="ordOver" class="on">OVER BOTH WALLS</button>
@@ -125,6 +132,19 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
         <button id="colNatural">NATURAL WIDTH</button>
       </div>
       <p class="hint">The image wraps once around the cylinder, so its left and right edges meet at the back. NATURAL WIDTH is the width where nothing is stretched sideways (image width / pi). Gold seam guide = where the image edge sits on the cylinder.</p>
+    </div>
+
+    <div class="box">
+      <h2>BAND (SPIRAL WALKWAY)</h2>
+      <label class="row"><input type="checkbox" id="link" checked> LINK COLUMN + BAND TO CLIMB (SCREW MOTION)</label>
+      <div class="sl"><b>OUTER RADIUS (ART PX) <i id="vBR"></i></b><input type="range" id="bandR" min="100" max="450" step="1" value="160"></div>
+      <div class="sl"><b>PITCH (ART PX PER TURN) <i id="vPi"></i></b><input type="range" id="pitch" min="100" max="600" step="1" value="180"></div>
+      <div class="sl"><b>TILT (CAMERA LOOKING DOWN) <i id="vTi"></i></b><input type="range" id="tilt" min="0.2" max="0.8" step="0.01" value="0.45"></div>
+      <div class="sl"><b>RIM HEIGHT (ART PX) <i id="vRH"></i></b><input type="range" id="rimH" min="20" max="200" step="1" value="67"></div>
+      <div class="sl"><b>ART REPEATS PER TURN <i id="vRe"></i></b><input type="range" id="reps" min="1" max="4" step="1" value="1"></div>
+      <div class="sl"><b>BACK HALF DIM <i id="vBD"></i></b><input type="range" id="bandDim" min="0" max="0.8" step="0.01" value="0.35"></div>
+      <label class="row"><input type="checkbox" id="marker"> SHOW PLAYER SIZE MARKER (36 x 96)</label>
+      <p class="hint">stairs.png: left strip = walkway (column side at the top), right strip = outer rim. Linked, the spiral keeps its shape and only the bricks slide along it, and the column turns with them. Too little TILT for the PITCH turns the walkway's top face away from the camera near the column; those spots draw as a dark underside.</p>
     </div>
 
     <div class="box">
@@ -141,20 +161,23 @@ button.on{background:#830cde;color:#fff;box-shadow:0 0 8px rgba(165,90,255,.7)}
 
 <script>
 'use strict';
-// SHAFT LAB - FIRST TEST: TWO LOOPING WALL LAYERS, NO PLAYER, NO COLUMN YET.
+// SHAFT LAB: TWO LOOPING WALL LAYERS, A CYLINDER COLUMN DOWN THE MIDDLE, AND A SPIRAL BAND AROUND IT. NO PLAYER YET (SIZE MARKER ONLY).
 // OFFSETS ARE IN ART PIXELS. camY IS SHARED (THE CLIMB). camXA / camXB ARE THE SIDEWAYS POSITIONS OF THE BACK / FRONT LAYER.
 // CLIMBING UP = camY GOING UP = THE TEXTURE MOVES DOWN ON SCREEN.
 
-const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front: 'assets/images/map/spiralShaftTest/background01.png', col: 'assets/images/map/spiralShaftTest/shaft.png' };
+const SRC = { back: 'assets/images/map/spiralShaftTest/background00.png', front: 'assets/images/map/spiralShaftTest/background01.png', col: 'assets/images/map/spiralShaftTest/shaft.png', band: 'assets/images/map/spiralShaftTest/stairs.png' };
 const S = {
   camY: 0, camXA: 0, camXB: 0,
-  vel: 90, hspd: 40, ratio: 0.7,
+  vel: 50, hspd: 40, ratio: 0.7,
   zoom: 1, dim: 0, bulge: 0.15, paused: false,
   showBack: true, showFront: true, seams: false,
   // COLUMN: A CYLINDER DOWN THE MIDDLE. colRot = TEXTURE PX AROUND THE CIRCUMFERENCE, colW = ON-SCREEN DIAMETER IN ART PX.
-  showCol: true, colOver: true, colW: 163, colSpin: 60, colShade: 0.55, colRot: 0, colTex: null,
-  img: { back: null, front: null, col: null }, name: { back: 'background00.png', front: 'background01.png', col: 'shaft.png' },
-  custom: { back: false, front: false, col: false },
+  showCol: true, colOver: true, colW: 163, colSpin: 0, colShade: 0.55, colRot: 0, colTex: null,
+  // BAND: bandOuter = OUTER RADIUS (INNER RADIUS = THE COLUMN'S), pitch = CLIMB PER FULL TURN, tilt = sin(CAMERA ELEVATION), rimH = RIM HEIGHT,
+  // repeats = HOW MANY TIMES THE ART TILES ROUND ONE TURN (WHOLE NUMBERS ONLY, SO THE LOOP IS SEAMLESS), bandPhi = EXTRA TURN OF THE WORLD (RADIANS).
+  showBand: true, link: true, bandOuter: 160, pitch: 180, tilt: 0.45, rimH: 67, repeats: 1, bandDim: 0.35, marker: false, bandPhi: 0,
+  img: { back: null, front: null, col: null, band: null }, name: { back: 'background00.png', front: 'background01.png', col: 'shaft.png', band: 'stairs.png' },
+  custom: { back: false, front: false, col: false, band: false },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -217,7 +240,7 @@ function drawLayer(img, camX, camY, guideColor, bulge, tex) {
 // ---------- COLUMN: THE IMAGE WRAPPED ONCE AROUND A CYLINDER ----------
 // EACH 1px-WIDE SLICE OF THE STRIP SAMPLES THE TEXTURE AT ANGLE asin(x/R), SO THE MIDDLE IS FULL-SIZE AND THE EDGES ARE SQUEEZED.
 // THE STRIP IS REBUILT ONLY WHEN SPIN / WIDTH / ZOOM / SHADING CHANGE, THEN TILED UP AND DOWN WITH THE SHARED CLIMB.
-const NM = { back: 'nmBack', front: 'nmFront', col: 'nmCol' };
+const NM = { back: 'nmBack', front: 'nmFront', col: 'nmCol', band: 'nmBand' };
 const colCache = { key: null, cv: null };
 const layerTex = { back: null, front: null };   // EACH WALL IMAGE DRAWN TWICE SIDE BY SIDE (FOR THE BULGE PATH)
 function prepLayerTex(k) {
@@ -236,14 +259,15 @@ function prepCol() {
 function buildCol() {
   const im = S.img.col, tex = S.colTex; if (!im || !tex) return null;
   const s = S.zoom * DPR, W = Math.max(8, Math.round(S.colW * s)), TH = Math.max(1, Math.round(im.naturalHeight * s));
-  const key = [W, TH, Math.round(S.colRot * 100), S.colShade, S.seams].join('|');
+  const rot = colRotTotal();
+  const key = [W, TH, Math.round(rot * 100), S.colShade, S.seams].join('|');
   if (colCache.key === key) return colCache;
   const c = colCache.cv || (colCache.cv = document.createElement('canvas'));
   if (c.width !== W || c.height !== TH) { c.width = W; c.height = TH; }
   const g = c.getContext('2d'); g.clearRect(0, 0, W, TH);
   g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
   const TW = im.naturalWidth, R = W / 2, K = TW / (Math.PI * 2);
-  const uAt = (i) => S.colRot + TW / 2 + K * Math.asin(Math.max(-1, Math.min(1, (i - R) / R)));
+  const uAt = (i) => rot + TW / 2 + K * Math.asin(Math.max(-1, Math.min(1, (i - R) / R)));
   for (let i = 0; i < W; i++) {
     const u1 = uAt(i), u2 = uAt(i + 1);
     g.drawImage(tex, mod(u1, TW), 0, Math.max(0.5, u2 - u1), im.naturalHeight, i, 0, 1, TH);
@@ -266,6 +290,121 @@ function drawCol() {
   }
 }
 
+// ---------- BAND: THE SPIRAL WALKWAY, WRAPPED ROUND THE COLUMN AS A HELIX ----------
+// stairs.png = TWO FLAT STRIPS SIDE BY SIDE: LEFT = WALKWAY (LOOKING STRAIGHT DOWN, COLUMN SIDE AT THE TOP), RIGHT = OUTER RIM (LOOKING STRAIGHT AT IT). NO CURVE IS DRAWN IN THE ART.
+// A POINT ON THE BAND IS (theta, r): theta = ANGLE ROUND THE COLUMN (0 = FACING THE VIEWER, GROWING TO THE RIGHT), r = DISTANCE FROM THE AXIS.
+//   screen x = cx + s * r * sin(theta)
+//   screen y = cy + s * ( yfoot - pitch * theta / 2pi + tilt * r * cos(theta) )      NEAR SIDE LOWER, CLIMBING TO THE RIGHT
+// THE STRIPS ARE CUT INTO theta SLICES x RADIAL ROWS. EACH SMALL QUAD IS DRAWN WITH ONE AFFINE TRANSFORM (NO PER-PIXEL WORK).
+// SCREW MOTION: TURNING THE HELIX BY phi LOOKS EXACTLY LIKE LIFTING IT BY pitch * phi / 2pi. LINKED, THE SHAPE STAYS PUT AND ONLY THE BRICKS SLIDE ALONG IT.
+// WITH WHOLE-NUMBER REPEATS PER TURN, SHIFTING BY ONE PITCH IS A WHOLE TURN OF THE ART, SO THE GEOMETRY IS BUILT ONCE AND ONLY SLID DOWN BY (yfoot mod pitch).
+const BAND_Q = { slices: 120, rows: 6 };   // QUALITY KNOBS: MORE = SMOOTHER AND SLOWER (slices MUST BE A MULTIPLE OF 4)
+const bandTex = { walk: null, rim: null, fw: 0, fh: 0 };
+const bandMesh = { key: null, back: null, front: null, rim: null };
+const bandBackLayer = { cv: null };
+function colRotTotal() { return S.colRot + (S.link && S.img.col ? S.camY * S.img.col.naturalWidth / S.pitch : 0); }
+function bandPhase() { return (S.link ? 2 * Math.PI * S.camY / S.pitch : 0) + S.bandPhi; }
+function prepBand() {
+  const im = S.img.band; bandMesh.key = null;
+  if (!im) { bandTex.walk = bandTex.rim = null; return; }
+  const fw = Math.floor(im.naturalWidth / 2), fh = im.naturalHeight; bandTex.fw = fw; bandTex.fh = fh;   // TWO EQUAL FRAMES SIDE BY SIDE
+  const mk = (x0) => {
+    const c = document.createElement('canvas'); c.width = fw * 2; c.height = fh;   // FRAME DRAWN TWICE SO A SLICE CROSSING ITS EDGE NEEDS NO SPECIAL CASE
+    const g = c.getContext('2d'); g.drawImage(im, x0, 0, fw, fh, 0, 0, fw, fh); g.drawImage(im, x0, 0, fw, fh, fw, 0, fw, fh);
+    let v0 = 0, vn = fh;
+    try {   // ROWS THAT ACTUALLY HOLD ART (THE FRAMES HAVE TRANSPARENT PADDING ABOVE / BELOW)
+      const d = g.getImageData(0, 0, fw, fh).data; let r0 = -1, r1 = -1;
+      for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) if (d[(y * fw + x) * 4 + 3] > 8) { if (r0 < 0) r0 = y; r1 = y; break; }
+      if (r0 >= 0) { v0 = r0; vn = r1 - r0 + 1; }
+    } catch (_) { /* CANVAS TAINTED (file://): USE THE WHOLE FRAME HEIGHT */ }
+    return { c, v0, vn };
+  };
+  bandTex.walk = mk(0); bandTex.rim = mk(fw);
+}
+// EVERY QUAD IS 12 NUMBERS: 2x2 TRANSFORM + ORIGIN (TEXTURE PX -> SCREEN PX), SOURCE u / v START, SOURCE SIZE, AND ITS SCREEN y RANGE (FOR CULLING)
+function buildBand() {
+  const Wt = bandTex.walk, Rt = bandTex.rim; if (!Wt || !Rt) return null;
+  const s = S.zoom * DPR, Rc = S.colW / 2, Ro = Math.max(S.bandOuter, Rc + 12), P = S.pitch, T = S.tilt, N = Math.round(S.repeats), H = S.rimH;
+  const SL = BAND_Q.slices, RW = BAND_Q.rows;
+  const key = [CW, CH, s, Rc, Ro, P, T, N, H, Wt.vn, Rt.vn, Wt.v0, Rt.v0, bandTex.fw, SL, RW].join('|');
+  if (bandMesh.key === key) return bandMesh;
+  const TAU = Math.PI * 2, cph = Math.sqrt(1 - T * T), cx = CW / 2, cy = CH / 2, FW = bandTex.fw;
+  const pos = (th, r) => [cx + s * r * Math.sin(th), cy + s * (-P * th / TAU + T * r * Math.cos(th))];
+  const K = Math.ceil((CH / s / 2 + T * Ro + H + 40) / P) + 1;   // TURNS EACH SIDE, ENOUGH TO COVER THE STAGE AT ANY SLIDE OF 0..pitch
+  const nS = SL * 2 * K, dth = TAU / SL, th0 = -TAU * K, dU = N * FW * dth / TAU;
+  const back = [], front = [], rim = [];
+  for (let i = 0; i < nS; i++) {
+    const ta = th0 + i * dth, tb = ta + dth, tm = ta + dth / 2, ua = N * FW * ta / TAU, isFront = Math.cos(tm) > 0;
+    for (let k = 0; k < RW; k++) {
+      const ra = Rc + (Ro - Rc) * k / RW, rb = Rc + (Ro - Rc) * (k + 1) / RW, rm = (ra + rb) / 2;
+      const va = Wt.v0 + Wt.vn * k / RW, dv = Wt.vn / RW;
+      // BEST-FIT AFFINE FOR THE QUAD: u-AXIS FROM THE MID-ROW, v-AXIS FROM THE MID-SLICE
+      const pa = pos(ta, rm), pb = pos(tb, rm), pc = pos(tm, ra), pd = pos(tm, rb), pm = pos(tm, rm);
+      const eux = (pb[0] - pa[0]) / dU, euy = (pb[1] - pa[1]) / dU, evx = (pd[0] - pc[0]) / dv, evy = (pd[1] - pc[1]) / dv;
+      const c1 = pos(ta, ra), c2 = pos(tb, ra), c3 = pos(ta, rb), c4 = pos(tb, rb);
+      (isFront ? front : back).push(eux, euy, evx, evy, pm[0] - (eux * dU + evx * dv) / 2, pm[1] - (euy * dU + evy * dv) / 2, ua, va, dU, dv,
+        Math.min(c1[1], c2[1], c3[1], c4[1]) - 2, Math.max(c1[1], c2[1], c3[1], c4[1]) + 2);
+    }
+    if (isFront) {   // THE OUTER RIM: A VERTICAL FACE AT r = Ro, HANGING BELOW THE WALKWAY'S OUTER EDGE. IT FACES AWAY ON THE BACK HALF, SO ONLY THE FRONT HALF GETS ONE.
+      const pa = pos(ta, Ro), pb = pos(tb, Ro), pm = pos(tm, Ro), hv = s * H * cph;
+      const eux = (pb[0] - pa[0]) / dU, euy = (pb[1] - pa[1]) / dU;
+      rim.push(eux, euy, 0, hv / Rt.vn, pm[0] - eux * dU / 2, pm[1] - euy * dU / 2, ua, Rt.v0, dU, Rt.vn, Math.min(pa[1], pb[1]) - 2, Math.max(pa[1], pb[1]) + hv + 2);
+    }
+  }
+  bandMesh.back = Float64Array.from(back); bandMesh.front = Float64Array.from(front); bandMesh.rim = Float64Array.from(rim);
+  bandMesh.K = K; bandMesh.key = key; return bandMesh;
+}
+function drawQuads(g, list, tex, yoff, sxOff, isRim) {
+  const TW = bandTex.fw, fh = bandTex.fh;
+  for (let q = 0; q < list.length; q += 12) {
+    if (list[q + 11] + yoff < 0 || list[q + 10] + yoff > CH) continue;   // OFF-SCREEN
+    const a = list[q], b = list[q + 1], c = list[q + 2], d = list[q + 3];
+    g.setTransform(a, b, c, d, list[q + 4], list[q + 5] + yoff);
+    const dU = list[q + 8], dv = list[q + 9], va = list[q + 7], sw = dU * 1.15, sh = isRim ? dv : Math.min(dv * 1.15, fh - va);   // 15% OVERLAP HIDES HAIRLINES BETWEEN QUADS
+    if (!isRim && a * d - b * c <= 0) { g.fillStyle = '#0a0220'; g.fillRect(0, 0, sw, sh); continue; }   // TOP FACE TURNED AWAY FROM THE CAMERA: DARK UNDERSIDE
+    g.drawImage(tex, mod(list[q + 6] + sxOff, TW), va, sw, sh, 0, 0, sw, sh);
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0);
+}
+function bandSlide() {   // HOW FAR THE BUILT GEOMETRY IS SLID DOWN (DEVICE PX), AND HOW FAR THE ART IS SLID ALONG (TEXTURE PX)
+  const P = S.pitch, s = S.zoom * DPR, phi = bandPhase();
+  return { yoff: s * mod(S.camY - P * phi / (Math.PI * 2), P), sxOff: Math.round(S.repeats) * bandTex.fw * phi / (Math.PI * 2) };
+}
+function drawBand(front) {
+  const m = buildBand(); if (!m) return;
+  const { yoff, sxOff } = bandSlide(), q = ctx.imageSmoothingQuality; ctx.imageSmoothingQuality = 'low';
+  if (front) {
+    drawQuads(ctx, m.front, bandTex.walk.c, yoff, sxOff, false);
+    drawQuads(ctx, m.rim, bandTex.rim.c, yoff, sxOff, true);
+  } else if (S.bandDim > 0) {   // DIM THE BACK HALF ONLY: DRAW IT ALONE, TINT IT, THEN LAY IT DOWN
+    const b = bandBackLayer.cv || (bandBackLayer.cv = document.createElement('canvas'));
+    if (b.width !== CW || b.height !== CH) { b.width = CW; b.height = CH; }
+    const g = b.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, CW, CH); g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'low';
+    drawQuads(g, m.back, bandTex.walk.c, yoff, sxOff, false);
+    g.globalCompositeOperation = 'source-atop'; g.fillStyle = 'rgba(14,0,34,' + S.bandDim + ')'; g.fillRect(0, 0, CW, CH); g.globalCompositeOperation = 'source-over';
+    ctx.drawImage(b, 0, 0);
+  } else drawQuads(ctx, m.back, bandTex.walk.c, yoff, sxOff, false);
+  ctx.imageSmoothingQuality = q;
+}
+// THE WHOLE SHAFT, BACK TO FRONT: BAND'S BACK HALF, COLUMN, BAND'S FRONT HALF + RIM
+function drawShaft() {
+  if (S.showBand) drawBand(false);
+  if (S.showCol) drawCol();
+  if (S.showBand) drawBand(true);
+  if (S.marker) drawMarker();
+}
+function markerFeetY() {   // SCREEN y WHERE A PLAYER STANDING ON THE WALKWAY'S MIDDLE, FACING THE VIEWER (theta = 0), HAS THEIR FEET. PICKS THE TURN NEAREST 62% DOWN THE STAGE.
+  const s = S.zoom * DPR, Rc = S.colW / 2, Ro = Math.max(S.bandOuter, Rc + 12), rm = (Rc + Ro) / 2, step = s * S.pitch;
+  const base = CH / 2 + bandSlide().yoff + s * S.tilt * rm, k = Math.round((base - CH * 0.62) / step);
+  return base - k * step;
+}
+function drawMarker() {
+  const s = S.zoom * DPR, w = 36 * s, h = 96 * s, x = CW / 2 - w / 2, y = markerFeetY() - h;
+  ctx.save(); ctx.lineWidth = Math.max(1, DPR * 1.5); ctx.strokeStyle = 'rgba(0,255,255,.95)'; ctx.fillStyle = 'rgba(0,255,255,.16)';
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, 6 * s) : ctx.rect(x, y, w, h); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x - 10 * s, y + h); ctx.lineTo(x + w + 10 * s, y + h); ctx.stroke(); ctx.restore();
+}
+
 function render() {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = '#0c001f'; ctx.fillRect(0, 0, CW, CH);
@@ -274,12 +413,12 @@ function render() {
     drawLayer(S.img.back, S.camXA, S.camY, '#00ffff', 0, layerTex.back);
     if (S.dim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + S.dim + ')'; ctx.fillRect(0, 0, CW, CH); }   // DIM ONLY THE BACK SO THE FRONT STANDS OFF IT
   }
-  if (S.showCol && !S.colOver) drawCol();   // BETWEEN THE WALLS
+  if ((S.showCol || S.showBand) && !S.colOver) drawShaft();   // BETWEEN THE WALLS
   if (S.showFront) drawLayer(S.img.front, S.camXB, S.camY, '#ff69b4', S.bulge, layerTex.front);
-  if (S.showCol && S.colOver) drawCol();    // OVER BOTH WALLS
+  if ((S.showCol || S.showBand) && S.colOver) drawShaft();    // OVER BOTH WALLS
   const f = (n) => n.toFixed(0).padStart(5, ' ');
   status.textContent = S.paused ? 'PAUSED' : (S.vel > 0 ? 'CLIMBING' : S.vel < 0 ? 'DESCENDING' : 'STILL');
-  status.textContent += '   Y ' + f(S.camY) + '   BACK X ' + f(S.camXA) + '   FRONT X ' + f(S.camXB) + (S.img.col ? '   COLUMN ' + f(mod(S.colRot, S.img.col.naturalWidth)) : '') + '   (ART PX)';
+  status.textContent += '   Y ' + f(S.camY) + '   BACK X ' + f(S.camXA) + '   FRONT X ' + f(S.camXB) + (S.img.col ? '   COLUMN ' + f(mod(colRotTotal(), S.img.col.naturalWidth)) : '') + (S.showBand ? '   BAND ' + (bandPhase() * 180 / Math.PI).toFixed(0).padStart(6, ' ') + ' DEG' : '') + '   (ART PX)';
 }
 
 let last = performance.now();
@@ -299,18 +438,18 @@ function frame(now) {
 const loadImg = (src) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });
 async function loadDefaults() {
   const bust = '?t=' + Date.now(), errs = [];
-  for (const k of ['back', 'front', 'col']) {
+  for (const k of ['back', 'front', 'col', 'band']) {
     if (S.custom[k]) continue;
     try { S.img[k] = await loadImg(SRC[k] + bust); S.name[k] = SRC[k].split('/').pop(); } catch (e) { errs.push(e.message); }
   }
-  $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front; $('nmCol').textContent = S.name.col;
-  prepCol(); prepLayerTex('back'); prepLayerTex('front');
+  $('nmBack').textContent = S.name.back; $('nmFront').textContent = S.name.front; $('nmCol').textContent = S.name.col; $('nmBand').textContent = S.name.band;
+  prepCol(); prepBand(); prepLayerTex('back'); prepLayerTex('front');
   if (errs.length) status.textContent = errs.join('  |  ');
 }
 function pickFile(k, file) {
   if (!file) return;
   const url = URL.createObjectURL(file);
-  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(NM[k]).textContent = file.name; if (k === 'col') prepCol(); else prepLayerTex(k); })
+  loadImg(url).then((im) => { S.img[k] = im; S.custom[k] = true; S.name[k] = file.name; $(NM[k]).textContent = file.name; if (k === 'col') prepCol(); else if (k === 'band') prepBand(); else prepLayerTex(k); })
     .catch((e) => { status.textContent = e.message; });
 }
 $('loadBack').onclick = () => $('fileBack').click();
@@ -319,7 +458,9 @@ $('fileBack').onchange = (e) => { pickFile('back', e.target.files[0]); e.target.
 $('fileFront').onchange = (e) => { pickFile('front', e.target.files[0]); e.target.value = ''; };
 $('loadCol').onclick = () => $('fileCol').click();
 $('fileCol').onchange = (e) => { pickFile('col', e.target.files[0]); e.target.value = ''; };
-$('reload').onclick = () => { S.custom.back = S.custom.front = S.custom.col = false; loadDefaults(); };
+$('loadBand').onclick = () => $('fileBand').click();
+$('fileBand').onchange = (e) => { pickFile('band', e.target.files[0]); e.target.value = ''; };
+$('reload').onclick = () => { S.custom.back = S.custom.front = S.custom.col = S.custom.band = false; loadDefaults(); };
 
 // ---------- CONTROLS (ALL MOUSE / PEN: NO KEYBOARD NEEDED) ----------
 function bindRange(id, key, outId, fmt) {
@@ -336,6 +477,15 @@ bindRange('bulge', 'bulge', 'vBu', (v) => Math.round(v / 0.6 * 100) + '%');   //
 bindRange('colW', 'colW', 'vCW', (v) => v.toFixed(0));
 bindRange('colSpin', 'colSpin', 'vCS', (v) => v.toFixed(0));
 bindRange('colShade', 'colShade', 'vCSh', (v) => Math.round(v * 100) + '%');
+bindRange('bandR', 'bandOuter', 'vBR', (v) => v.toFixed(0));
+bindRange('pitch', 'pitch', 'vPi', (v) => v.toFixed(0));
+bindRange('tilt', 'tilt', 'vTi', (v) => v.toFixed(2));
+bindRange('rimH', 'rimH', 'vRH', (v) => v.toFixed(0));
+bindRange('reps', 'repeats', 'vRe', (v) => v.toFixed(0));
+bindRange('bandDim', 'bandDim', 'vBD', (v) => Math.round(v * 100) + '%');
+$('showBand').onchange = (e) => { S.showBand = e.target.checked; };
+$('link').onchange = (e) => { S.link = e.target.checked; };
+$('marker').onchange = (e) => { S.marker = e.target.checked; };
 $('showCol').onchange = (e) => { S.showCol = e.target.checked; };
 function setOrder(over) { S.colOver = over; $('ordOver').classList.toggle('on', over); $('ordBetween').classList.toggle('on', !over); }
 $('ordOver').onclick = () => setOrder(true);
@@ -347,11 +497,11 @@ $('seams').onchange = (e) => { S.seams = e.target.checked; };
 
 function setVel(v) { $('vel').value = v; $('vel').dispatchEvent(new Event('input')); markDir(); }
 function markDir() { $('up').classList.toggle('on', S.vel > 0); $('down').classList.toggle('on', S.vel < 0); }
-$('up').onclick = () => setVel(Math.abs(S.vel) || 90);
-$('down').onclick = () => setVel(-(Math.abs(S.vel) || 90));
+$('up').onclick = () => setVel(Math.abs(S.vel) || 50);
+$('down').onclick = () => setVel(-(Math.abs(S.vel) || 50));
 $('vel').addEventListener('input', markDir); markDir();
 $('pause').onclick = () => { S.paused = !S.paused; $('pause').classList.toggle('on', S.paused); $('pause').textContent = S.paused ? 'RESUME' : 'PAUSE'; };
-$('resetPos').onclick = () => { S.camY = S.camXA = S.camXB = 0; };
+$('resetPos').onclick = () => { S.camY = S.camXA = S.camXB = S.colRot = S.bandPhi = 0; };
 function fitHeight() {
   const im = S.img.back || S.img.front; if (!im) return;
   const z = Math.min(3, Math.max(0.5, (CH / DPR) / im.naturalHeight));
@@ -367,13 +517,14 @@ cv.addEventListener('pointermove', (e) => {
   const dx = (e.clientX - drag.x) / S.zoom, dy = (e.clientY - drag.y) / S.zoom; drag.x = e.clientX; drag.y = e.clientY;
   S.camXA -= dx; S.camXB -= dx * S.ratio; S.camY += dy;
   if (S.img.col) S.colRot -= dx * S.img.col.naturalWidth / (Math.PI * S.colW);   // DRAG TURNS THE CYLINDER SO ITS MIDDLE FOLLOWS THE POINTER
+  S.bandPhi -= dx / Math.max(1, (S.colW / 2 + Math.max(S.bandOuter, S.colW / 2 + 12)) / 2);   // ...AND THE BAND BY THE SAME ARC AT ITS MIDDLE RADIUS
 
 });
 const endDrag = (e) => { drag = null; cv.classList.remove('drag'); try { cv.releasePointerCapture(e.pointerId); } catch (_) { /* ALREADY RELEASED */ } };
 cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
 
 // TEST HOOK (HEADLESS CHECKS)
-window.__shaft = { S, step, render, drawLayer, buildCol, drawCol, colCache, warpU, layerTex };
+window.__shaft = { S, step, render, drawLayer, buildCol, drawCol, colCache, warpU, layerTex, buildBand, bandMesh, bandTex, bandSlide, bandPhase, colRotTotal, markerFeetY, BAND_Q };
 
 resize();
 loadDefaults().then(() => { fitHeight(); last = performance.now(); requestAnimationFrame(frame); });
