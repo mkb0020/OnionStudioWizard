@@ -18,7 +18,7 @@
   },
   "pins": { "a": { "x": -16, "y": 0 }, "b": { "x": 16, "y": 0 } },
   "pinPoses": {},
-  "rootOffset": { "x": -110, "y": -200 },
+  "rootOffset": { "x": -30, "y": -185 },
   "spring": { "stiffness": 150, "damping": 80, "runAngle": 0, "fallAngle": 12, "kick": 260, "strips": 50, "ampMin": 6, "ampMax": 24, "freqMin": 1, "freqMax": 3, "phase": 5 },
   "idle": {
     "enabled": true, "root": { "x": 20, "y": -185 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 550, "gust": 1050,
@@ -27,7 +27,7 @@
   },
   "attack": { "enabled": true, "root": { "x": 0, "y": -185 }, "blendRate": 20, "backBias": 600, "flutter": 250, "gust": 7000, "gustLift": 0.7, "gustTime": 0.6 },
   "jump": {
-    "roots": { "jumpStart": { "x": 14, "y": -205 }, "jump": { "x": 8, "y": -215 }, "fall": { "x": 20, "y": -244 }, "land": { "x": 26, "y": -238 } },
+    "roots": { "jumpStart": { "x": 30, "y": -175 }, "jump": { "x": 30, "y": -175 }, "fall": { "x": 10, "y": -200 }, "land": { "x": 26, "y": -238 } },
     "blendRate": 16, "rootEase": 30
   }
 }
