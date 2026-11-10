@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide{pointer-events:none}
 #ruler[hidden]{display:none}
 #world.pixview canvas{image-rendering:pixelated}
 #cursor{position:absolute;pointer-events:none;border:1.5px solid #000;border-radius:50%;
@@ -388,6 +388,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="texture" title="Texture brushes (X): blotch, speckle, stone, crack"><svg viewBox="0 0 24 24"><path d="M3 5l5 3 3-4 4 4 6-3"/><path d="M4 12l4 2 3-3 3 4 6-2"/><path d="M3 20l5-3 3 2 4-3 5 2"/><circle cx="6" cy="9" r=".7"/><circle cx="17" cy="14" r=".7"/><circle cx="12" cy="18" r=".7"/></svg></button>
       <button class="tb" data-tool="move"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
       <button class="tb" data-tool="picker" title="Eyedropper (Q): pick a color from the canvas"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
+      <button class="tb" data-tool="wave" title="Wave guide (J): rails + ticks + a traveling wave for hair and capes"><svg viewBox="0 0 24 24"><path d="M2 6h20M2 18h20" opacity=".55"/><path d="M3 6c3 0 4 12 7 12s4-12 7-12 3 4 4 6"/><path d="M5 4v4M12 16v4M19 4v4"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
       </div>
@@ -496,6 +497,72 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       </div>
       <p class="note">Drag along a fold. The center goes light, both flanks go dark, and it only touches existing paint on the layer. LEAN 0 = symmetric; higher = shadow gathers on the side away from LIGHT.</p>
     </div>
+    <div class="sec" id="waveSec" hidden>
+      <h2>Wave guide</h2>
+      <div class="onion-row">
+        <select id="wvSel" aria-label="Guide" style="flex:1;min-width:0"></select>
+        <button class="tgl" id="wvAdd" style="width:auto;padding:0 10px" title="New guide">+ NEW</button>
+        <button class="tgl" id="wvDel" style="width:auto;padding:0 10px" title="Delete this guide">&#10005;</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl on" id="wvShow" style="width:auto;flex:1">SHOW: ON</button>
+        <input type="range" id="wvOp" min="10" max="100" value="80" style="flex:1;min-width:0" aria-label="Guide opacity"><output id="wvOpOut">80%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">WAVES</span>
+        <input type="range" id="wvWaves" min="1" max="16" value="3"><output id="wvWavesOut">1.5</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">SPACING</span>
+        <div class="seg" id="wvSpacing" style="flex:1"><button data-v="even" class="on">EVEN</button><button data-v="uneven">UNEVEN</button></div>
+      </div>
+      <div class="onion-row" data-wv="uneven">
+        <span class="lbl">SPREAD</span>
+        <input type="range" id="wvSpread" min="-100" max="100" value="0"><output id="wvSpreadOut">0</output>
+      </div>
+      <div class="onion-row" data-wv="uneven">
+        <span class="lbl">LEAN</span>
+        <input type="range" id="wvLean" min="15" max="85" value="50"><output id="wvLeanOut">50%</output>
+      </div>
+      <div class="onion-row" data-wv="uneven">
+        <span class="lbl">WOBBLE</span>
+        <input type="range" id="wvWob" min="0" max="100" value="35"><output id="wvWobOut">35%</output>
+      </div>
+      <div class="onion-row" data-wv="uneven">
+        <button class="tgl" id="wvSeed" style="width:auto;flex:1">NEW WOBBLE</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">TRAVEL</span>
+        <div class="seg" id="wvDir" style="flex:1"><button data-v="1" class="on">TO TIP</button><button data-v="-1">TO ROOT</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">LOOPS</span>
+        <input type="range" id="wvLoops" min="1" max="4" value="1"><output id="wvLoopsOut">1</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">OFFSET</span>
+        <input type="range" id="wvOffset" min="0" max="99" value="0"><output id="wvOffsetOut">0%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">TIMING</span>
+        <div class="seg" id="wvTiming" style="flex:1"><button data-v="time" class="on" title="Frames with a longer hold move the wave further, so it moves evenly in time">TIME</button><button data-v="frame" title="Every frame moves the wave the same amount">FRAMES</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">KEYS</span>
+        <span class="note" id="wvKeys" style="flex:1">-</span>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="wvKeyDel" style="width:auto;flex:1">DEL KEY</button>
+        <button class="tgl" id="wvKeyOne" style="width:auto;flex:1" title="Keep this frame's rails as the only key">1 KEY</button>
+        <button class="tgl" id="wvFlip" style="width:auto;flex:1" title="Swap the top and bottom rails">FLIP</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="wvRedraw" style="width:auto;flex:1">REDRAW</button>
+        <button class="tgl" id="wvBake" style="width:auto;flex:1" title="Paint this guide into a new top layer on every frame">BAKE</button>
+      </div>
+      <p class="note" id="wvNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -549,6 +616,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="ruler" width="1000" height="1000" hidden></canvas>
       <canvas id="onion" width="1000" height="1000"></canvas>
       <canvas id="view" width="1000" height="1000"></canvas>
+      <canvas id="guide" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
     </div>
     <div id="target"></div>
@@ -2448,6 +2516,166 @@ const Engine = (() => {
 
 
 /* =====================================================================
+   WAVE GUIDE (pure math + drawing; the UI lives further down)
+
+   The Pinterest hair / cape trick, done neatly: two rails (top A, bottom B), ticks that alternate
+   between them, and a wave whose peaks touch the top rail at a tick and whose troughs touch the
+   bottom rail at a tick. Every frame slides the ticks along a bit, so the wave travels.
+
+   Rails: a0 -> a1 (top) and b0 -> b1 (bottom). End 0 is the ROOT (where the hair/cape is attached),
+   end 1 is the TIP. The rails don't have to be parallel. u (0..1) runs root -> tip on both rails.
+
+   Phase: s(u) = WAVES * warp(u) - shift. Whole numbers of s are peaks (top ticks), whole numbers + LEAN
+   are troughs (bottom ticks). Between two ticks the wave is a half-cosine, so with even spacing it is a
+   true sine, and with uneven spacing it still turns exactly at every tick.
+     warp(u)  even: u.  uneven: SPREAD (ticks bunch at the root or the tip) after WOBBLE (seeded, hand-drawn
+              irregularity). warp stays strictly increasing, so the ticks never cross.
+     shift    = DIR * LOOPS * t + OFFSET, t = 0..1 through the animation (by time with holds, or by frame).
+              LOOPS is a whole number, so the last frame flows straight back into the first.
+
+   Rail positions are keyframed per frame (keys hold a frame object, so reordering frames keeps them);
+   frames between two keys slide between them, frames before the first / after the last key hold it.
+   ===================================================================== */
+const Wave = (() => {
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const lerpP = (p, q, k) => ({ x: lerp(p.x, q.x, k), y: lerp(p.y, q.y, k) });
+  const cloneR = r => ({ a0: { ...r.a0 }, a1: { ...r.a1 }, b0: { ...r.b0 }, b1: { ...r.b1 } });
+  const lerpR = (r, q, k) => ({ a0: lerpP(r.a0, q.a0, k), a1: lerpP(r.a1, q.a1, k), b0: lerpP(r.b0, q.b0, k), b1: lerpP(r.b1, q.b1, k) });
+
+  function defaults() {
+    return { name: 'Guide', waves: 1.5, spacing: 'even', spread: 0, lean: 50, wobble: 35, seed: (Math.random() * 1e9) | 0,
+      loops: 1, dir: 1, offset: 0, timing: 'time', keys: [] };
+  }
+
+  // small seeded generator (mulberry32) for the wobble coefficients
+  function rng(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  }
+  const coefCache = new Map();
+  function wobbleCoefs(seed) {
+    if (coefCache.has(seed)) return coefCache.get(seed);
+    const r = rng(seed), c = [1, 2, 3, 4].map(() => r() * 2 - 1);
+    const sum = c.reduce((s, v) => s + Math.abs(v), 0) || 1;
+    const out = c.map(v => v / sum);                   // sum of |c| = 1, so the slope never drops below 1 - k
+    coefCache.set(seed, out); return out;
+  }
+
+  // u (0..1) -> warped u (0..1), strictly increasing
+  function warp(g, u) {
+    if (g.spacing !== 'uneven') return u;
+    const k = 0.85 * Math.min(100, Math.max(0, g.wobble)) / 100;
+    if (k > 0) {
+      const c = wobbleCoefs(g.seed);
+      let w = 0;
+      for (let i = 0; i < c.length; i++) w += c[i] * Math.sin(Math.PI * (i + 1) * u) / (Math.PI * (i + 1));
+      u += k * w;
+    }
+    const a = -Math.min(100, Math.max(-100, g.spread)) / 25;   // SPREAD > 0: ticks spread out toward the tip
+    return Math.abs(a) < 1e-4 ? u : (Math.exp(a * u) - 1) / (Math.exp(a) - 1);
+  }
+  const leanOf = g => g.spacing === 'uneven' ? Math.min(0.9, Math.max(0.1, g.lean / 100)) : 0.5;
+
+  // wave height at cycle position c (0..1): 1 = top rail (peak at c = 0), 0 = bottom rail (trough at c = q)
+  function height(c, q) {
+    return c < q ? 0.5 + 0.5 * Math.cos(Math.PI * c / q) : 0.5 - 0.5 * Math.cos(Math.PI * (c - q) / (1 - q));
+  }
+
+  // animation position of frame i, 0..1 (frame 0 = 0; one past the last frame would be 1 = frame 0 again)
+  function timeAt(frames, i, mode) {
+    const n = frames.length; if (n <= 1) return 0;
+    if (mode === 'frame') return i / n;
+    let before = 0, total = 0;
+    for (let k = 0; k < n; k++) { const h = frames[k].hold || 1; if (k < i) before += h; total += h; }
+    return before / total;
+  }
+  const shiftAt = (g, frames, i) => g.dir * g.loops * timeAt(frames, i, g.timing) + g.offset / 100;
+
+  // keys that still point at a frame in the project, in frame order
+  function liveKeys(g, frames) {
+    return g.keys.map(k => ({ i: frames.indexOf(k.frame), k })).filter(o => o.i >= 0).sort((a, b) => a.i - b.i);
+  }
+  function railsAt(g, frames, i) {
+    const live = liveKeys(g, frames);
+    if (!live.length) return g.keys.length ? cloneR(g.keys[0].r) : null;
+    if (i <= live[0].i) return cloneR(live[0].k.r);
+    const last = live[live.length - 1];
+    if (i >= last.i) return cloneR(last.k.r);
+    for (let j = 0; j < live.length - 1; j++) {
+      const p = live[j], q = live[j + 1];
+      if (i >= p.i && i <= q.i) return lerpR(p.k.r, q.k.r, (i - p.i) / (q.i - p.i));
+    }
+    return cloneR(last.k.r);
+  }
+
+  // Geometry for one frame: the wave polyline and the ticks ({p, top, dx, dy} with dx/dy = rail direction).
+  function build(g, r, shift, samples = 400) {
+    const q = leanOf(g), W = Math.max(0.25, g.waves);
+    const A = u => lerpP(r.a0, r.a1, u), B = u => lerpP(r.b0, r.b1, u);
+    const sAt = u => W * warp(g, u) - shift;
+    const wave = [];
+    for (let j = 0; j <= samples; j++) {
+      const u = j / samples, s = sAt(u), c = s - Math.floor(s);
+      wave.push(lerpP(B(u), A(u), height(c, q)));
+    }
+    const ticks = [], M = 1200;
+    const ad = { x: r.a1.x - r.a0.x, y: r.a1.y - r.a0.y }, bd = { x: r.b1.x - r.b0.x, y: r.b1.y - r.b0.y };
+    let u0 = 0, s0 = sAt(0);
+    const hit = (lvl, top) => {                  // crossings of s = n + lvl between u0 and u1 (s is increasing)
+      return (u1, s1) => {
+        for (let n = Math.ceil(s0 - lvl); n + lvl <= s1; n++) {
+          const target = n + lvl; if (target < s0 || (target === s0 && u0 > 0)) continue;
+          const k = s1 === s0 ? 0 : (target - s0) / (s1 - s0), u = lerp(u0, u1, k);
+          ticks.push({ u, top, p: top ? A(u) : B(u), dx: top ? ad.x : bd.x, dy: top ? ad.y : bd.y });
+        }
+      };
+    };
+    const peak = hit(0, true), trough = hit(q, false);
+    for (let j = 1; j <= M; j++) {
+      const u1 = j / M, s1 = sAt(u1);
+      peak(u1, s1); trough(u1, s1);
+      u0 = u1; s0 = s1;
+    }
+    ticks.sort((a, b) => a.u - b.u);
+    return { wave, ticks, A, B };
+  }
+
+  // Draw one guide. lw = base line width in canvas pixels (the UI keeps it steady on screen across zoom).
+  const COLORS = { rail: '#58e84c', tick: '#fecd39', wave: '#ff69b4' };
+  function draw(ctx, g, r, shift, o = {}) {
+    const lw = o.lw || 3, geo = build(g, r, shift);
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = o.alpha == null ? 1 : o.alpha;
+    ctx.strokeStyle = COLORS.rail; ctx.lineWidth = lw;
+    ctx.beginPath(); ctx.moveTo(r.a0.x, r.a0.y); ctx.lineTo(r.a1.x, r.a1.y); ctx.moveTo(r.b0.x, r.b0.y); ctx.lineTo(r.b1.x, r.b1.y); ctx.stroke();
+    ctx.strokeStyle = COLORS.tick; ctx.lineWidth = lw * 1.4;
+    const half = o.tick || 14;
+    ctx.beginPath();
+    for (const t of geo.ticks) {
+      const L = Math.hypot(t.dx, t.dy) || 1, nx = -t.dy / L * half, ny = t.dx / L * half;
+      ctx.moveTo(t.p.x - nx, t.p.y - ny); ctx.lineTo(t.p.x + nx, t.p.y + ny);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = COLORS.wave; ctx.lineWidth = lw * 1.2;
+    ctx.beginPath(); geo.wave.forEach((p, j) => j ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+    ctx.restore();
+    return geo;
+  }
+
+  // Rails from a root -> tip drag: parallel, `half` px either side; "top" is the side facing up on screen.
+  function railsFromDrag(a, b, half = 60) {
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+    let nx = -dy / L, ny = dx / L;
+    if (ny > 0 || (Math.abs(ny) < 1e-6 && nx > 0)) { nx = -nx; ny = -ny; }
+    return { a0: { x: a.x + nx * half, y: a.y + ny * half }, a1: { x: b.x + nx * half, y: b.y + ny * half },
+             b0: { x: a.x - nx * half, y: a.y - ny * half }, b1: { x: b.x - nx * half, y: b.y - ny * half } };
+  }
+
+  return { defaults, warp, height, leanOf, timeAt, shiftAt, liveKeys, railsAt, build, draw, railsFromDrag, cloneR, lerpR, COLORS };
+})();
+
+
+/* =====================================================================
    UI
    ===================================================================== */
 (() => {
@@ -2521,6 +2749,276 @@ const Engine = (() => {
   }
   $('#rulerBtn').addEventListener('click', () => setRuler(!state.ruler));
   try { if (localStorage.getItem('dtRuler') === '1') setRuler(true, true); } catch (err) { /* optional */ }
+
+  /* ---------- wave guide (its own canvas above the art; never exported unless you BAKE it) ----------
+     WAVE tool (J): with no guide yet, drag from the ROOT to the TIP to place one. Then drag the four
+     round handles (rail ends) or the square one (whole guide). Dragging on a frame without a key
+     makes a key there; frames between keys slide between them. Edits and setting changes are undoable;
+     SHOW / opacity are view settings. Everything is saved in the project (waveGuides). */
+  const guideEl = $('#guide'), gctx = guideEl.getContext('2d');
+  const wave = { show: true, opacity: 0.8, sel: 0, guides: [] };
+  let guideRaf = 0, gdrag = null, wvBefore = null;
+  const curGuide = () => wave.guides[wave.sel] || null;
+  const HANDLE_PX = 22;                         // grab radius on screen (pen friendly)
+
+  function requestGuide() {
+    if (guideRaf) return;
+    guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
+  }
+  function handlesOf(r) {
+    const c = { x: (r.a0.x + r.a1.x + r.b0.x + r.b1.x) / 4, y: (r.a0.y + r.a1.y + r.b0.y + r.b1.y) / 4 };
+    return [['a0', r.a0], ['a1', r.a1], ['b0', r.b0], ['b1', r.b1], ['all', c]];
+  }
+  function drawGuides() {
+    gctx.clearRect(0, 0, guideEl.width, guideEl.height);
+    const editing = state.tool === 'wave';
+    guideEl.style.display = (wave.show || editing) ? '' : 'none';
+    if (!wave.show && !editing) return;
+    guideEl.style.opacity = wave.show ? wave.opacity : 0.5;
+    const z = state.zoom, lw = clamp(2.5 / z, 1, 12), i = project.currentFrame;
+    wave.guides.forEach((g, gi) => {
+      const r = Wave.railsAt(g, project.frames, i); if (!r) return;
+      const mine = gi === wave.sel;
+      Wave.draw(gctx, g, r, Wave.shiftAt(g, project.frames, i), { lw, tick: 9 * lw / 2.5 + 6, alpha: editing && !mine ? 0.4 : 1 });
+      if (!editing || !mine || playing) return;
+      // handles: round = rail ends, square = whole guide. Filled ones belong to a key on this frame.
+      const keyed = g.keys.some(k => k.frame === project.frame);
+      const R = 9 / z;
+      gctx.save(); gctx.lineWidth = 2 / z;
+      for (const [name, p] of handlesOf(r)) {
+        gctx.fillStyle = keyed ? (name[0] === 'a' ? '#58e84c' : name[0] === 'b' ? '#00ffff' : '#fecd39') : '#170032';
+        gctx.strokeStyle = name === 'all' ? '#fecd39' : name[0] === 'a' ? '#58e84c' : '#00ffff';
+        gctx.beginPath();
+        if (name === 'all') gctx.rect(p.x - R, p.y - R, R * 2, R * 2); else gctx.arc(p.x, p.y, R, 0, Math.PI * 2);
+        gctx.fill(); gctx.stroke();
+      }
+      const root = { x: (r.a0.x + r.b0.x) / 2, y: (r.a0.y + r.b0.y) / 2 };
+      gctx.font = '600 ' + (12 / z) + 'px ui-monospace, Menlo, Consolas, monospace';
+      gctx.textAlign = 'center'; gctx.textBaseline = 'middle';
+      const label = 'ROOT', w = gctx.measureText(label).width + 8 / z;
+      gctx.fillStyle = '#170032e0'; gctx.fillRect(root.x - w / 2, root.y - 9 / z, w, 18 / z);
+      gctx.fillStyle = '#fecd39'; gctx.fillText(label, root.x, root.y + 1 / z);
+      gctx.restore();
+    });
+    if (gdrag && gdrag.mode === 'place' && gdrag.b) {          // preview while placing a new guide
+      const r = Wave.railsFromDrag(gdrag.a, gdrag.b);
+      Wave.draw(gctx, gdrag.g, r, Wave.shiftAt(gdrag.g, project.frames, i), { lw, tick: 9 * lw / 2.5 + 6 });
+    }
+  }
+
+  /* undo: whole-state snapshots (keys keep their frame objects) */
+  const cloneGuide = g => ({ ...g, keys: g.keys.map(k => ({ frame: k.frame, r: Wave.cloneR(k.r) })) });
+  const wvSnap = () => ({ sel: wave.sel, guides: wave.guides.map(cloneGuide) });
+  function wvRestore(s) { wave.guides = s.guides.map(cloneGuide); wave.sel = clamp(s.sel, 0, Math.max(0, wave.guides.length - 1)); syncWaveUI(); requestGuide(); }
+  function wvCommit(before, label) {
+    const after = wvSnap();
+    if (JSON.stringify(after, (k, v) => k === 'frame' ? project.frames.indexOf(v) : v) === JSON.stringify(before, (k, v) => k === 'frame' ? project.frames.indexOf(v) : v)) return false;
+    project.dirty = true;
+    history.push({ label, bytes: 0, undo: () => wvRestore(before), redo: () => wvRestore(after) });
+    return true;
+  }
+  // a one-shot change (button): snapshot, change, commit
+  function wvEdit(label, fn) { const before = wvSnap(); if (fn() === false) return; wvCommit(before, label); syncWaveUI(); requestGuide(); }
+  // slider: snapshot on the first input, commit when the slider is let go
+  function wvLive(fn) { if (!wvBefore) wvBefore = wvSnap(); fn(); syncWaveUI(); requestGuide(); }
+  function wvSettle(label) { if (wvBefore) { const b = wvBefore; wvBefore = null; wvCommit(b, label); } }
+
+  function keyHere(g) {                           // the key on this frame, made from the in-between rails if needed
+    let k = g.keys.find(k => k.frame === project.frame);
+    if (!k) { k = { frame: project.frame, r: Wave.railsAt(g, project.frames, project.currentFrame) }; g.keys.push(k); }
+    return k;
+  }
+  function newGuide() {
+    const g = Wave.defaults();
+    let n = wave.guides.length + 1; while (wave.guides.some(x => x.name === 'Guide ' + n)) n++;
+    g.name = 'Guide ' + n; return g;
+  }
+
+  /* pointer (called from the stage handlers) */
+  function waveDown(e, p) {
+    const g = curGuide(), z = state.zoom;
+    if (g && g.keys.length) {
+      const r = Wave.railsAt(g, project.frames, project.currentFrame);
+      let best = null, bd = HANDLE_PX / z;
+      for (const [name, hp] of handlesOf(r)) { const d = Math.hypot(hp.x - p.x, hp.y - p.y); if (d <= bd) { bd = d; best = name; } }
+      if (!best) { flash('Drag a handle to move the guide (or REDRAW to place it again)'); return; }
+      const before = wvSnap(), k = keyHere(g);
+      gdrag = { id: e.pointerId, mode: 'handle', which: best, start: p, before, k, r0: Wave.cloneR(k.r) };
+    } else {
+      gdrag = { id: e.pointerId, mode: 'place', a: p, b: null, g: g || newGuide() };
+    }
+    requestGuide();
+  }
+  function waveMove(p) {
+    const d = gdrag;
+    if (d.mode === 'place') { d.b = p; requestGuide(); return; }
+    const dx = p.x - d.start.x, dy = p.y - d.start.y, r = d.k.r, r0 = d.r0;
+    const names = d.which === 'all' ? ['a0', 'a1', 'b0', 'b1'] : [d.which];
+    for (const n of names) { r[n].x = Math.round((r0[n].x + dx) * 10) / 10; r[n].y = Math.round((r0[n].y + dy) * 10) / 10; }
+    requestGuide();
+  }
+  function waveUp(ok) {
+    const d = gdrag; gdrag = null;
+    if (d.mode === 'place') {
+      if (ok && d.b && Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y) >= 20) {
+        wvEdit('Place wave guide', () => {
+          const g = d.g;
+          if (!wave.guides.includes(g)) { wave.guides.push(g); wave.sel = wave.guides.length - 1; }
+          g.keys = [{ frame: project.frame, r: Wave.railsFromDrag(d.a, d.b) }];
+        });
+        flash('Guide placed on all ' + project.frames.length + ' frame' + (project.frames.length > 1 ? 's' : ''));
+      } else if (ok) flash('Drag from the root to the tip to place the guide');
+      requestGuide(); return;
+    }
+    if (ok) { wvCommit(d.before, d.which === 'all' ? 'Move wave guide' : 'Move wave rail'); syncWaveUI(); }
+    else wvRestore(d.before);
+    requestGuide();
+  }
+  function cancelWaveDrag() { if (gdrag) { const d = gdrag; gdrag = null; if (d.mode === 'handle') wvRestore(d.before); requestGuide(); } }
+
+  /* settings panel */
+  function syncWaveUI() {
+    const g = curGuide(), sel = $('#wvSel');
+    sel.innerHTML = '';
+    if (!wave.guides.length) sel.add(new Option('(no guide yet)', '-1'));
+    wave.guides.forEach((x, i) => sel.add(new Option(x.name, String(i))));
+    sel.value = g ? String(wave.sel) : '-1';
+    $('#wvShow').classList.toggle('on', wave.show); $('#wvShow').textContent = 'SHOW: ' + (wave.show ? 'ON' : 'OFF');
+    $('#wvOp').value = Math.round(wave.opacity * 100); $('#wvOpOut').textContent = Math.round(wave.opacity * 100) + '%';
+    const d = g || Wave.defaults();
+    $('#wvWaves').value = Math.round(d.waves * 2); $('#wvWavesOut').textContent = d.waves;
+    $$('#wvSpacing button').forEach(b => b.classList.toggle('on', b.dataset.v === d.spacing));
+    $$('[data-wv="uneven"]').forEach(el => { el.hidden = d.spacing !== 'uneven'; });
+    $('#wvSpread').value = d.spread; $('#wvSpreadOut').textContent = (d.spread > 0 ? '+' : '') + d.spread;
+    $('#wvLean').value = d.lean; $('#wvLeanOut').textContent = d.lean + '%';
+    $('#wvWob').value = d.wobble; $('#wvWobOut').textContent = d.wobble + '%';
+    $$('#wvDir button').forEach(b => b.classList.toggle('on', +b.dataset.v === d.dir));
+    $('#wvLoops').value = d.loops; $('#wvLoopsOut').textContent = d.loops;
+    $('#wvOffset').value = d.offset; $('#wvOffsetOut').textContent = d.offset + '%';
+    $$('#wvTiming button').forEach(b => b.classList.toggle('on', b.dataset.v === d.timing));
+    const live = g ? Wave.liveKeys(g, project.frames) : [];
+    $('#wvKeys').textContent = live.length ? 'frame ' + live.map(o => o.i + 1).join(', ') : '-';
+    const keyed = !!(g && g.keys.some(k => k.frame === project.frame));
+    $('#wvKeyDel').disabled = !keyed || live.length < 2;
+    $('#wvKeyOne').disabled = !g || live.length < 2;
+    ['#wvFlip', '#wvRedraw', '#wvBake', '#wvDel'].forEach(s => { $(s).disabled = !(g && (s === '#wvDel' || g.keys.length)); });
+    $('#wvNote').textContent = !g || !g.keys.length
+      ? 'Drag from the ROOT (where it is attached) to the TIP to place the guide. It goes on every frame.'
+      : 'Round handles move the rail ends, the square moves the whole guide. Dragging on a frame without a key makes one there; frames between keys slide between them.';
+  }
+  function guideSet(key, v) { const g = curGuide(); if (g) g[key] = v; }
+  const wvSlider = (id, key, label, map = v => v) => {
+    $(id).addEventListener('input', e => wvLive(() => guideSet(key, map(+e.target.value))));
+    $(id).addEventListener('change', () => wvSettle(label));
+  };
+  wvSlider('#wvWaves', 'waves', 'Guide waves', v => v / 2);
+  wvSlider('#wvSpread', 'spread', 'Guide spread');
+  wvSlider('#wvLean', 'lean', 'Guide lean');
+  wvSlider('#wvWob', 'wobble', 'Guide wobble');
+  wvSlider('#wvLoops', 'loops', 'Guide loops');
+  wvSlider('#wvOffset', 'offset', 'Guide offset');
+  const wvSeg = (id, key, label, map = v => v) => $$(id + ' button').forEach(b => b.addEventListener('click', () => {
+    if (curGuide()) wvEdit(label, () => guideSet(key, map(b.dataset.v)));
+  }));
+  wvSeg('#wvSpacing', 'spacing', 'Guide spacing');
+  wvSeg('#wvDir', 'dir', 'Guide direction', v => +v);
+  wvSeg('#wvTiming', 'timing', 'Guide timing');
+  $('#wvSeed').addEventListener('click', () => wvEdit('New wobble', () => guideSet('seed', (Math.random() * 1e9) | 0)));
+  $('#wvSel').addEventListener('change', e => { const i = +e.target.value; if (i >= 0) { wave.sel = i; syncWaveUI(); requestGuide(); } e.target.blur(); });
+  $('#wvAdd').addEventListener('click', () => {
+    wvEdit('New wave guide', () => { wave.guides.push(newGuide()); wave.sel = wave.guides.length - 1; });
+    if (state.tool !== 'wave') setTool('wave');
+    flash('Drag from the root to the tip to place the new guide');
+  });
+  $('#wvDel').addEventListener('click', () => wvEdit('Delete wave guide', () => {
+    if (!curGuide()) return false;
+    wave.guides.splice(wave.sel, 1); wave.sel = clamp(wave.sel, 0, Math.max(0, wave.guides.length - 1));
+  }));
+  $('#wvShow').addEventListener('click', () => { wave.show = !wave.show; syncWaveUI(); requestGuide(); settingsChanged(); });
+  $('#wvOp').addEventListener('input', e => { wave.opacity = +e.target.value / 100; syncWaveUI(); requestGuide(); });
+  $('#wvOp').addEventListener('change', () => settingsChanged());
+  $('#wvKeyDel').addEventListener('click', () => wvEdit('Delete guide key', () => {
+    const g = curGuide(); if (!g || Wave.liveKeys(g, project.frames).length < 2) return false;
+    const k = g.keys.findIndex(k => k.frame === project.frame); if (k < 0) return false;
+    g.keys.splice(k, 1);
+  }));
+  $('#wvKeyOne').addEventListener('click', () => wvEdit('Guide same on all frames', () => {
+    const g = curGuide(); if (!g) return false;
+    g.keys = [{ frame: project.frame, r: Wave.railsAt(g, project.frames, project.currentFrame) }];
+  }));
+  $('#wvFlip').addEventListener('click', () => wvEdit('Flip wave guide', () => {
+    const g = curGuide(); if (!g) return false;
+    for (const k of g.keys) { const r = k.r; [r.a0, r.b0] = [r.b0, r.a0]; [r.a1, r.b1] = [r.b1, r.a1]; }
+  }));
+  $('#wvRedraw').addEventListener('click', () => {
+    if (!curGuide()) return;
+    wvEdit('Clear wave guide', () => { curGuide().keys = []; });
+    if (state.tool !== 'wave') setTool('wave');
+    flash('Drag from the root to the tip to place the guide again');
+  });
+  // Paint the selected guide into a new top layer on every frame, as one undo step.
+  $('#wvBake').addEventListener('click', () => {
+    const g = curGuide(); if (!g || !g.keys.length || !frameGuard()) return;
+    const added = [];
+    project.frames.forEach((f, i) => {
+      const l = new Engine.Layer(project.width, project.height, g.name.slice(0, 16) + ' guide');
+      Wave.draw(l.ctx, g, Wave.railsAt(g, project.frames, i), Wave.shiftAt(g, project.frames, i), { lw: 3, tick: 14 });
+      l.onion = false;
+      added.push({ f, l, prev: f.activeLayer });
+    });
+    const put = () => added.forEach(a => { a.f.layers.push(a.l); a.f.activeLayer = a.f.layers.length - 1; });
+    put(); project.dirty = true;
+    history.push({ label: 'Bake wave guide', bytes: added.length * project.width * project.height * 4, thumbsAll: true,
+      undo: () => added.forEach(a => { const k = a.f.layers.indexOf(a.l); if (k >= 0) a.f.layers.splice(k, 1); a.f.activeLayer = Math.min(a.prev, a.f.layers.length - 1); }),
+      redo: put });
+    project.frames.forEach((_, i) => drawThumb(i));
+    wave.show = false; syncWaveUI(); requestGuide(); settingsChanged();
+    flash('Baked into ' + added.length + ' layer' + (added.length > 1 ? 's' : '') + ' (live guide hidden)');
+  });
+
+  /* saving / loading (keys are stored by frame index) */
+  const r1 = v => Math.round(v * 10) / 10;
+  const packR = r => Object.fromEntries(['a0', 'a1', 'b0', 'b1'].map(n => [n, { x: r1(r[n].x), y: r1(r[n].y) }]));
+  function waveManifest() {
+    return {
+      show: wave.show, opacity: wave.opacity, sel: wave.sel,
+      guides: wave.guides.map(g => ({
+        name: g.name, waves: g.waves, spacing: g.spacing, spread: g.spread, lean: g.lean, wobble: g.wobble, seed: g.seed,
+        loops: g.loops, dir: g.dir, offset: g.offset, timing: g.timing,
+        keys: Wave.liveKeys(g, project.frames).map(o => ({ frame: o.i, r: packR(o.k.r) }))
+      }))
+    };
+  }
+  function loadWave(m, frames) {
+    wave.guides = []; wave.sel = 0; wave.show = true; wave.opacity = 0.8; gdrag = null; wvBefore = null;
+    if (m && typeof m === 'object') {
+      wave.show = m.show !== false;
+      if (isFinite(+m.opacity)) wave.opacity = clamp(+m.opacity, 0.1, 1);
+      const num = (v, a, b, d) => isFinite(+v) ? clamp(+v, a, b) : d;
+      const pt = p => p && isFinite(+p.x) && isFinite(+p.y) ? { x: +p.x, y: +p.y } : null;
+      for (const gd of (Array.isArray(m.guides) ? m.guides : []).slice(0, 20)) {
+        if (!gd || typeof gd !== 'object') continue;
+        const d = Wave.defaults();
+        const g = {
+          name: String(gd.name || 'Guide').slice(0, 24), waves: Math.round(num(gd.waves, 0.5, 8, d.waves) * 2) / 2,
+          spacing: gd.spacing === 'uneven' ? 'uneven' : 'even', spread: Math.round(num(gd.spread, -100, 100, 0)),
+          lean: Math.round(num(gd.lean, 15, 85, 50)), wobble: Math.round(num(gd.wobble, 0, 100, d.wobble)),
+          seed: isFinite(+gd.seed) ? (+gd.seed | 0) : d.seed, loops: Math.round(num(gd.loops, 1, 4, 1)),
+          dir: +gd.dir === -1 ? -1 : 1, offset: Math.round(num(gd.offset, 0, 99, 0)), timing: gd.timing === 'frame' ? 'frame' : 'time', keys: []
+        };
+        for (const kd of Array.isArray(gd.keys) ? gd.keys : []) {
+          const f = frames[kd && kd.frame | 0], r = kd && kd.r; if (!f || !r) continue;
+          const pts = ['a0', 'a1', 'b0', 'b1'].map(n => pt(r[n])); if (pts.some(p => !p)) continue;
+          if (g.keys.some(k => k.frame === f)) continue;
+          g.keys.push({ frame: f, r: { a0: pts[0], a1: pts[1], b0: pts[2], b1: pts[3] } });
+        }
+        wave.guides.push(g);
+      }
+      wave.sel = clamp(+m.sel | 0, 0, Math.max(0, wave.guides.length - 1));
+    }
+    syncWaveUI(); requestGuide();
+  }
+  syncWaveUI();
 
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
@@ -2603,7 +3101,7 @@ const Engine = (() => {
       if (t.layer) { const li = t.frame.layers.indexOf(t.layer); if (li >= 0) project.activeLayer = li; }
     }
     if (t && t.thumbsAll) project.frames.forEach((_, i) => drawThumb(i));
-    requestRender(); refreshStrip(); refreshLayers(); updateStatus(); requestOnion(); scheduleAutosave();
+    requestRender(); refreshStrip(); refreshLayers(); updateStatus(); requestOnion(); requestGuide(); syncWaveUI(); scheduleAutosave();
   };
 
   /* ---------- view transform ---------- */
@@ -2614,6 +3112,7 @@ const Engine = (() => {
     updatePixView();
     updateCursorSize();
     updateStatus();
+    requestGuide();
   }
   function zoomAt(sx, sy, factor) {
     const z = clamp(state.zoom * factor, 0.1, 16);
@@ -2650,6 +3149,9 @@ const Engine = (() => {
     $('#blurSec').hidden = t !== 'blur';
     $('#wrinkleSec').hidden = t !== 'wrinkle';
     $('#textureSec').hidden = t !== 'texture';
+    $('#waveSec').hidden = t !== 'wave';
+    if (t !== 'wave') cancelWaveDrag();
+    requestGuide();
     syncSize();
   }
   $$('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
@@ -2661,7 +3163,7 @@ const Engine = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -2693,6 +3195,7 @@ const Engine = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
+    cancelWaveDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -2959,6 +3462,9 @@ const Engine = (() => {
       fillPending = e.pointerId;       // fills on release, so a second finger can still start a pinch
     } else if (state.tool === 'picker') {
       pickId = e.pointerId; pickAt(e);
+    } else if (state.tool === 'wave') {
+      if (chain) finishChain();
+      waveDown(e, p);
     }
   });
 
@@ -2975,6 +3481,7 @@ const Engine = (() => {
     }
     if (stroke && stroke.id === e.pointerId) { moveStroke(e); return; }
     if (pickId === e.pointerId) { pickAt(e); return; }
+    if (gdrag && gdrag.id === e.pointerId) { waveMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -2993,6 +3500,7 @@ const Engine = (() => {
     }
     if (panning && panning.id === e.pointerId) { panning = null; stage.classList.remove('panning'); return; }
     if (pickId === e.pointerId) { pickId = null; return; }
+    if (gdrag && gdrag.id === e.pointerId) { waveUp(e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -3081,7 +3589,7 @@ const Engine = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag) return false;
+    if (stroke || shape || drag || gdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -3090,7 +3598,7 @@ const Engine = (() => {
     if (!frameGuard()) return;
     i = clamp(i, 0, project.frames.length - 1);
     if (i === project.currentFrame) return;
-    project.currentFrame = i; requestRender(); refreshStrip(); refreshLayers(); updateStatus(); requestOnion();
+    project.currentFrame = i; requestRender(); refreshStrip(); refreshLayers(); updateStatus(); requestOnion(); requestGuide(); syncWaveUI();
   }
   $('#addFrameBtn').addEventListener('click', () => { if (frameGuard()) project.addFrame(); });
   $('#dupFrameBtn').addEventListener('click', () => { if (frameGuard()) project.duplicateFrame(); });
@@ -3625,7 +4133,7 @@ const Engine = (() => {
     if (!playing) return;
     playing = false; cancelAnimationFrame(playRaf); onionEl.style.display = ''; requestOnion();
     const b = $('#playBtn'); b.classList.remove('active'); $('svg', b).innerHTML = ICON_PLAY;
-    refreshStrip(); refreshLayers(); updateStatus();
+    refreshStrip(); refreshLayers(); updateStatus(); requestGuide(); syncWaveUI();
   }
   function tick(now) {
     if (!playing) return;
@@ -3637,14 +4145,14 @@ const Engine = (() => {
       project.currentFrame = (project.currentFrame + 1) % project.frames.length;
       moved = true;
     }
-    if (moved) { requestRender(); refreshStrip(false); updateStatus(); }
+    if (moved) { requestRender(); refreshStrip(false); updateStatus(); requestGuide(); }
     playRaf = requestAnimationFrame(tick);
   }
   $('#playBtn').addEventListener('click', () => { playing ? stopPlayback() : startPlayback(); });
 
   /* ---------- undo / redo ---------- */
-  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape) return; history.undo(); }
-  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape) return; history.redo(); }
+  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag) return; history.undo(); }
+  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag) return; history.redo(); }
   $('#undoBtn').addEventListener('click', doUndo);
   $('#redoBtn').addEventListener('click', doRedo);
 
@@ -3986,7 +4494,8 @@ const Engine = (() => {
      A .dtproj file is a plain zip:
        project.json          manifest: canvas size, fps, paper color, onion + export settings,
                              and for every frame: hold, selected layer, and its layers
-                             (name, visible, opacity, locked, onion, clip, file)
+                             (name, visible, opacity, locked, onion, clip, file),
+                             plus waveGuides (wave guide settings + rail keys by frame index)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -4003,7 +4512,7 @@ const Engine = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -4034,6 +4543,7 @@ const Engine = (() => {
       width: project.width, height: project.height, fps: project.fps, currentFrame: project.currentFrame,
       paperColor: state.paperColor,
       onion: { prev: onion.prev, prevOpacity: onion.prevOpacity },
+      waveGuides: waveManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
         hold: s.frame.hold, activeLayer: Math.min(s.frame.activeLayer, s.layers.length - 1),
@@ -4125,6 +4635,7 @@ const Engine = (() => {
     }
     setFps(fps);
     proj.handle = handle; proj.name = cleanName(name) || 'untitled';
+    loadWave(m.waveGuides, frames);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
   }
@@ -4159,7 +4670,7 @@ const Engine = (() => {
       inp.click();
     });
   }
-  const busyDrawing = () => { if (stroke || shape || drag) { flash('Finish what you are drawing first'); return true; } return false; };
+  const busyDrawing = () => { if (stroke || shape || drag || gdrag) { flash('Finish what you are drawing first'); return true; } return false; };
 
   async function openProject() {
     if (busy || busyDrawing()) return;
@@ -4387,6 +4898,7 @@ const Engine = (() => {
       case 'w': setTool('wrinkle'); break;
       case 'x': setTool('texture'); break;
       case 'q': setTool('picker'); break;
+      case 'j': setTool('wave'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -4408,7 +4920,7 @@ const Engine = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
