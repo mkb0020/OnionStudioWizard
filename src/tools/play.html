@@ -199,6 +199,7 @@ function mapSolids(g, C) {   // MERGE RUNS OF '#' INTO RECTS (ROW RUNS, THEN STA
 function loadDefaultLevel() {
   solids.length = walls.length = oneWays.length = lamps.length = 0; MAP.on = false; MAP.grid = null; buildLevel(); lamps.push(...defaultLamps());
   LEVEL_MIN_X = 0; LEVEL_MAX_X = 13500; FALL_Y = GROUND_Y + 300; FLOOR_MAX = GROUND_Y; SPAWN = { x: 100, y: GROUND_Y };
+  spawnCritters();
 }
 async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
   const def = OSWTiles.TILESETS[m && m.tileset] || OSWTiles.TILESETS.basic;
@@ -224,6 +225,7 @@ async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
   LEVEL_MIN_X = 0; LEVEL_MAX_X = g.cols * C; FALL_Y = g.rows * C + 400; FLOOR_MAX = Infinity;
   const sp = (Array.isArray(m.spawn) && g.kind(m.spawn[0], m.spawn[1]) !== '#') ? m.spawn : defaultSpawn(g);
   SPAWN = { x: (sp[0] + 0.5) * C, y: (sp[1] + 1) * C };
+  spawnCritters();
   return true;
 }
 function drawMapLevel(vl, vr) {
@@ -260,6 +262,7 @@ async function loadAssets() {
   IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
+  for (const [kind, K] of Object.entries(CRITTER_KINDS)) for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
 function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX SHIFT (FORWARD-MIRRORED / DOWN)
@@ -271,7 +274,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { keys.delete(keyName(e)); });
@@ -397,6 +400,78 @@ function pressJump() {
 }
 
 /* ---------- ONE FIXED STEP ---------- */
+/* ---------- CRITTERS (FRIENDLY WANDERERS: NO COMBAT, NO PLAYER COLLISION) ----------
+   EACH KIND HAS TWO ONE-ROW SHEETS OF frame x frame CELLS (idle, walk), FACING RIGHT, FEET ON THE CELL BOTTOM.
+   anchorX = THE ART X INSIDE THE CELL THAT SITS ON THE CRITTER'S POSITION (ROUGHLY UNDER THE BODY); TURNING MIRRORS AROUND IT, SO THE FEET STAY PUT.
+   stepPx = ART PX A PLANTED FOOT SLIDES BACK PER WALK FRAME (MEASURED OFF THE SHEET). WALK SPEED IS DERIVED FROM IT AND walk.fps, SO THE FEET NEVER SKATE:
+   CHANGE walk.fps TO MAKE HIM WALK FASTER OR SLOWER.
+   BEHAVIOUR: IDLE FOR idleTime SECONDS, THEN WALK FOR walkTime SECONDS (SOMETIMES TURNING FIRST). AT A WALL, A LEDGE DROP BIGGER THAN stepUp,
+   OR THE LEVEL EDGE HE TURNS AROUND AND PAUSES; PAST leash FROM HOME HE HEADS BACK. N TOGGLES CRITTERS; F1 SHOWS THEIR BOXES. */
+const CRITTER_DIR = 'assets/images/critters/';
+const CRITTER_KINDS = {
+  aetherling: {
+    idle: { src: 'aetherling_idle.png', frames: 8, fps: 8 },
+    walk: { src: 'aetherling_walk_cycle.png', frames: 8, fps: 10 },
+    frame: 400, scale: 1, anchorX: 255, stepPx: 12, hitW: 110, hitH: 110, stepUp: 12,
+    idleTime: [1.5, 4], walkTime: [2.5, 6], turnChance: 0.45, pauseAfterTurn: [0.6, 1.6], leash: 600,   // leash = HOW FAR (WORLD PX) HE STRAYS FROM WHERE HE SPAWNED BEFORE HEADING BACK
+  },
+};
+const CRITTER_SPAWNS = { test: [{ kind: 'aetherling', x: 650 }], mapCells: 4 };   // TEST LEVEL: WORLD X. MAP LEVELS: THIS MANY CELLS RIGHT OF THE PLAYER SPAWN
+const critters = [];
+let crittersOn = true;
+const critRand = ([a, b]) => a + Math.random() * (b - a);
+const critSpeed = K => K.stepPx * K.scale * SCALE * K.walk.fps;   // WORLD PX / S
+function critGround(x, y, reach) {   // TOP OF THE NEAREST SOLID OR LEDGE UNDER x, NO HIGHER THAN reach PX ABOVE y (Infinity = NOTHING)
+  let f = Infinity;
+  for (const s of solids) if (x >= s.x && x <= s.x + s.w && s.y >= y - reach && s.y < f) f = s.y;
+  for (const o of oneWays) if (x >= o.x && x <= o.x + o.w && o.y >= y - reach && o.y < f) f = o.y;
+  return f;
+}
+function critBlocked(x, y, K) {   // A SOLID STANDS IN FRONT OF THE BODY (TALLER THAN A STEP)
+  for (const s of solids) if (x >= s.x && x <= s.x + s.w && s.y < y - K.stepUp && s.y + s.h > y - K.hitH) return true;
+  return false;
+}
+function spawnCritters() {
+  critters.length = 0;
+  const list = MAP.on ? [{ kind: 'aetherling', x: SPAWN.x + CRITTER_SPAWNS.mapCells * MAP.cell }] : CRITTER_SPAWNS.test;
+  for (const d of list) {
+    const K = CRITTER_KINDS[d.kind]; if (!K) continue;
+    let x = Math.min(LEVEL_MAX_X - K.hitW, Math.max(LEVEL_MIN_X + K.hitW, d.x)), top = MAP.on ? SPAWN.y - MAP.cell : GROUND_Y - 10;
+    let y = critGround(x, top, 0);
+    if (!isFinite(y) || critBlocked(x, y, K)) { x = SPAWN.x; y = SPAWN.y; }   // NO FLOOR THERE: START NEXT TO THE PLAYER
+    critters.push({ kind: d.kind, home: x, x, y, px: x, py: y, vy: 0, dir: Math.random() < 0.5 ? -1 : 1, state: 'idle', t: critRand(K.idleTime), animT: Math.random() * 2 });
+  }
+}
+function stepCritter(c, dt) {
+  const K = CRITTER_KINDS[c.kind]; c.px = c.x; c.py = c.y; c.t -= dt; c.animT += dt;
+  if (c.t <= 0) {
+    if (c.state === 'idle') { c.state = 'walk'; c.t = critRand(K.walkTime); if (Math.abs(c.x - c.home) > K.leash) c.dir = Math.sign(c.home - c.x); else if (Math.random() < K.turnChance) c.dir = -c.dir; }
+    else { c.state = 'idle'; c.t = critRand(K.idleTime); }
+    c.animT = 0;
+  }
+  if (c.state === 'walk' && c.vy === 0) {
+    const nx = c.x + c.dir * critSpeed(K) * dt, front = nx + c.dir * K.hitW / 2, g = critGround(front, c.y, K.stepUp);
+    if (front < LEVEL_MIN_X + 4 || front > LEVEL_MAX_X - 4 || critBlocked(front, c.y, K) || g - c.y > K.stepUp) {
+      c.dir = -c.dir; c.state = 'idle'; c.t = critRand(K.pauseAfterTurn); c.animT = 0;   // TURN AROUND, LOOK AROUND, CARRY ON
+    } else c.x = nx;
+  }
+  const g = critGround(c.x, c.y, K.stepUp);   // STAY ON THE FLOOR: SMALL STEPS SNAP, ANYTHING ELSE IS A FALL
+  if (g <= c.y + K.stepUp && c.vy === 0) c.y = g;
+  else { c.vy = Math.min(c.vy + PHYS.gravity * dt, PHYS.maxFall); const ny = c.y + c.vy * dt; if (ny >= g) { c.y = g; c.vy = 0; } else c.y = ny; }
+  if (c.y > FALL_Y) { c.x = c.px = SPAWN.x; c.y = c.py = SPAWN.y; c.vy = 0; }
+}
+function stepCritters(dt) { if (crittersOn) for (const c of critters) stepCritter(c, dt); }
+function drawCritters(alpha) {
+  if (!crittersOn) return;
+  for (const c of critters) {
+    const K = CRITTER_KINDS[c.kind], A = K[c.state], im = IMG['critter_' + c.kind + '_' + c.state]; if (!im) continue;
+    const x = c.px + (c.x - c.px) * alpha, y = c.py + (c.y - c.py) * alpha, cw = im.naturalWidth / A.frames, ch = im.naturalHeight;
+    const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch);
+    ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -K.anchorX * ch / K.frame, -ch, cw, ch); ctx.restore();
+    if (showHitboxes) { ctx.lineWidth = 1; ctx.strokeStyle = '#fecd39'; ctx.strokeRect(x - K.hitW / 2 + .5, y - K.hitH + .5, K.hitW, K.hitH); }
+  }
+}
+
 function tick(dt) {
   while (pressQ.length) {   // KEY PRESSES (EDGE EVENTS) FIRST, THEN THE HELD-KEY LOGIC
     const k = pressQ.shift();
@@ -411,12 +486,14 @@ function tick(dt) {
     else if (k === 'v') { cape.mode = (cape.mode + 1) % CAPE_MODES.length; cloth.need = true; }
     else if (k === 'g') CAPE_DISSOLVE.enabled = !CAPE_DISSOLVE.enabled;
     else if (k === 'l') lighting.on = !lighting.on;
+    else if (k === 'n') crittersOn = !crittersOn;
   }
   P.mx = 0;
   if (isAttacking) {
     wasAirborne = false; airPeakFall = 0; jumpStartTimer = 0; landTimer = 0;
     if (attackT > 0) { attackT -= dt; if (attackT <= 0) isAttacking = false; }   // THE GROUND ATTACKS END ON A TIMER (k.wait IN THE KAPLAY BUILD)
   } else mainUpdate(dt);
+  stepCritters(dt);
   updateAirKick(dt); updateDoubleJump(dt);
   if (P.grounded) coyoteT = PHYS.coyote; else if (coyoteT > 0) coyoteT -= dt;
   physics(dt);
@@ -1163,6 +1240,7 @@ function drawHud() {
     'light (L): ' + (lighting.on ? 'on' : 'off') + '   cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
     'sheet cape (F3): ' + (capeProf.data ? (capeProf.on ? 'ON' : 'OFF') + '   ' : '') + capeProf.note,
     'cape config: ' + capeCfgSrc,
+    'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
     'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
@@ -1175,6 +1253,7 @@ function render(alpha) {
   ctx.save(); ctx.translate(Math.round(W / 2 - cam.x - shake.x), Math.round(H / 2 - cam.y - shake.y));
   drawLevel(cam.x - W / 2 - 60, cam.x + W / 2 + 60);
   drawTorches(cam.x - W / 2, cam.x + W / 2);                              // z 3
+  drawCritters(alpha);                                                    // z 5: WANDERING CRITTERS, BEHIND THE PLAYER AND HER FX
   drawParticles();                                                        // z 8
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
@@ -1278,7 +1357,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
