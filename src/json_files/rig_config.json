@@ -14,8 +14,6 @@
       "waistTrim": 8,
       "pelvisTilt": 0.75,
       "headFollow": 0.3,
-      "filler": false,
-      "fillerScale": 0.89,
       "stomach": true,
       "stomachWChest": 38,
       "stomachWPelvis": 36,
@@ -35,9 +33,9 @@
     },
     "feet": {
       "bootOn": true,
-      "soleOff": 59.6,
-      "footLen": 10,
-      "heelFrac": 0.09
+      "soleOff": 93,
+      "footLen": 123,
+      "heelFrac": 0.34
     },
     "art": {
       "art": true,
@@ -116,9 +114,9 @@
   },
   "footPresets": {
     "boot": {
-      "soleOff": 61,
-      "footLen": 84,
-      "heelFrac": 0.26
+      "soleOff": 93,
+      "footLen": 123,
+      "heelFrac": 0.34
     },
     "bare": {
       "soleOff": 39,
@@ -268,64 +266,64 @@
   },
   "pivots": {
     "hip": [
-      431.6,
-      471.4
+      539.1,
+      589.4
     ],
     "knee": [
-      436.6,
-      583.4
+      545.2,
+      729.1
     ],
     "ankle": [
-      428.7,
-      716.9
+      535.6,
+      895.9
     ],
     "shoulder": [
-      409.9,
-      353.8
+      512.3,
+      441.6
     ],
     "elbow": [
-      403.4,
-      419.6
+      504.1,
+      524.6
     ],
     "wrist": [
-      408.1,
-      490.9
+      510.3,
+      613.0
     ],
     "rib": [
-      438.3,
-      428.9
+      548.2,
+      535.9
     ],
     "neck": [
-      421.0,
-      326.0
+      522.0,
+      408.0
     ],
     "headPivot": [
-      430.5,
-      333.6
+      530.0,
+      392.0
     ],
     "neckFrom": [
-      383,
-      336
+      522.0,
+      412.0
     ],
     "neckTo": [
-      394,
-      284
+      530.0,
+      385.0
     ],
     "stomachFrom": [
-      398,
-      434.5
+      545.0,
+      565.0
     ],
     "stomachTo": [
-      416,
-      361
+      548.0,
+      530.0
     ],
     "bagHip": [
-      384.5,
-      438
+      521.5,
+      547.5
     ],
     "strapTop": [
-      415.5,
-      333.5
+      538.0,
+      437.5
     ]
   }
 }
