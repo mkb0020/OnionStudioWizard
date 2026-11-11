@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler,#guide{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide,#bendPrev{pointer-events:none}
 #ruler[hidden]{display:none}
 #world.pixview canvas{image-rendering:pixelated}
 #cursor{position:absolute;pointer-events:none;border:1.5px solid #000;border-radius:50%;
@@ -389,6 +389,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="move"><svg viewBox="0 0 24 24"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg></button>
       <button class="tb" data-tool="picker" title="Eyedropper (Q): pick a color from the canvas"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
       <button class="tb" data-tool="wave" title="Wave guide (J): rails + ticks + a traveling wave for hair and capes"><svg viewBox="0 0 24 24"><path d="M2 6h20M2 18h20" opacity=".55"/><path d="M3 6c3 0 4 12 7 12s4-12 7-12 3 4 4 6"/><path d="M5 4v4M12 16v4M19 4v4"/></svg></button>
+      <button class="tb" data-tool="bend" title="Bend strip (Y): lay a flat strip of hair / fabric / scales along a curve, same width"><svg viewBox="0 0 24 24"><path d="M3 9c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 16c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 9v7M21 5v7"/><path d="M8 8.3l-.6 7M13 10.5l-.4 7" opacity=".6"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
       </div>
@@ -563,6 +564,56 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <p class="note" id="wvNote"></p>
     </div>
 
+    <div class="sec" id="bendSec" hidden>
+      <h2>Bend strip</h2>
+      <div class="onion-row">
+        <canvas id="bdThumb" width="120" height="36" style="flex:1;min-width:0;height:36px;border:1px solid var(--acc);border-radius:var(--r);background:#ffffff10"></canvas>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="bdPick" style="width:auto;flex:1" title="Copy the painted part of the selected layer (this frame) as the strip. Root = left end.">USE THIS LAYER</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">CURVE</span>
+        <div class="seg" id="bdMode" style="flex:1"><button data-v="hand" class="on">HAND</button><button data-v="guide">GUIDE</button></div>
+      </div>
+      <div class="onion-row" data-bd="guide">
+        <span class="lbl">FOLLOW</span>
+        <select id="bdGuide" style="flex:1;min-width:0"></select>
+      </div>
+      <div class="onion-row" data-bd="hand">
+        <span class="lbl">POINTS</span>
+        <input type="range" id="bdPts" min="3" max="9" value="5"><output id="bdPtsOut">5</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">WIDTH</span>
+        <input type="range" id="bdWidth" min="25" max="300" value="100"><output id="bdWidthOut">100%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">TAPER</span>
+        <input type="range" id="bdTaper" min="0" max="95" value="0"><output id="bdTaperOut">0%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">LENGTH</span>
+        <div class="seg" id="bdFit" style="flex:1"><button data-v="fit" class="on" title="Stretch the strip to the curve's length">FIT</button><button data-v="keep" title="Keep the drawn length; stop where the curve ends">KEEP</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">KINKS</span>
+        <div class="seg" id="bdKink" style="flex:1"><button data-v="mark" class="on" title="Show tight spots in red">MARK</button><button data-v="smooth" title="Relax the curve where the strip would fold">SMOOTH</button></div>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="bdFlip" style="width:auto;flex:1" title="Turn the strip over (top edge becomes bottom)">FLIP</button>
+        <button class="tgl" id="bdRev" style="width:auto;flex:1" title="Root on the right end of the strip instead of the left">ROOT RIGHT</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="bdApply" style="width:auto;flex:1" title="Paint the bent strip into a new layer on this frame">APPLY</button>
+        <button class="tgl" id="bdApplyAll" style="width:auto;flex:1" title="Paint it into a new top layer on every frame (one undo)">ALL FRAMES</button>
+      </div>
+      <div class="onion-row" data-bd="hand">
+        <button class="tgl" id="bdRedraw" style="width:auto;flex:1">REDRAW CURVE</button>
+      </div>
+      <p class="note" id="bdNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -617,6 +668,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="onion" width="1000" height="1000"></canvas>
       <canvas id="view" width="1000" height="1000"></canvas>
       <canvas id="guide" width="1000" height="1000"></canvas>
+      <canvas id="bendPrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
     </div>
     <div id="target"></div>
@@ -2676,6 +2728,205 @@ const Wave = (() => {
 
 
 /* =====================================================================
+   BEND STRIP (pure math + mesh drawing; the UI lives further down)
+
+   A flat, horizontal strip of art (hair, fabric, scales, fur) is laid along a curve without changing its
+   width: strip column s (root = left) goes to arc length a(s) along the curve, and strip row y goes out
+   along the curve's normal at that point. FIT stretches the strip's length to the curve's length; KEEP
+   keeps the drawn length and stops where the curve ends. TAPER thins it toward the tip, WIDTH scales it.
+
+   Drawing: the strip is cut into a grid of small cells, each split into two triangles, and every triangle
+   is drawn with its own affine transform (clipped, grown a hair so neighbors meet without seams).
+
+   Kinks: where the curve turns tighter than half the strip's width, the inside edge folds over itself.
+   Those spots are reported (the UI marks them red) and SMOOTH relaxes the curve there until they go away.
+   ===================================================================== */
+const Bend = (() => {
+  // Even spacing along the curve (1 px by default), so arc length = index * step.
+  function resample(poly, step = 1) {
+    const out = [];
+    if (!poly || poly.length < 2) return out;
+    out.push({ x: poly[0].x, y: poly[0].y });
+    let carry = 0;
+    for (let i = 1; i < poly.length; i++) {
+      const a = poly[i - 1], b = poly[i], L = Math.hypot(b.x - a.x, b.y - a.y);
+      if (L < 1e-9) continue;
+      let t = step - carry;
+      while (t <= L) { out.push({ x: a.x + (b.x - a.x) * t / L, y: a.y + (b.y - a.y) * t / L }); t += step; }
+      carry = L - (t - step);
+    }
+    const last = poly[poly.length - 1], e = out[out.length - 1];
+    if (Math.hypot(last.x - e.x, last.y - e.y) > step * 0.25) out.push({ x: last.x, y: last.y });
+    return out;
+  }
+
+  // Smooth curve through the points (Catmull-Rom), as a dense polyline.
+  function spline(pts, per = 24) {
+    if (!pts || pts.length < 2) return pts ? pts.slice() : [];
+    const P = i => pts[Math.max(0, Math.min(pts.length - 1, i))], out = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+      for (let j = 0; j < per; j++) {
+        const t = j / per, t2 = t * t, t3 = t2 * t;
+        out.push({
+          x: 0.5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+          y: 0.5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
+        });
+      }
+    }
+    out.push({ ...pts[pts.length - 1] });
+    return out;
+  }
+
+  // n points spread evenly along a smooth curve through pts (used by the POINTS slider)
+  function respace(pts, n) {
+    const Q = resample(spline(pts), 1);
+    if (Q.length < 2) return pts.slice();
+    const out = [];
+    for (let i = 0; i < n; i++) { const q = Q[Math.round(i * (Q.length - 1) / (n - 1))]; out.push({ x: q.x, y: q.y }); }
+    return out;
+  }
+
+  // unit tangents + signed curvature (1/px, + = turning toward the +normal side) of an evenly spaced polyline
+  function frameOf(Q, step = 1) {
+    const n = Q.length, T = new Array(n), K = new Float32Array(n), d = 3;
+    for (let i = 0; i < n; i++) {
+      const a = Q[Math.max(0, i - 1)], b = Q[Math.min(n - 1, i + 1)];
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      T[i] = { x: dx / L, y: dy / L };
+    }
+    for (let i = d; i < n - d; i++) {
+      const ax = Q[i].x - Q[i - d].x, ay = Q[i].y - Q[i - d].y, bx = Q[i + d].x - Q[i].x, by = Q[i + d].y - Q[i].y;
+      const ang = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+      K[i] = ang / (d * step);
+    }
+    return { T, K };
+  }
+
+  // the numbers the mapping needs, from the strip size and the settings
+  function plan(Q, sw, sh, o, step = 1) {
+    const L = (Q.length - 1) * step;
+    const ratio = o.fit ? L / sw : 1;                 // curve px per strip px
+    const scale = o.width == null ? 1 : o.width;
+    const taper = Math.min(0.95, Math.max(0, o.taper || 0));
+    const k = s => scale * (1 - taper * Math.min(1, Math.max(0, s / sw)));
+    const usedS = o.fit ? sw : Math.min(sw, L);        // strip columns that fit on the curve
+    return { L, ratio, k, usedS };
+  }
+
+  // spots where the strip would fold: |curvature| * half width > 1. Returns arc indices.
+  function kinksOf(Q, F, sw, sh, o, step = 1) {
+    const p = plan(Q, sw, sh, o, step), out = [];
+    for (let i = 0; i < Q.length; i++) {
+      const s = i * step / p.ratio; if (s > p.usedS) break;
+      if (Math.abs(F.K[i]) * (sh / 2) * p.k(s) > 0.98) out.push(i);
+    }
+    return out;
+  }
+
+  // Relax the curve where it kinks, then re-space it. Works on a coarse copy of the curve (points about a
+  // third of the strip's half width apart) so a big fold straightens in a few passes, and rebuilds a smooth
+  // curve through those points. Only the stretches around a kink move; the root stays put, the tip may swing.
+  function unkink(Q, sw, sh, o, step = 1, maxIter = 80) {
+    const half = sh / 2 * (o.width == null ? 1 : o.width);
+    const h = Math.max(2, Math.min(40, half / 3));
+    let P = Q, F = frameOf(P, step), bad = kinksOf(P, F, sw, sh, o, step), it = 0;
+    if (!bad.length) return P;
+    while (bad.length && it++ < maxIter) {
+      let C = resample(P, h);                         // fresh, evenly spaced, so kink i maps to coarse point i / h
+      const mark = new Uint8Array(C.length), reach = 3 + Math.min(6, it >> 2);
+      for (const i of bad) { const c = Math.round(i * step / h); for (let j = Math.max(1, c - reach); j <= Math.min(C.length - 1, c + reach); j++) mark[j] = 1; }
+      for (let pass = 0; pass < 2; pass++) {
+        const N = C.map(q => ({ ...q }));
+        for (let j = 1; j < C.length - 1; j++) if (mark[j]) { N[j].x = (C[j - 1].x + 2 * C[j].x + C[j + 1].x) / 4; N[j].y = (C[j - 1].y + 2 * C[j].y + C[j + 1].y) / 4; }
+        const e = C.length - 1;                         // the tip is free: it swings to carry on from its neighbors
+        if (e >= 2 && mark[e - 1]) { const L = Math.hypot(C[e].x - C[e - 1].x, C[e].y - C[e - 1].y), dx = N[e - 1].x - N[e - 2].x, dy = N[e - 1].y - N[e - 2].y, l = Math.hypot(dx, dy) || 1; N[e] = { x: N[e - 1].x + dx / l * L, y: N[e - 1].y + dy / l * L }; }
+        C = N;
+      }
+      P = resample(spline(C, Math.max(2, Math.ceil(h))), step); F = frameOf(P, step); bad = kinksOf(P, F, sw, sh, o, step);
+    }
+    return P;
+  }
+
+  // Lay the strip along the curve. strip: canvas (root on the left, already flipped / reversed as wanted).
+  // curve: polyline from root to tip. o: { fit, taper, width, smooth, alpha, cell }.
+  // Returns { Q, kinks:[{x,y}] } (the curve actually used and where it still folds).
+  function render(ctx, strip, curve, o = {}) {
+    const step = 1, sw = strip.width, sh = strip.height;
+    let Q = resample(curve, step);
+    if (Q.length < 3 || sw < 1 || sh < 1) return { Q, kinks: [] };
+    if (o.smooth) Q = unkink(Q, sw, sh, o, step);
+    const F = frameOf(Q, step), p = plan(Q, sw, sh, o, step);
+    const at = a => {                                  // point + normal at arc length a (linear between samples)
+      const f = Math.min(Q.length - 1.000001, Math.max(0, a / step)), i = Math.floor(f), t = f - i;
+      const q0 = Q[i], q1 = Q[i + 1], t0 = F.T[i], t1 = F.T[i + 1];
+      let tx = t0.x + (t1.x - t0.x) * t, ty = t0.y + (t1.y - t0.y) * t; const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+      return { x: q0.x + (q1.x - q0.x) * t, y: q0.y + (q1.y - q0.y) * t, nx: -ty, ny: tx };
+    };
+    const map = (s, y) => { const c = at(s * p.ratio), d = (y - sh / 2) * p.k(s); return { x: c.x + c.nx * d, y: c.y + c.ny * d }; };
+
+    // grid: columns about every 3 px of strip (finer if the strip is stretched a lot), 4 rows
+    const cols = Math.max(2, Math.ceil(p.usedS / Math.max(1, (o.cell || 3) / Math.max(1, p.ratio)))), rows = 4;
+    const S = j => p.usedS * j / cols, Y = r => sh * r / rows;
+    const grid = [];
+    for (let j = 0; j <= cols; j++) { const col = []; for (let r = 0; r <= rows; r++) col.push(map(S(j), Y(r))); grid.push(col); }
+    ctx.save();
+    if (o.alpha != null) ctx.globalAlpha = o.alpha;
+    for (let j = 0; j < cols; j++) for (let r = 0; r < rows; r++) {
+      const s0 = S(j), s1 = S(j + 1), y0 = Y(r), y1 = Y(r + 1);
+      const d00 = grid[j][r], d10 = grid[j + 1][r], d01 = grid[j][r + 1], d11 = grid[j + 1][r + 1];
+      tri(ctx, strip, [s0, y0, s1, y0, s1, y1], [d00, d10, d11]);
+      tri(ctx, strip, [s0, y0, s1, y1, s0, y1], [d00, d11, d01]);
+    }
+    ctx.restore();
+    const kinks = o.smooth ? [] : kinksOf(Q, F, sw, sh, o, step).filter((v, i, a) => i === 0 || v - a[i - 1] > 6).map(i => ({ x: Q[i].x, y: Q[i].y }));
+    return { Q, kinks };
+  }
+
+  function growTri(p0, p1, p2, g) {
+    const P = [p0, p1, p2], n = [];
+    const area = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y), sgn = area > 0 ? 1 : -1;
+    for (let i = 0; i < 3; i++) {                       // outward unit normal of edge i -> i+1
+      const a = P[i], b = P[(i + 1) % 3], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
+      n.push({ x: dy / L * sgn, y: -dx / L * sgn });
+    }
+    return P.map((p, i) => {
+      const na = n[(i + 2) % 3], nb = n[i], d = 1 + na.x * nb.x + na.y * nb.y;
+      let mx = (na.x + nb.x) * g / Math.max(d, 1e-3), my = (na.y + nb.y) * g / Math.max(d, 1e-3);
+      const m = Math.hypot(mx, my), cap = 3 * g;
+      if (m > cap) { mx *= cap / m; my *= cap / m; }
+      return { x: p.x + mx, y: p.y + my };
+    });
+  }
+
+  // one textured triangle: source (x0,y0,x1,y1,x2,y2) in strip pixels -> destination points
+  function tri(ctx, img, s, d) {
+    const [x0, y0, x1, y1, x2, y2] = s, [p0, p1, p2] = d;
+    const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+    if (Math.abs(det) < 1e-9) return;
+    const a = ((p1.x - p0.x) * (y2 - y0) - (p2.x - p0.x) * (y1 - y0)) / det;
+    const b = ((p1.y - p0.y) * (y2 - y0) - (p2.y - p0.y) * (y1 - y0)) / det;
+    const c = ((p2.x - p0.x) * (x1 - x0) - (p1.x - p0.x) * (x2 - x0)) / det;
+    const dd = ((p2.y - p0.y) * (x1 - x0) - (p1.y - p0.y) * (x2 - x0)) / det;
+    const e = p0.x - a * x0 - c * y0, f = p0.y - b * x0 - dd * y0;
+    // clip to the destination triangle with every edge pushed out ~0.8 px, so neighbors overlap instead of
+    // leaving faint hairline seams (miter joins, capped so thin slivers don't spike)
+    const [q0, q1, q2] = growTri(p0, p1, p2, 0.8);
+    const sx = Math.max(0, Math.floor(Math.min(x0, x1, x2)) - 3), sy = Math.max(0, Math.floor(Math.min(y0, y1, y2)) - 3);
+    const ex = Math.min(img.width, Math.ceil(Math.max(x0, x1, x2)) + 3), ey = Math.min(img.height, Math.ceil(Math.max(y0, y1, y2)) + 3);
+    if (ex <= sx || ey <= sy) return;
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); ctx.lineTo(q2.x, q2.y); ctx.closePath(); ctx.clip();
+    ctx.transform(a, b, c, dd, e, f);
+    ctx.drawImage(img, sx, sy, ex - sx, ey - sy, sx, sy, ex - sx, ey - sy);
+    ctx.restore();
+  }
+
+  return { resample, spline, respace, frameOf, kinksOf, unkink, render };
+})();
+
+
+/* =====================================================================
    UI
    ===================================================================== */
 (() => {
@@ -2762,6 +3013,7 @@ const Wave = (() => {
   const HANDLE_PX = 22;                         // grab radius on screen (pen friendly)
 
   function requestGuide() {
+    if (bendReady) requestBend();               // the bend preview can follow a guide
     if (guideRaf) return;
     guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
   }
@@ -2905,6 +3157,7 @@ const Wave = (() => {
     $('#wvNote').textContent = !g || !g.keys.length
       ? 'Drag from the ROOT (where it is attached) to the TIP to place the guide. It goes on every frame.'
       : 'Round handles move the rail ends, the square moves the whole guide. Dragging on a frame without a key makes one there; frames between keys slide between them.';
+    if (bendReady) syncBendUI();
   }
   function guideSet(key, v) { const g = curGuide(); if (g) g[key] = v; }
   const wvSlider = (id, key, label, map = v => v) => {
@@ -3019,6 +3272,238 @@ const Wave = (() => {
     syncWaveUI(); requestGuide();
   }
   syncWaveUI();
+
+  /* ---------- bend strip (BEND tool, Y) ----------
+     USE THIS LAYER copies the painted part of the selected layer as the strip (root = left end, unless
+     ROOT RIGHT). The curve is either HAND (drag root -> tip, then drag the round handles) or GUIDE (the
+     wave of a wave guide, so it moves with the guide on every frame). The preview lives on its own
+     canvas; APPLY paints into a new layer on this frame, ALL FRAMES into a new top layer on every frame.
+     Settings, the hand curve and the strip are saved in the project (`bend`) and undoable. */
+  var bendReady = false;                        // var: the wave guide code above checks it before this runs
+  const bendEl = $('#bendPrev'), bctx = bendEl.getContext('2d');
+  const bend = { strip: null, stripUrl: null, mode: 'hand', guide: 0, pts: [], n: 5, width: 100, taper: 0, fit: true, smooth: false, flip: false, rev: false };
+  let bendRaf = 0, bdrag = null, bdBefore = null, viewCache = null, bendScratch = null;
+
+  function requestBend() {
+    if (bendRaf) return;
+    bendRaf = requestAnimationFrame(() => { bendRaf = 0; drawBendPreview(); });
+  }
+  // the strip as it will be laid down (turned over / root on the right); cached
+  function viewStrip() {
+    const s = bend.strip; if (!s) return null;
+    if (viewCache && viewCache.s === s && viewCache.flip === bend.flip && viewCache.rev === bend.rev) return viewCache.c;
+    const c = document.createElement('canvas'); c.width = s.width; c.height = s.height;
+    const x = c.getContext('2d');
+    x.setTransform(bend.rev ? -1 : 1, 0, 0, bend.flip ? -1 : 1, bend.rev ? s.width : 0, bend.flip ? s.height : 0);
+    x.drawImage(s, 0, 0);
+    viewCache = { s, flip: bend.flip, rev: bend.rev, c };
+    return c;
+  }
+  const bendOpts = () => ({ fit: bend.fit, taper: bend.taper / 100, width: bend.width / 100, smooth: bend.smooth });
+  function bendGuide() { return bend.mode === 'guide' ? (wave.guides[bend.guide] || null) : null; }
+  // curve (root -> tip polyline) for frame i, or null
+  function bendCurve(i) {
+    if (bend.mode === 'hand') return bend.pts.length >= 2 ? Bend.spline(bend.pts) : null;
+    const g = bendGuide(); if (!g || !g.keys.length) return null;
+    return Wave.build(g, Wave.railsAt(g, project.frames, i), Wave.shiftAt(g, project.frames, i)).wave;
+  }
+  function drawBendPreview() {
+    bctx.clearRect(0, 0, bendEl.width, bendEl.height);
+    if (state.tool !== 'bend') return;
+    const z = state.zoom, i = project.currentFrame;
+    let curve = bendCurve(i);
+    if (bdrag && bdrag.mode === 'place' && bdrag.b) curve = [bdrag.a, bdrag.b];
+    if (!curve) return;
+    const vs = viewStrip();
+    let res = null;
+    if (vs) {                                    // render solid on a scratch canvas, then fade it as one piece
+      if (!bendScratch) { bendScratch = document.createElement('canvas'); bendScratch.width = bendEl.width; bendScratch.height = bendEl.height; }
+      const sc = bendScratch.getContext('2d'); sc.clearRect(0, 0, bendScratch.width, bendScratch.height);
+      res = Bend.render(sc, vs, curve, bendOpts());
+      bctx.save(); bctx.globalAlpha = 0.9; bctx.drawImage(bendScratch, 0, 0); bctx.restore();
+    }
+    bctx.save(); bctx.lineCap = 'round'; bctx.lineJoin = 'round';
+    bctx.strokeStyle = '#00ffff'; bctx.globalAlpha = 0.8; bctx.lineWidth = 1.5 / z; bctx.setLineDash([6 / z, 5 / z]);
+    const Q = res ? res.Q : curve;
+    bctx.beginPath(); Q.forEach((q, j) => j ? bctx.lineTo(q.x, q.y) : bctx.moveTo(q.x, q.y)); bctx.stroke();
+    bctx.setLineDash([]); bctx.globalAlpha = 1;
+    if (res) for (const k of res.kinks) { bctx.strokeStyle = '#ff2a2a'; bctx.lineWidth = 3 / z; bctx.beginPath(); bctx.arc(k.x, k.y, 14 / z, 0, Math.PI * 2); bctx.stroke(); }
+    if (bend.mode === 'hand' && !playing && !(bdrag && bdrag.mode === 'place')) {
+      const R = 9 / z;
+      bend.pts.forEach((pt, j) => {
+        bctx.fillStyle = j === 0 ? '#fecd39' : '#170032'; bctx.strokeStyle = j === 0 ? '#fecd39' : '#00ffff'; bctx.lineWidth = 2 / z;
+        bctx.beginPath(); bctx.arc(pt.x, pt.y, R, 0, Math.PI * 2); bctx.fill(); bctx.stroke();
+      });
+    }
+    if (Q.length) {                              // ROOT label at the start
+      const r0 = Q[0];
+      bctx.font = '600 ' + (12 / z) + 'px ui-monospace, Menlo, Consolas, monospace'; bctx.textAlign = 'center'; bctx.textBaseline = 'middle';
+      const w = bctx.measureText('ROOT').width + 8 / z, ly = r0.y - 22 / z;
+      bctx.fillStyle = '#170032e0'; bctx.fillRect(r0.x - w / 2, ly - 9 / z, w, 18 / z);
+      bctx.fillStyle = '#fecd39'; bctx.fillText('ROOT', r0.x, ly + 1 / z);
+    }
+    bctx.restore();
+  }
+
+  /* undo */
+  const bdSnap = () => ({ ...bend, pts: bend.pts.map(q => ({ ...q })) });
+  function bdRestore(sn) { Object.assign(bend, sn, { pts: sn.pts.map(q => ({ ...q })) }); syncBendUI(); requestBend(); }
+  function bdCommit(before, label) {
+    const after = bdSnap();
+    if (JSON.stringify({ ...after, strip: 0 }) === JSON.stringify({ ...before, strip: 0 }) && after.strip === before.strip) return false;
+    project.dirty = true;
+    history.push({ label, bytes: 0, undo: () => bdRestore(before), redo: () => bdRestore(after) });
+    return true;
+  }
+  function bdEdit(label, fn) { const before = bdSnap(); if (fn() === false) return; bdCommit(before, label); syncBendUI(); requestBend(); }
+  function bdLive(fn) { if (!bdBefore) bdBefore = bdSnap(); fn(); syncBendUI(); requestBend(); }
+  function bdSettle(label) { if (bdBefore) { const b = bdBefore; bdBefore = null; bdCommit(b, label); } }
+
+  /* pointer */
+  function bendDown(e, p) {
+    if (bend.mode === 'guide') { flash(bendGuide() ? 'The curve follows ' + bendGuide().name + ': edit it with the WAVE tool (J), or switch CURVE to HAND' : 'Pick a wave guide in FOLLOW, or switch CURVE to HAND'); return; }
+    if (bend.pts.length < 2) { bdrag = { id: e.pointerId, mode: 'place', a: p, b: null }; return; }
+    let best = -1, bd = HANDLE_PX / state.zoom;
+    bend.pts.forEach((q, j) => { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d <= bd) { bd = d; best = j; } });
+    if (best < 0) { flash('Drag a round handle to bend the curve (REDRAW CURVE to start over)'); return; }
+    bdrag = { id: e.pointerId, mode: 'handle', j: best, start: p, q0: { ...bend.pts[best] }, before: bdSnap() };
+  }
+  function bendMove(p) {
+    const d = bdrag;
+    if (d.mode === 'place') { d.b = p; requestBend(); return; }
+    bend.pts[d.j] = { x: Math.round((d.q0.x + p.x - d.start.x) * 10) / 10, y: Math.round((d.q0.y + p.y - d.start.y) * 10) / 10 };
+    requestBend();
+  }
+  function bendUp(ok) {
+    const d = bdrag; bdrag = null;
+    if (d.mode === 'place') {
+      if (ok && d.b && Math.hypot(d.b.x - d.a.x, d.b.y - d.a.y) >= 20) {
+        bdEdit('Place bend curve', () => {
+          bend.pts = [];
+          for (let j = 0; j < bend.n; j++) { const t = j / (bend.n - 1); bend.pts.push({ x: d.a.x + (d.b.x - d.a.x) * t, y: d.a.y + (d.b.y - d.a.y) * t }); }
+        });
+      } else if (ok) flash('Drag from the root to the tip to place the curve');
+      requestBend(); return;
+    }
+    if (ok) bdCommit(d.before, 'Bend curve'); else bdRestore(d.before);
+    requestBend();
+  }
+  function cancelBendDrag() { if (bdrag) { const d = bdrag; bdrag = null; if (d.mode === 'handle') bdRestore(d.before); requestBend(); } }
+
+  /* panel */
+  function drawBendThumb() {
+    const c = $('#bdThumb'), x = c.getContext('2d'), vs = viewStrip();
+    const cw = Math.round(c.clientWidth || 120); if (cw > 0 && c.width !== cw) c.width = cw;
+    x.clearRect(0, 0, c.width, c.height);
+    if (!vs) { x.fillStyle = '#9090C0'; x.font = '10px ui-monospace, Menlo, Consolas, monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('no strip yet', c.width / 2, c.height / 2); return; }
+    const k = Math.min((c.width - 6) / vs.width, (c.height - 6) / vs.height);
+    x.drawImage(vs, (c.width - vs.width * k) / 2, (c.height - vs.height * k) / 2, vs.width * k, vs.height * k);
+  }
+  function syncBendUI() {
+    $$('#bdMode button').forEach(b => b.classList.toggle('on', b.dataset.v === bend.mode));
+    $$('[data-bd]').forEach(el => { el.hidden = el.dataset.bd !== bend.mode; });
+    const gs = $('#bdGuide'); gs.innerHTML = '';
+    if (!wave.guides.length) gs.add(new Option('(make one with the WAVE tool)', '-1'));
+    wave.guides.forEach((g, i) => gs.add(new Option(g.name + (g.keys.length ? '' : ' (not placed)'), String(i))));
+    gs.value = wave.guides[bend.guide] ? String(bend.guide) : '-1';
+    $('#bdPts').value = bend.n; $('#bdPtsOut').textContent = bend.n;
+    $('#bdWidth').value = bend.width; $('#bdWidthOut').textContent = bend.width + '%';
+    $('#bdTaper').value = bend.taper; $('#bdTaperOut').textContent = bend.taper + '%';
+    $$('#bdFit button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'fit') === bend.fit));
+    $$('#bdKink button').forEach(b => b.classList.toggle('on', (b.dataset.v === 'smooth') === bend.smooth));
+    $('#bdFlip').classList.toggle('on', bend.flip); $('#bdRev').classList.toggle('on', bend.rev);
+    const ready = !!(bend.strip && bendCurve(project.currentFrame));
+    $('#bdApply').disabled = $('#bdApplyAll').disabled = !ready;
+    $('#bdRedraw').disabled = bend.pts.length < 2;
+    $('#bdNote').textContent = !bend.strip
+      ? 'Draw a flat, horizontal strip (root on the left) on its own layer, select that layer, then press USE THIS LAYER.'
+      : bend.mode === 'hand' && bend.pts.length < 2 ? 'Drag from the ROOT to the TIP to place the curve, then drag the handles to bend it.'
+      : bend.mode === 'guide' && !bendCurve(project.currentFrame) ? 'Place a wave guide with the WAVE tool (J) first. The strip will ride its wave on every frame.'
+      : 'Red circles = the strip folds there (bend less, thin it, or KINKS: SMOOTH). Tip: hide the flat strip layer while you look.';
+    drawBendThumb();
+  }
+  $('#bdPick').addEventListener('click', () => {
+    const l = project.layer, w = project.width, h = project.height;
+    const d = l.ctx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) { flash(l.name + ' is empty: draw the strip on it first'); return; }
+    const c = document.createElement('canvas'); c.width = x1 - x0 + 1; c.height = y1 - y0 + 1;
+    c.getContext('2d').drawImage(l.canvas, -x0, -y0);
+    bdEdit('Pick bend strip', () => { bend.strip = c; bend.stripUrl = c.toDataURL('image/png'); });
+    flash('Strip: ' + c.width + ' × ' + c.height + ' px from ' + l.name);
+  });
+  $$('#bdMode button').forEach(b => b.addEventListener('click', () => bdEdit('Bend curve type', () => { bend.mode = b.dataset.v; })));
+  $('#bdGuide').addEventListener('change', e => { const i = +e.target.value; if (i >= 0) bdEdit('Bend follows guide', () => { bend.guide = i; }); e.target.blur(); });
+  const bdSlider = (id, key, label) => {
+    $(id).addEventListener('input', e => bdLive(() => { bend[key] = +e.target.value; }));
+    $(id).addEventListener('change', () => bdSettle(label));
+  };
+  bdSlider('#bdWidth', 'width', 'Bend width');
+  bdSlider('#bdTaper', 'taper', 'Bend taper');
+  $('#bdPts').addEventListener('input', e => bdLive(() => { bend.n = +e.target.value; if (bend.pts.length >= 2) bend.pts = Bend.respace(bend.pts, bend.n).map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })); }));
+  $('#bdPts').addEventListener('change', () => bdSettle('Bend points'));
+  $$('#bdFit button').forEach(b => b.addEventListener('click', () => bdEdit('Bend length', () => { bend.fit = b.dataset.v === 'fit'; })));
+  $$('#bdKink button').forEach(b => b.addEventListener('click', () => bdEdit('Bend kinks', () => { bend.smooth = b.dataset.v === 'smooth'; })));
+  $('#bdFlip').addEventListener('click', () => bdEdit('Flip bend strip', () => { bend.flip = !bend.flip; }));
+  $('#bdRev').addEventListener('click', () => bdEdit('Bend strip root side', () => { bend.rev = !bend.rev; }));
+  $('#bdRedraw').addEventListener('click', () => { bdEdit('Clear bend curve', () => { bend.pts = []; }); flash('Drag from the root to the tip to place the curve again'); });
+  $('#bdApply').addEventListener('click', () => {
+    const vs = viewStrip(), curve = bendCurve(project.currentFrame);
+    if (!vs || !curve || !frameGuard()) return;
+    let kinks = 0;
+    project.addLayer({ name: 'Bend', label: 'Apply bend strip', draw: c => { kinks = Bend.render(c, vs, curve, bendOpts()).kinks.length; } });
+    flash('Bent strip added as a new layer' + (kinks ? ' (' + kinks + ' fold' + (kinks > 1 ? 's' : '') + ')' : ''));
+  });
+  $('#bdApplyAll').addEventListener('click', () => {
+    const vs = viewStrip(); if (!vs || !frameGuard()) return;
+    const added = [];
+    project.frames.forEach((f, i) => {
+      const curve = bendCurve(i); if (!curve) return;
+      const l = new Engine.Layer(project.width, project.height, 'Bend');
+      Bend.render(l.ctx, vs, curve, bendOpts());
+      added.push({ f, l, prev: f.activeLayer });
+    });
+    if (!added.length) return;
+    const put = () => added.forEach(a => { a.f.layers.push(a.l); a.f.activeLayer = a.f.layers.length - 1; });
+    put(); project.dirty = true;
+    history.push({ label: 'Apply bend strip (all frames)', bytes: added.length * project.width * project.height * 4, thumbsAll: true,
+      undo: () => added.forEach(a => { const k = a.f.layers.indexOf(a.l); if (k >= 0) a.f.layers.splice(k, 1); a.f.activeLayer = Math.min(a.prev, a.f.layers.length - 1); }),
+      redo: put });
+    project.frames.forEach((_, i) => drawThumb(i));
+    flash('Bent strip added on ' + added.length + ' frame' + (added.length > 1 ? 's' : ''));
+  });
+
+  /* saving / loading */
+  function bendManifest() {
+    return { mode: bend.mode, guide: bend.guide, n: bend.n, width: bend.width, taper: bend.taper, fit: bend.fit, smooth: bend.smooth,
+      flip: bend.flip, rev: bend.rev, pts: bend.pts.map(q => ({ x: Math.round(q.x * 10) / 10, y: Math.round(q.y * 10) / 10 })), strip: bend.stripUrl };
+  }
+  let bendLoadGen = 0;
+  function loadBend(m) {
+    const gen = ++bendLoadGen; bdrag = null; bdBefore = null;
+    Object.assign(bend, { strip: null, stripUrl: null, mode: 'hand', guide: 0, pts: [], n: 5, width: 100, taper: 0, fit: true, smooth: false, flip: false, rev: false });
+    if (m && typeof m === 'object') {
+      const num = (v, a, b, d) => isFinite(+v) ? Math.round(clamp(+v, a, b)) : d;
+      bend.mode = m.mode === 'guide' ? 'guide' : 'hand'; bend.guide = num(m.guide, 0, 19, 0); bend.n = num(m.n, 3, 9, 5);
+      bend.width = num(m.width, 25, 300, 100); bend.taper = num(m.taper, 0, 95, 0);
+      bend.fit = m.fit !== false; bend.smooth = !!m.smooth; bend.flip = !!m.flip; bend.rev = !!m.rev;
+      if (Array.isArray(m.pts)) bend.pts = m.pts.slice(0, 9).filter(q => q && isFinite(+q.x) && isFinite(+q.y)).map(q => ({ x: +q.x, y: +q.y }));
+      if (bend.pts.length < 2) bend.pts = [];
+      if (typeof m.strip === 'string' && m.strip.startsWith('data:image/png;base64,')) {
+        const img = new Image();
+        img.onload = () => {
+          if (gen !== bendLoadGen || img.width > 4096 || img.height > 4096) return;
+          const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
+          bend.strip = c; bend.stripUrl = m.strip; syncBendUI(); requestBend();
+        };
+        img.src = m.strip;
+      }
+    }
+    syncBendUI(); requestBend();
+  }
+  bendReady = true;
+  syncBendUI();
 
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
@@ -3150,8 +3635,11 @@ const Wave = (() => {
     $('#wrinkleSec').hidden = t !== 'wrinkle';
     $('#textureSec').hidden = t !== 'texture';
     $('#waveSec').hidden = t !== 'wave';
+    $('#bendSec').hidden = t !== 'bend';
     if (t !== 'wave') cancelWaveDrag();
-    requestGuide();
+    if (t !== 'bend') cancelBendDrag();
+    if (t === 'bend') syncBendUI();
+    requestGuide(); requestBend();
     syncSize();
   }
   $$('[data-tool]').forEach(b => b.addEventListener('click', () => setTool(b.dataset.tool)));
@@ -3163,7 +3651,7 @@ const Wave = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -3195,7 +3683,7 @@ const Wave = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
-    cancelWaveDrag();
+    cancelWaveDrag(); cancelBendDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -3465,6 +3953,9 @@ const Wave = (() => {
     } else if (state.tool === 'wave') {
       if (chain) finishChain();
       waveDown(e, p);
+    } else if (state.tool === 'bend') {
+      if (chain) finishChain();
+      bendDown(e, p);
     }
   });
 
@@ -3482,6 +3973,7 @@ const Wave = (() => {
     if (stroke && stroke.id === e.pointerId) { moveStroke(e); return; }
     if (pickId === e.pointerId) { pickAt(e); return; }
     if (gdrag && gdrag.id === e.pointerId) { waveMove(p); return; }
+    if (bdrag && bdrag.id === e.pointerId) { bendMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -3501,6 +3993,7 @@ const Wave = (() => {
     if (panning && panning.id === e.pointerId) { panning = null; stage.classList.remove('panning'); return; }
     if (pickId === e.pointerId) { pickId = null; return; }
     if (gdrag && gdrag.id === e.pointerId) { waveUp(e.type === 'pointerup'); return; }
+    if (bdrag && bdrag.id === e.pointerId) { bendUp(e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -3589,7 +4082,7 @@ const Wave = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag || gdrag) return false;
+    if (stroke || shape || drag || gdrag || bdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -4151,8 +4644,8 @@ const Wave = (() => {
   $('#playBtn').addEventListener('click', () => { playing ? stopPlayback() : startPlayback(); });
 
   /* ---------- undo / redo ---------- */
-  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag) return; history.undo(); }
-  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag) return; history.redo(); }
+  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag || bdrag) return; history.undo(); }
+  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag || bdrag) return; history.redo(); }
   $('#undoBtn').addEventListener('click', doUndo);
   $('#redoBtn').addEventListener('click', doRedo);
 
@@ -4496,6 +4989,7 @@ const Wave = (() => {
                              and for every frame: hold, selected layer, and its layers
                              (name, visible, opacity, locked, onion, clip, file),
                              plus waveGuides (wave guide settings + rail keys by frame index)
+                             and bend (bend strip settings, hand curve, strip as a PNG data URL)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -4512,7 +5006,7 @@ const Wave = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || gdrag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -4544,6 +5038,7 @@ const Wave = (() => {
       paperColor: state.paperColor,
       onion: { prev: onion.prev, prevOpacity: onion.prevOpacity },
       waveGuides: waveManifest(),
+      bend: bendManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
         hold: s.frame.hold, activeLayer: Math.min(s.frame.activeLayer, s.layers.length - 1),
@@ -4636,6 +5131,7 @@ const Wave = (() => {
     setFps(fps);
     proj.handle = handle; proj.name = cleanName(name) || 'untitled';
     loadWave(m.waveGuides, frames);
+    loadBend(m.bend);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
   }
@@ -4670,7 +5166,7 @@ const Wave = (() => {
       inp.click();
     });
   }
-  const busyDrawing = () => { if (stroke || shape || drag || gdrag) { flash('Finish what you are drawing first'); return true; } return false; };
+  const busyDrawing = () => { if (stroke || shape || drag || gdrag || bdrag) { flash('Finish what you are drawing first'); return true; } return false; };
 
   async function openProject() {
     if (busy || busyDrawing()) return;
@@ -4899,6 +5395,7 @@ const Wave = (() => {
       case 'x': setTool('texture'); break;
       case 'q': setTool('picker'); break;
       case 'j': setTool('wave'); break;
+      case 'y': setTool('bend'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -4920,7 +5417,7 @@ const Wave = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
