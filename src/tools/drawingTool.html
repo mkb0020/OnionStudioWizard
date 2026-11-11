@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev{pointer-events:none}
 #ruler[hidden]{display:none}
 #world.pixview canvas{image-rendering:pixelated}
 #cursor{position:absolute;pointer-events:none;border:1.5px solid #000;border-radius:50%;
@@ -391,6 +391,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="wave" title="Wave guide (J): rails + ticks + a traveling wave for hair and capes"><svg viewBox="0 0 24 24"><path d="M2 6h20M2 18h20" opacity=".55"/><path d="M3 6c3 0 4 12 7 12s4-12 7-12 3 4 4 6"/><path d="M5 4v4M12 16v4M19 4v4"/></svg></button>
       <button class="tb" data-tool="bend" title="Bend strip (Y): lay a flat strip of hair / fabric / scales along a curve, same width"><svg viewBox="0 0 24 24"><path d="M3 9c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 16c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 9v7M21 5v7"/><path d="M8 8.3l-.6 7M13 10.5l-.4 7" opacity=".6"/></svg></button>
       <button class="tb" data-tool="pose" title="Pose guide (F): a stick figure whose bones turn but never stretch, for one-shot moves"><svg viewBox="0 0 24 24"><circle cx="8" cy="4" r="2"/><path d="M8 6.5l1 6"/><path d="M8.5 8.5l-3.5 3M8.5 8.5l4 1.5"/><path d="M9 12.5l-2.5 4.5L7 21"/><path d="M9 12.5l6 1 6-3"/></svg></button>
+      <button class="tb" data-tool="squash" title="Squash &amp; stretch (S): squash or stretch a layer, keeping its volume; ANIMATE sets it per frame"><svg viewBox="0 0 24 24"><ellipse cx="7" cy="17" rx="5" ry="3"/><ellipse cx="17" cy="10" rx="3" ry="7"/><path d="M7 4v6M5 8l2 2 2-2" opacity=".7"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
       </div>
@@ -671,6 +672,53 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <p class="note" id="psNote"></p>
     </div>
 
+    <div class="sec" id="squashSec" hidden>
+      <h2>Squash &amp; stretch</h2>
+      <div class="onion-row">
+        <span class="lbl">MODE</span>
+        <div class="seg" id="sqMode" style="flex:1"><button data-v="once" class="on" title="One amount for the layer">ONCE</button><button data-v="anim" title="A different amount per frame, with keys (frames between keys blend)">ANIMATE</button></div>
+      </div>
+      <div class="onion-row" data-sq="once">
+        <span class="lbl">ON</span>
+        <div class="seg" id="sqAll" style="flex:1"><button data-v="0" class="on">THIS FRAME</button><button data-v="1" title="This layer plus the layers with the same name in every frame">ALL FRAMES</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">AMOUNT</span>
+        <input type="range" id="sqAmt" min="-60" max="150" value="0"><output id="sqAmtOut">0%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">VOLUME</span>
+        <input type="range" id="sqVol" min="0" max="100" value="100" title="100% = the width makes up for the height exactly, so the art keeps its size. 0% = only the length changes."><output id="sqVolOut">100%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">ANCHOR</span>
+        <div class="seg" id="sqAnchor" style="flex:1"><button data-v="base" class="on" title="The end of the art opposite the arrow (the feet, when the arrow points up). Found on every frame.">BASE</button><button data-v="center" title="The middle of the art, on every frame">CENTER</button><button data-v="custom" title="Drag the square anywhere (same spot on every frame)">CUSTOM</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">ARROW</span>
+        <span class="note" id="sqDir" style="flex:1">up</span>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="sqUp" style="width:auto;flex:1" title="Stretch up and down">UP</button>
+        <button class="tgl" id="sqSide" style="width:auto;flex:1" title="Stretch sideways">SIDE</button>
+        <button class="tgl" id="sqRev" style="width:auto;flex:1" title="Point the arrow the other way: the anchor moves to the other end of the art">FLIP</button>
+      </div>
+      <div class="onion-row" data-sq="anim">
+        <span class="lbl">KEYS</span>
+        <span class="note" id="sqKeys" style="flex:1">-</span>
+      </div>
+      <div class="onion-row" data-sq="anim">
+        <button class="tgl" id="sqKeyDel" style="width:auto;flex:1">DEL KEY</button>
+        <button class="tgl" id="sqKeyClear" style="width:auto;flex:1">CLEAR KEYS</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="sqApply" style="width:auto;flex:1" title="Squash / stretch the layer's pixels for real (one undo)">APPLY</button>
+        <button class="tgl" id="sqReset" style="width:auto;flex:1" title="Amount back to 0 (ANIMATE: clear the keys)">RESET</button>
+        <button class="tgl" id="sqReuse" style="width:auto;flex:1" title="Bring back the last applied amount / keys, e.g. to do the cape layer the same way">REUSE</button>
+      </div>
+      <p class="note" id="sqNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -727,6 +775,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="guide" width="1000" height="1000"></canvas>
       <canvas id="bendPrev" width="1000" height="1000"></canvas>
       <canvas id="posePrev" width="1000" height="1000"></canvas>
+      <canvas id="sqPrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
     </div>
     <div id="target"></div>
@@ -2461,7 +2510,7 @@ const Engine = (() => {
     if (!onionTmp || onionTmp.width !== W || onionTmp.height !== H) onionTmp = makeCanvas(W, H);
     const t = onionTmp.getContext('2d');
     for (const it of list) {
-      composite(t, it.f, true);
+      composite(t, it.f, true, true);
       t.globalCompositeOperation = 'source-in'; t.fillStyle = it.color; t.fillRect(0, 0, W, H);
       t.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = it.a; ctx.drawImage(onionTmp, 0, 0);
@@ -2473,22 +2522,28 @@ const Engine = (() => {
   // unclipped layer below. The clipped layers are stacked in a scratch canvas, cut to the base's pixels, then
   // drawn at the base's opacity. Hidden base = clipped layers hidden too.
   let clipTmp = null;
-  function composite(ctx, frame, onionOnly = false) {
+  // A tool can show a layer differently ON SCREEN ONLY (the canvas view and onion skin), without touching its
+  // pixels: setLayerView(fn), fn(layer, frame) -> a canvas to show instead, or null. Export, thumbs, fill and
+  // saving never use it.
+  let layerView = null;
+  function setLayerView(fn) { layerView = fn || null; }
+  function composite(ctx, frame, onionOnly = false, onScreen = false) {
     const c = ctx.canvas, ls = frame.layers; ctx.clearRect(0, 0, c.width, c.height);
+    const cv = l => (onScreen && layerView && layerView(l, frame)) || l.canvas;
     for (let i = 0; i < ls.length; i++) {
       const l = ls[i];
       if (i > 0 && l.clip) continue;                                   // drawn with its base
-      if (l.visible && !(onionOnly && !l.onion)) { ctx.globalAlpha = l.opacity; ctx.drawImage(l.canvas, 0, 0); }
+      if (l.visible && !(onionOnly && !l.onion)) { ctx.globalAlpha = l.opacity; ctx.drawImage(cv(l), 0, 0); }
       if (!l.visible || !ls[i + 1] || !ls[i + 1].clip) continue;
       if (!clipTmp || clipTmp.width !== c.width || clipTmp.height !== c.height) clipTmp = makeCanvas(c.width, c.height);
       const t = clipTmp.getContext('2d'); let any = false;
       t.globalCompositeOperation = 'source-over'; t.globalAlpha = 1; t.clearRect(0, 0, c.width, c.height);
       for (let j = i + 1; ls[j] && ls[j].clip; j++) {
         const m = ls[j]; if (!m.visible || (onionOnly && !m.onion)) continue;
-        t.globalAlpha = m.opacity; t.drawImage(m.canvas, 0, 0); any = true;
+        t.globalAlpha = m.opacity; t.drawImage(cv(m), 0, 0); any = true;
       }
       if (!any) continue;
-      t.globalAlpha = 1; t.globalCompositeOperation = 'destination-in'; t.drawImage(l.canvas, 0, 0);
+      t.globalAlpha = 1; t.globalCompositeOperation = 'destination-in'; t.drawImage(cv(l), 0, 0);
       t.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = l.opacity; ctx.drawImage(clipTmp, 0, 0);
     }
@@ -2621,7 +2676,7 @@ const Engine = (() => {
     };
   }
 
-  return { MAX_HOLD, Layer, Frame, readZip, Project, PixelEdit, LayerShift, LayerAdjust, adjustBrightness, drawFitted, StrokeDrawer, BlurDrawer, WrinkleDrawer, TextureDrawer, CrackDrawer, drawDot, drawSegment, drawShape, tidyStroke, composite, floodMask, dilateMask, bucketFill, renderThumb, renderLayerThumb, renderOnion, exportFrame, exportSheet, sheetLayout, makeZip };
+  return { MAX_HOLD, Layer, Frame, readZip, Project, PixelEdit, LayerShift, LayerAdjust, adjustBrightness, drawFitted, StrokeDrawer, BlurDrawer, WrinkleDrawer, TextureDrawer, CrackDrawer, drawDot, drawSegment, drawShape, tidyStroke, composite, setLayerView, floodMask, dilateMask, bucketFill, renderThumb, renderLayerThumb, renderOnion, exportFrame, exportSheet, sheetLayout, makeZip };
 })();
 
 
@@ -3271,7 +3326,7 @@ const Pose = (() => {
   let raf = 0;
   function requestRender() {
     if (raf) return;
-    raf = requestAnimationFrame(() => { raf = 0; Engine.composite(vctx, project.frame); mirrorPop(); if (!playing) scheduleThumb(); });
+    raf = requestAnimationFrame(() => { raf = 0; Engine.composite(vctx, project.frame, false, true); mirrorPop(); if (!playing) scheduleThumb(); });
   }
 
   /* ---------- proportion ruler (a separate canvas under the onion skin and layers; never exported) ---------- */
@@ -3310,6 +3365,7 @@ const Pose = (() => {
   function requestGuide() {
     if (bendReady) requestBend();               // the bend preview can follow a guide
     if (poseReady) requestPose();
+    if (sqReady) requestSq();
     if (guideRaf) return;
     guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
   }
@@ -3455,6 +3511,7 @@ const Pose = (() => {
       : 'Round handles move the rail ends, the square moves the whole guide. Dragging on a frame without a key makes one there; frames between keys slide between them.';
     if (bendReady) syncBendUI();
     if (poseReady) syncPoseUI();
+    if (sqReady) syncSqUI();
   }
   function guideSet(key, v) { const g = curGuide(); if (g) g[key] = v; }
   const wvSlider = (id, key, label, map = v => v) => {
@@ -4098,9 +4155,302 @@ const Pose = (() => {
   }
   poseReady = true;
   syncPoseBodies(); syncPoseUI();
-  // test hook (headless checks): current joints and keys
+  // test hooks (headless checks)
   window.__pose = { joints: () => Pose.fk(poseB, pdrag ? pdrag.k.p : poseAt(project.currentFrame), poseS()).J, at: i => poseAt(i), keys: () => poseLive().map(o => ({ i: o.i, p: o.k.p })), body: () => poseB, scale: () => poseS() };
   poseRefreshBodies();
+
+  /* ---------- squash & stretch (SQUASH tool, S) ----------
+     Squashes or stretches the selected layer along the ARROW, around the ANCHOR, keeping its volume (VOLUME
+     100% = the width makes up for the length exactly, so the art never looks bigger or smaller). The preview
+     is shown through Engine.setLayerView: the layer's pixels are only changed by APPLY (one undo step), so
+     switching frames, undo and autosave never see a half-done squash. ONCE = one amount (this frame or all
+     frames); ANIMATE = keys per frame, frames between keys blend. Settings are undoable and saved (`squash`). */
+  var sqReady = false;                          // var: requestGuide / syncWaveUI above check it before this runs
+  const sqEl = $('#sqPrev'), sqctx = sqEl.getContext('2d');
+  const sq = { mode: 'once', all: false, amount: 0, vol: 100, anchor: 'base', custom: null, angle: -90, keys: [], last: null };
+  let sqRaf = 0, sqdrag = null, sqBefore = null;
+  const SQ_MIN = -60, SQ_MAX = 150;
+  const sqOn = () => state.tool === 'squash';
+
+  function requestSq() {
+    if (sqRaf) return;
+    sqRaf = requestAnimationFrame(() => { sqRaf = 0; drawSq(); });
+  }
+  function sqRefresh() { requestRender(); requestOnion(); requestSq(); }
+
+  // layers it works on: the selected layer (ONCE + THIS FRAME), or it plus its namesakes in every frame
+  function sqTargets() {
+    if (!project.layer || project.layer.locked) return [];
+    return project.targetLayers(sq.mode === 'anim' || sq.all);
+  }
+  const sqLive = () => sq.keys.map(k => ({ i: project.frames.indexOf(k.frame), k })).filter(o => o.i >= 0).sort((a, b) => a.i - b.i);
+  function sqAmountAt(i) {
+    if (sq.mode !== 'anim') return sq.amount;
+    const live = sqLive(); if (!live.length) return 0;
+    if (i <= live[0].i) return live[0].k.a;
+    const last = live[live.length - 1]; if (i >= last.i) return last.k.a;
+    for (let j = 0; j < live.length - 1; j++) {
+      const p = live[j], q = live[j + 1];
+      if (i >= p.i && i <= q.i) return p.k.a + (q.k.a - p.k.a) * (i - p.i) / (q.i - p.i);
+    }
+    return last.k.a;
+  }
+  const sqKeyOn = () => sq.keys.find(k => k.frame === project.frame) || null;
+
+  // bounding box of the painted pixels (alpha > 8), cached per layer version
+  const sqBoxCache = new WeakMap();
+  function sqBox(l) {
+    const c = sqBoxCache.get(l); if (c && c.ver === l.ver) return c.box;
+    const w = l.canvas.width, h = l.canvas.height, d = l.ctx.getImageData(0, 0, w, h).data;
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) { const r = y * w * 4; for (let x = 0; x < w; x++) if (d[r + x * 4 + 3] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    const box = x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+    sqBoxCache.set(l, { ver: l.ver, box }); return box;
+  }
+  const sqU = () => ({ x: Math.cos(sq.angle * Math.PI / 180), y: Math.sin(sq.angle * Math.PI / 180) });
+  function sqAnchorOf(box) {
+    if (sq.anchor === 'custom' && sq.custom) return { ...sq.custom };
+    if (!box) return null;
+    const c = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+    if (sq.anchor === 'center') return c;
+    const u = sqU(), e = Math.abs(u.x) * box.w / 2 + Math.abs(u.y) * box.h / 2;
+    return { x: c.x - u.x * e, y: c.y - u.y * e };
+  }
+  // amount (%) -> scale along the arrow (k) and across it (q)
+  function sqScales(a) {
+    const k = Math.max(0.4, 1 + a / 100);
+    return { k, q: Math.pow(k, -sq.vol / 100) };
+  }
+  function sqDraw(ctx, src, a, A) {
+    const { k, q } = sqScales(a), t = sq.angle * Math.PI / 180;
+    ctx.save(); ctx.imageSmoothingEnabled = !state.crisp; ctx.imageSmoothingQuality = 'high';
+    ctx.translate(A.x, A.y); ctx.rotate(t); ctx.scale(k, q); ctx.rotate(-t); ctx.translate(-A.x, -A.y);
+    ctx.drawImage(src, 0, 0); ctx.restore();
+  }
+
+  // on-screen preview (never touches the layer)
+  const sqPrevCache = new WeakMap();
+  function sqView(l, frame) {
+    if (!sqReady || !sqOn()) return null;
+    const ts = sqTargets(); if (!ts.includes(l)) return null;
+    const a = sqAmountAt(project.frames.indexOf(frame)); if (Math.abs(a) < 0.05) return null;
+    const A = sqAnchorOf(sqBox(l)); if (!A) return null;
+    const key = [l.ver, a, sq.vol, sq.angle, A.x, A.y, state.crisp].join('|');
+    let c = sqPrevCache.get(l);
+    if (c && c.key === key) return c.cv;
+    const cv = c ? c.cv : Object.assign(document.createElement('canvas'), { width: l.canvas.width, height: l.canvas.height });
+    const x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); sqDraw(x, l.canvas, a, A);
+    sqPrevCache.set(l, { key, cv }); return cv;
+  }
+  Engine.setLayerView(sqView);
+
+  const sqD0 = () => 150 / state.zoom;                          // arrow length at 0% (canvas px, steady on screen)
+  function sqGeo() {
+    const l = project.layer; if (!l || !sqTargets().includes(l)) return null;
+    const box = sqBox(l), A = sqAnchorOf(box); if (!A) return null;
+    const a = sqAmountAt(project.currentFrame), u = sqU(), L = sqD0() * sqScales(a).k;
+    return { box, A, a, u, tip: { x: A.x + u.x * L, y: A.y + u.y * L }, mark: { x: A.x + u.x * sqD0(), y: A.y + u.y * sqD0() } };
+  }
+  function drawSq() {
+    sqctx.clearRect(0, 0, sqEl.width, sqEl.height);
+    if (!sqOn() || playing) return;
+    const g = sqGeo(); if (!g) return;
+    const z = state.zoom, c = sqctx;
+    c.save(); c.lineCap = 'round'; c.lineJoin = 'round';
+    // the art's box before (dashed) and after
+    c.strokeStyle = '#c4b5fd'; c.lineWidth = 1.2 / z; c.setLineDash([5 / z, 4 / z]); c.globalAlpha = 0.8;
+    if (g.box) c.strokeRect(g.box.x, g.box.y, g.box.w, g.box.h);
+    c.setLineDash([]);
+    if (g.box && Math.abs(g.a) >= 0.05) {
+      const { k, q } = sqScales(g.a), t = sq.angle * Math.PI / 180;
+      c.save(); c.translate(g.A.x, g.A.y); c.rotate(t); c.scale(k, q); c.rotate(-t); c.translate(-g.A.x, -g.A.y);
+      c.beginPath(); c.rect(g.box.x, g.box.y, g.box.w, g.box.h); c.restore();
+      c.strokeStyle = '#ff69b4'; c.lineWidth = 1.5 / z; c.stroke();
+    }
+    c.globalAlpha = 1;
+    // arrow, 100% tick, handles
+    c.strokeStyle = '#170032'; c.lineWidth = 6 / z; c.beginPath(); c.moveTo(g.A.x, g.A.y); c.lineTo(g.tip.x, g.tip.y); c.stroke();
+    c.strokeStyle = '#00ffff'; c.lineWidth = 3 / z; c.beginPath(); c.moveTo(g.A.x, g.A.y); c.lineTo(g.tip.x, g.tip.y); c.stroke();
+    const n = { x: -g.u.y, y: g.u.x }, tk = 12 / z;
+    c.strokeStyle = '#fecd39'; c.lineWidth = 2.5 / z; c.beginPath(); c.moveTo(g.mark.x - n.x * tk, g.mark.y - n.y * tk); c.lineTo(g.mark.x + n.x * tk, g.mark.y + n.y * tk); c.stroke();
+    const R = 9 / z, keyed = sq.mode !== 'anim' || !!sqKeyOn();
+    c.lineWidth = 2 / z;
+    c.fillStyle = '#fecd39'; c.strokeStyle = '#170032'; c.beginPath(); c.rect(g.A.x - R, g.A.y - R, R * 2, R * 2); c.fill(); c.stroke();
+    c.fillStyle = keyed ? '#00ffff' : '#170032'; c.strokeStyle = '#00ffff'; c.beginPath(); c.arc(g.tip.x, g.tip.y, R * 1.15, 0, Math.PI * 2); c.fill(); c.stroke();
+    const label = sqLabel(g.a);
+    c.font = '600 ' + (12 / z) + 'px ui-monospace, Menlo, Consolas, monospace'; c.textAlign = 'left'; c.textBaseline = 'middle';
+    const lx = g.tip.x + 16 / z, ly = g.tip.y, w = c.measureText(label).width + 8 / z;
+    c.fillStyle = '#170032e0'; c.fillRect(lx - 4 / z, ly - 9 / z, w, 18 / z);
+    c.fillStyle = '#00ffff'; c.fillText(label, lx, ly + 1 / z);
+    c.restore();
+  }
+  const sqLabel = a => Math.abs(a) < 0.05 ? '0%' : (a > 0 ? '+' + Math.round(a) + '% STRETCH' : Math.round(a) + '% SQUASH');
+
+  /* undo: settings snapshots (keys keep their frame objects) */
+  const sqSnap = () => ({ mode: sq.mode, all: sq.all, amount: sq.amount, vol: sq.vol, anchor: sq.anchor, custom: sq.custom && { ...sq.custom }, angle: sq.angle,
+    keys: sq.keys.map(k => ({ frame: k.frame, a: k.a })), last: sq.last });
+  function sqRestore(s) { Object.assign(sq, { ...s, custom: s.custom && { ...s.custom }, keys: s.keys.map(k => ({ ...k })) }); syncSqUI(); sqRefresh(); }
+  function sqCommit(before, label) {
+    const after = sqSnap(), ser = o => JSON.stringify(o, (k, v) => k === 'frame' ? project.frames.indexOf(v) : v);
+    if (ser(after) === ser(before)) return false;
+    project.dirty = true;
+    history.push({ label, bytes: 0, undo: () => sqRestore(before), redo: () => sqRestore(after) });
+    return true;
+  }
+  function sqEdit(label, fn) { const before = sqSnap(); if (fn() === false) return; sqCommit(before, label); syncSqUI(); sqRefresh(); }
+  function sqLiveEdit(fn) { if (!sqBefore) sqBefore = sqSnap(); fn(); syncSqUI(); sqRefresh(); }
+  function sqSettle(label) { if (sqBefore) { const b = sqBefore; sqBefore = null; sqCommit(b, label); } }
+  // set the amount: ONCE = the one amount, ANIMATE = the key on this frame (made if needed)
+  function sqSetAmount(a) {
+    a = clamp(Math.round(a), SQ_MIN, SQ_MAX);
+    if (sq.mode !== 'anim') { sq.amount = a; return; }
+    let k = sqKeyOn(); if (!k) { k = { frame: project.frame, a: 0 }; sq.keys.push(k); }
+    k.a = a;
+  }
+
+  /* pointer */
+  function sqDown(e, p) {
+    if (!project.layer || project.layer.locked) { flash('This layer is locked: unlock it to squash'); return; }
+    const g = sqGeo(); if (!g) { flash('This layer is empty on this frame'); return; }
+    const z = state.zoom, hit = HANDLE_PX / z;
+    const dTip = Math.hypot(g.tip.x - p.x, g.tip.y - p.y), dA = Math.hypot(g.A.x - p.x, g.A.y - p.y);
+    if (Math.min(dTip, dA) > hit) { flash('Drag the round handle to squash / stretch (and turn the arrow), the square to move the anchor'); return; }
+    sqdrag = { id: e.pointerId, which: dTip <= dA ? 'tip' : 'anchor', A: g.A, before: sqSnap(), start: p, a0: { ...g.A } };
+    requestSq();
+  }
+  function sqMove(p) {
+    const d = sqdrag;
+    if (d.which === 'anchor') {
+      sq.anchor = 'custom'; sq.custom = { x: Math.round((d.a0.x + p.x - d.start.x) * 10) / 10, y: Math.round((d.a0.y + p.y - d.start.y) * 10) / 10 };
+    } else {
+      const dx = p.x - d.A.x, dy = p.y - d.A.y, L = Math.hypot(dx, dy);
+      if (L > 12 / state.zoom) {
+        let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        const snap = Math.round(ang / 45) * 45; if (Math.abs(ang - snap) < 6) ang = snap;     // easy to hit straight up / sideways
+        sq.angle = Math.round(ang * 10) / 10;
+      }
+      sqSetAmount((L / sqD0() - 1) * 100);
+    }
+    syncSqUI(); sqRefresh();
+  }
+  function sqUp(ok) {
+    const d = sqdrag; sqdrag = null;
+    if (ok) sqCommit(d.before, d.which === 'anchor' ? 'Move squash anchor' : 'Squash / stretch');
+    else sqRestore(d.before);
+    syncSqUI(); sqRefresh();
+  }
+  function cancelSqDrag() { if (sqdrag) { const d = sqdrag; sqdrag = null; sqRestore(d.before); } }
+
+  /* panel */
+  function syncSqUI() {
+    if (!sqReady) return;
+    $$('#sqMode button').forEach(b => b.classList.toggle('on', b.dataset.v === sq.mode));
+    $$('#sqAll button').forEach(b => b.classList.toggle('on', +b.dataset.v === (sq.all ? 1 : 0)));
+    $$('[data-sq="once"]').forEach(el => { el.hidden = sq.mode === 'anim'; });
+    $$('[data-sq="anim"]').forEach(el => { el.hidden = sq.mode !== 'anim'; });
+    const a = sqAmountAt(project.currentFrame);
+    $('#sqAmt').value = Math.round(a); $('#sqAmtOut').textContent = (a > 0 ? '+' : '') + Math.round(a) + '%';
+    $('#sqVol').value = sq.vol; $('#sqVolOut').textContent = sq.vol + '%';
+    $$('#sqAnchor button').forEach(b => b.classList.toggle('on', b.dataset.v === sq.anchor));
+    const ang = ((sq.angle % 360) + 360) % 360;
+    const names = { 0: 'right', 90: 'down', 180: 'left', 270: 'up', 45: 'down-right', 135: 'down-left', 225: 'up-left', 315: 'up-right' };
+    $('#sqDir').textContent = names[Math.round(ang)] || Math.round(ang) + '°';
+    const live = sqLive();
+    $('#sqKeys').textContent = live.length ? live.map(o => 'f' + (o.i + 1) + ' ' + (o.k.a > 0 ? '+' : '') + Math.round(o.k.a) + '%').join(', ') : '-';
+    $('#sqKeyDel').disabled = !sqKeyOn();
+    $('#sqKeyClear').disabled = !sq.keys.length;
+    const ts = sqTargets(), any = ts.some(l => Math.abs(sqAmountAt(project.frames.findIndex(f => f.layers.includes(l)))) >= 0.05);
+    $('#sqApply').disabled = !any;
+    $('#sqReuse').disabled = !sq.last;
+    const l = project.layer;
+    $('#sqNote').textContent = !l ? '' : l.locked ? '"' + l.name + '" is locked.'
+      : !sqBox(l) ? '"' + l.name + '" is empty on this frame. Pick the layer to squash in the layer list.'
+      : sq.mode === 'anim'
+        ? 'Working on "' + l.name + '" in every frame. Drag the round handle (or AMOUNT) on a frame to key it there; frames between keys blend. Key 0% where it should be back to normal. Preview only until APPLY.'
+        : 'Working on "' + l.name + '"' + (sq.all ? ' in every frame' : '') + '. Drag the round handle past the yellow tick to stretch, inside it to squash; it also turns the arrow. Preview only until APPLY.';
+  }
+  $$('#sqMode button').forEach(b => b.addEventListener('click', () => sqEdit('Squash mode', () => { if (sq.mode === b.dataset.v) return false; sq.mode = b.dataset.v; })));
+  $$('#sqAll button').forEach(b => b.addEventListener('click', () => sqEdit('Squash on', () => { sq.all = b.dataset.v === '1'; })));
+  $$('#sqAnchor button').forEach(b => b.addEventListener('click', () => sqEdit('Squash anchor', () => {
+    if (b.dataset.v === 'custom' && !sq.custom) { const g = sqGeo(); sq.custom = g ? { ...g.A } : { x: project.width / 2, y: project.height / 2 }; }
+    sq.anchor = b.dataset.v;
+  })));
+  $('#sqAmt').addEventListener('input', e => sqLiveEdit(() => sqSetAmount(+e.target.value)));
+  $('#sqAmt').addEventListener('change', () => sqSettle('Squash amount'));
+  $('#sqVol').addEventListener('input', e => sqLiveEdit(() => { sq.vol = +e.target.value; }));
+  $('#sqVol').addEventListener('change', () => sqSettle('Squash volume'));
+  $('#sqUp').addEventListener('click', () => sqEdit('Arrow up', () => { sq.angle = -90; }));
+  $('#sqSide').addEventListener('click', () => sqEdit('Arrow sideways', () => { sq.angle = 0; }));
+  $('#sqRev').addEventListener('click', () => sqEdit('Flip arrow', () => { sq.angle = ((sq.angle + 360) % 360) - 180; }));
+  $('#sqKeyDel').addEventListener('click', () => sqEdit('Delete squash key', () => {
+    const i = sq.keys.findIndex(k => k.frame === project.frame); if (i < 0) return false; sq.keys.splice(i, 1);
+  }));
+  $('#sqKeyClear').addEventListener('click', () => sqEdit('Clear squash keys', () => { if (!sq.keys.length) return false; sq.keys = []; }));
+  $('#sqReset').addEventListener('click', () => sqEdit('Reset squash', () => { if (sq.mode === 'anim') sq.keys = []; else sq.amount = 0; }));
+  $('#sqReuse').addEventListener('click', () => sqEdit('Reuse last squash', () => {
+    const L = sq.last; if (!L) return false;
+    sq.mode = L.mode; sq.all = L.all; sq.amount = L.amount; sq.vol = L.vol; sq.anchor = L.anchor; sq.custom = L.custom && { ...L.custom }; sq.angle = L.angle;
+    sq.keys = L.keys.filter(k => project.frames.includes(k.frame)).map(k => ({ ...k }));
+  }));
+  // Squash the pixels for real: every target layer with a non-zero amount, one undo step (pixels + settings).
+  $('#sqApply').addEventListener('click', () => {
+    if (!frameGuard()) return;
+    const ts = sqTargets(), w = project.width, h = project.height, jobs = [];
+    for (const l of ts) {
+      const i = project.frames.findIndex(f => f.layers.includes(l)), a = sqAmountAt(i);
+      if (Math.abs(a) < 0.05) continue;
+      const A = sqAnchorOf(sqBox(l)); if (!A) continue;
+      jobs.push({ l, a, A });
+    }
+    if (!jobs.length) { flash('Nothing to squash: set an amount first'); return; }
+    const sBefore = sqSnap();
+    const tmp = document.createElement('canvas'); tmp.width = w; tmp.height = h; const tc = tmp.getContext('2d');
+    const before = [], after = [];
+    for (const j of jobs) {
+      before.push(j.l.ctx.getImageData(0, 0, w, h));
+      tc.clearRect(0, 0, w, h); tc.drawImage(j.l.canvas, 0, 0);
+      j.l.ctx.clearRect(0, 0, w, h); sqDraw(j.l.ctx, tmp, j.a, j.A);
+      after.push(j.l.ctx.getImageData(0, 0, w, h));
+    }
+    const layers = jobs.map(j => j.l);
+    sq.last = { mode: sq.mode, all: sq.all, amount: sq.amount, vol: sq.vol, anchor: sq.anchor, custom: sq.custom && { ...sq.custom }, angle: sq.angle, keys: sq.keys.map(k => ({ ...k })) };
+    if (sq.mode === 'anim') sq.keys = []; else sq.amount = 0;
+    const sAfter = sqSnap();
+    project.dirty = true; layers.forEach(l => l.ver++);
+    history.push({ label: 'Squash & stretch', frame: project.frame, layer: project.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
+      undo: () => { layers.forEach((l, k) => l.ctx.putImageData(before[k], 0, 0)); sqRestore(sBefore); },
+      redo: () => { layers.forEach((l, k) => l.ctx.putImageData(after[k], 0, 0)); sqRestore(sAfter); } });
+    project.frames.forEach((_, i) => drawThumb(i));
+    syncSqUI(); sqRefresh(); refreshLayers();
+    flash('Squashed "' + project.layer.name + '" on ' + jobs.length + ' frame' + (jobs.length > 1 ? 's' : '') + ' (REUSE does another layer the same way)');
+  });
+
+  /* saving / loading (keys by frame index) */
+  function sqManifest() {
+    return { mode: sq.mode, all: sq.all, amount: sq.amount, vol: sq.vol, anchor: sq.anchor, custom: sq.custom, angle: sq.angle,
+      keys: sqLive().map(o => ({ frame: o.i, a: o.k.a })) };
+  }
+  function loadSq(m, frames) {
+    sqdrag = null; sqBefore = null;
+    Object.assign(sq, { mode: 'once', all: false, amount: 0, vol: 100, anchor: 'base', custom: null, angle: -90, keys: [], last: null });
+    if (m && typeof m === 'object') {
+      const num = (v, a, b, d) => isFinite(+v) ? clamp(+v, a, b) : d;
+      sq.mode = m.mode === 'anim' ? 'anim' : 'once'; sq.all = !!m.all;
+      sq.amount = Math.round(num(m.amount, SQ_MIN, SQ_MAX, 0)); sq.vol = Math.round(num(m.vol, 0, 100, 100));
+      sq.anchor = ['base', 'center', 'custom'].includes(m.anchor) ? m.anchor : 'base';
+      if (m.custom && isFinite(+m.custom.x) && isFinite(+m.custom.y)) sq.custom = { x: +m.custom.x, y: +m.custom.y };
+      if (sq.anchor === 'custom' && !sq.custom) sq.anchor = 'base';
+      sq.angle = num(m.angle, -360, 360, -90);
+      for (const kd of (Array.isArray(m.keys) ? m.keys : []).slice(0, 500)) {
+        const f = kd && frames[kd.frame | 0]; if (!f || sq.keys.some(k => k.frame === f)) continue;
+        sq.keys.push({ frame: f, a: Math.round(num(kd.a, SQ_MIN, SQ_MAX, 0)) });
+      }
+    }
+    syncSqUI(); sqRefresh();
+  }
+  sqReady = true;
+  syncSqUI();
+  window.__sq = { geo: () => sqGeo(), state: sq, amountAt: i => sqAmountAt(i) };
 
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
@@ -4236,6 +4586,9 @@ const Pose = (() => {
     $('#poseSec').hidden = t !== 'pose';
     if (t !== 'pose') cancelPoseDrag();
     if (t === 'pose') { syncPoseUI(); poseRefreshBodies(); }
+    $('#squashSec').hidden = t !== 'squash';
+    if (t !== 'squash') cancelSqDrag();
+    if (sqReady) { syncSqUI(); sqRefresh(); }
     if (t !== 'wave') cancelWaveDrag();
     if (t !== 'bend') cancelBendDrag();
     if (t === 'bend') syncBendUI();
@@ -4251,7 +4604,7 @@ const Pose = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.tool === 'pose' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.tool === 'pose' || state.tool === 'squash' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -4283,7 +4636,7 @@ const Pose = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
-    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag();
+    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -4559,6 +4912,9 @@ const Pose = (() => {
     } else if (state.tool === 'pose') {
       if (chain) finishChain();
       poseDown(e, p);
+    } else if (state.tool === 'squash') {
+      if (chain) finishChain();
+      sqDown(e, p);
     }
   });
 
@@ -4578,6 +4934,7 @@ const Pose = (() => {
     if (gdrag && gdrag.id === e.pointerId) { waveMove(p); return; }
     if (bdrag && bdrag.id === e.pointerId) { bendMove(p); return; }
     if (pdrag && pdrag.id === e.pointerId) { poseMove(p); return; }
+    if (sqdrag && sqdrag.id === e.pointerId) { sqMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -4599,6 +4956,7 @@ const Pose = (() => {
     if (gdrag && gdrag.id === e.pointerId) { waveUp(e.type === 'pointerup'); return; }
     if (bdrag && bdrag.id === e.pointerId) { bendUp(e.type === 'pointerup'); return; }
     if (pdrag && pdrag.id === e.pointerId) { poseUp(e.type === 'pointerup'); return; }
+    if (sqdrag && sqdrag.id === e.pointerId) { sqUp(e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -4687,7 +5045,7 @@ const Pose = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag || gdrag || bdrag || pdrag) return false;
+    if (stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -5249,8 +5607,8 @@ const Pose = (() => {
   $('#playBtn').addEventListener('click', () => { playing ? stopPlayback() : startPlayback(); });
 
   /* ---------- undo / redo ---------- */
-  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag || bdrag || pdrag) return; history.undo(); }
-  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag || bdrag || pdrag) return; history.redo(); }
+  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag || bdrag || pdrag || sqdrag) return; history.undo(); }
+  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag || bdrag || pdrag || sqdrag) return; history.redo(); }
   $('#undoBtn').addEventListener('click', doUndo);
   $('#redoBtn').addEventListener('click', doRedo);
 
@@ -5596,6 +5954,7 @@ const Pose = (() => {
                              plus waveGuides (wave guide settings + rail keys by frame index)
                              and bend (bend strip settings, hand curve, strip as a PNG data URL)
                              and pose (pose guide: size, body, keys by frame index with hip x/y + bone angles)
+                             and squash (squash & stretch settings + amount keys by frame index; pixels only change on APPLY)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -5612,7 +5971,7 @@ const Pose = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -5646,6 +6005,7 @@ const Pose = (() => {
       waveGuides: waveManifest(),
       bend: bendManifest(),
       pose: poseManifest(),
+      squash: sqManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
         hold: s.frame.hold, activeLayer: Math.min(s.frame.activeLayer, s.layers.length - 1),
@@ -5740,6 +6100,7 @@ const Pose = (() => {
     loadWave(m.waveGuides, frames);
     loadBend(m.bend);
     loadPose(m.pose, frames);
+    loadSq(m.squash, frames);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
   }
@@ -6005,6 +6366,7 @@ const Pose = (() => {
       case 'j': setTool('wave'); break;
       case 'y': setTool('bend'); break;
       case 'f': setTool('pose'); break;
+      case 's': setTool('squash'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -6026,7 +6388,7 @@ const Pose = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
