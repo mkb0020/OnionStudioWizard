@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler,#guide,#bendPrev{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev{pointer-events:none}
 #ruler[hidden]{display:none}
 #world.pixview canvas{image-rendering:pixelated}
 #cursor{position:absolute;pointer-events:none;border:1.5px solid #000;border-radius:50%;
@@ -390,6 +390,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="picker" title="Eyedropper (Q): pick a color from the canvas"><svg viewBox="0 0 24 24"><path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg></button>
       <button class="tb" data-tool="wave" title="Wave guide (J): rails + ticks + a traveling wave for hair and capes"><svg viewBox="0 0 24 24"><path d="M2 6h20M2 18h20" opacity=".55"/><path d="M3 6c3 0 4 12 7 12s4-12 7-12 3 4 4 6"/><path d="M5 4v4M12 16v4M19 4v4"/></svg></button>
       <button class="tb" data-tool="bend" title="Bend strip (Y): lay a flat strip of hair / fabric / scales along a curve, same width"><svg viewBox="0 0 24 24"><path d="M3 9c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 16c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 9v7M21 5v7"/><path d="M8 8.3l-.6 7M13 10.5l-.4 7" opacity=".6"/></svg></button>
+      <button class="tb" data-tool="pose" title="Pose guide (F): a stick figure whose bones turn but never stretch, for one-shot moves"><svg viewBox="0 0 24 24"><circle cx="8" cy="4" r="2"/><path d="M8 6.5l1 6"/><path d="M8.5 8.5l-3.5 3M8.5 8.5l4 1.5"/><path d="M9 12.5l-2.5 4.5L7 21"/><path d="M9 12.5l6 1 6-3"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
       </div>
@@ -614,6 +615,62 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <p class="note" id="bdNote"></p>
     </div>
 
+    <div class="sec" id="poseSec" hidden>
+      <h2>Pose guide</h2>
+      <div class="onion-row">
+        <span class="lbl">BODY</span>
+        <select id="psBody" aria-label="Body proportions" style="flex:1;min-width:0"><option value="default">Rig files (default)</option></select>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">SIZE</span>
+        <input type="range" id="psSize" min="30" max="250" value="100"><output id="psSizeOut">100%</output>
+      </div>
+      <div class="onion-row">
+        <button class="tgl on" id="psShow" style="width:auto;flex:1">SHOW: ON</button>
+        <input type="range" id="psOp" min="10" max="100" value="85" style="flex:1;min-width:0" aria-label="Guide opacity"><output id="psOpOut">85%</output>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">GRAB</span>
+        <div class="seg" id="psSide" style="flex:1"><button data-v="both" class="on">BOTH</button><button data-v="N" title="Only the near (cyan) arm and leg">NEAR</button><button data-v="F" title="Only the far (pink) arm and leg">FAR</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">PIN FOOT</span>
+        <button class="tgl" id="psPinN" style="width:auto;flex:1" title="Keep the near foot on the floor: moving the hips bends the leg instead">NEAR</button>
+        <button class="tgl" id="psPinF" style="width:auto;flex:1" title="Keep the far foot on the floor: moving the hips bends the leg instead">FAR</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">BONE</span>
+        <span class="note" id="psBone" style="flex:1">-</span>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">TURN</span>
+        <input type="range" id="psTurn" min="0" max="70" value="0" title="Draw this bone shorter because it turns toward or away from the camera"><output id="psTurnOut">0%</output>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="psBend" style="width:auto;flex:1" title="Bend the selected arm or leg the other way (same hand / foot position)">FLIP BEND</button>
+        <button class="tgl" id="psFace" style="width:auto;flex:1" title="Face the other way (every key)">FACE &#8644;</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">EASE</span>
+        <div class="seg" id="psEase" style="flex:1"><button data-v="linear" class="on" title="Even spacing to the next key">EVEN</button><button data-v="in" title="Starts slow, ends fast (wind-up into a strike)">IN</button><button data-v="out" title="Starts fast, ends slow (strike into a hold)">OUT</button><button data-v="both" title="Slow at both ends">BOTH</button></div>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">KEYS</span>
+        <span class="note" id="psKeys" style="flex:1">-</span>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="psKeyDel" style="width:auto;flex:1">DEL KEY</button>
+        <button class="tgl" id="psKeyOne" style="width:auto;flex:1" title="Keep this frame's pose as the only key">1 KEY</button>
+        <button class="tgl" id="psReset" style="width:auto;flex:1" title="Back to the standing pose on this frame (keeps the hip position)">STAND</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="psCopy" style="width:auto;flex:1">COPY POSE</button>
+        <button class="tgl" id="psPaste" style="width:auto;flex:1" title="Paste the copied pose as a key on this frame">PASTE</button>
+        <button class="tgl" id="psBake" style="width:auto;flex:1" title="Paint the figure into a new top layer on every frame">BAKE</button>
+      </div>
+      <p class="note" id="psNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -669,6 +726,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="view" width="1000" height="1000"></canvas>
       <canvas id="guide" width="1000" height="1000"></canvas>
       <canvas id="bendPrev" width="1000" height="1000"></canvas>
+      <canvas id="posePrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
     </div>
     <div id="target"></div>
@@ -2927,6 +2985,243 @@ const Bend = (() => {
 
 
 /* =====================================================================
+   POSE GUIDE (pure math + drawing; the UI lives further down)
+
+   A side-view stick figure whose bones can turn but never stretch, for drawing one-shot moves (kicks,
+   punches) with the body in proportion. Bone lengths come from the rig's pivots (800x800 art px): the
+   rig files by default, or a library character's part sidecars. Scale s = project px per art px.
+
+   A pose = root (hip) position + one angle per bone, in degrees. The spine and both thighs are measured
+   against the world (so leaning the torso never swings the legs); every other bone is measured against
+   its parent, so moving an upper arm carries the forearm and hand with it. In-between frames blend the
+   angles (shortest way round), never the joint positions, so every bone keeps its length mid-swing.
+
+   N = near side (towards the viewer), F = far side. face = 1 looks right (as the art does), -1 left.
+   sh[bone] = 0..0.7 foreshortening: the bone is drawn that much shorter because it turns toward or away
+   from the camera; it is a choice you make, never a stretch the tool makes on its own.
+   pinN / pinF hold a foot to the floor: moving the hips bends that leg instead of sliding the foot, and a
+   leg pinned on both keys stays planted on the frames between them.
+   ===================================================================== */
+const Pose = (() => {
+  const R = Math.PI / 180;
+  const SIDES = ['N', 'F'];
+  const NAMES = ['spine', 'chest', 'neck', 'head', 'uArmN', 'fArmN', 'handN', 'uArmF', 'fArmF', 'handF',
+    'thighN', 'shinN', 'footN', 'thighF', 'shinF', 'footF'];
+  const lenKey = n => n.replace(/[NF]$/, '');
+  // Rig files (bone_lengths.json referenceJoints), 800x800 art px, facing right.
+  const DEFAULT_PIV = { headPivot: [397, 289], neck: [395.5, 326], shoulder: [395.5, 338], rib: [397, 411], elbow: [402, 413],
+    wrist: [419.5, 473.5], hip: [398, 472], knee: [391.5, 598], ankle: [385.5, 730] };
+  const PIV_NAMES = Object.keys(DEFAULT_PIV);
+  // Not covered by the pivots; measured off Nova's side-view art (800 px): toe and heel from the ankle, hand length, head.
+  const EXTRA = { toe: [53, 34], heel: [-31, 34], hand: 40, headR: 34, headUp: 12 };
+
+  const wrapDeg = d => { d = ((d + 180) % 360 + 360) % 360 - 180; return d === -180 ? 180 : d; };
+  const lerp = (a, b, k) => a + (b - a) * k;
+  const toLocal = (v, a) => ({ u: v.x * Math.cos(a) + v.y * Math.sin(a), v: -v.x * Math.sin(a) + v.y * Math.cos(a) });
+  const toWorld = (l, a) => ({ x: l.u * Math.cos(a) - l.v * Math.sin(a), y: l.u * Math.sin(a) + l.v * Math.cos(a) });
+  const go = (o, a, l) => ({ x: o.x + Math.cos(a) * l, y: o.y + Math.sin(a) * l });
+  const angTo = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+
+  // Proportions from pivots (missing ones fall back to the rig files).
+  function body(piv) {
+    const src = Object.assign({}, DEFAULT_PIV, piv || {});
+    const P = k => ({ x: +src[k][0], y: +src[k][1] });
+    const d = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+    const hip = P('hip'), rib = P('rib'), neck = P('neck'), hp = P('headPivot'), sh = P('shoulder'),
+      el = P('elbow'), wr = P('wrist'), kn = P('knee'), an = P('ankle');
+    const chestA = angTo(rib, neck), neckA = angTo(neck, hp), footA = Math.atan2(EXTRA.toe[1], EXTRA.toe[0]);
+    const len = { spine: d(hip, rib), chest: d(rib, neck), neck: d(neck, hp), uArm: d(sh, el), fArm: d(el, wr), hand: EXTRA.hand,
+      thigh: d(hip, kn), shin: d(kn, an), foot: Math.hypot(EXTRA.toe[0], EXTRA.toe[1]) };
+    const B = {
+      len, headR: EXTRA.headR,
+      shAt: toLocal({ x: sh.x - rib.x, y: sh.y - rib.y }, chestA),         // shoulder, in the chest's frame
+      headOff: toLocal({ x: 0, y: -EXTRA.headUp }, neckA),                  // head centre from the head pivot
+      faceA: -neckA,                                                        // which way the face points, from the neck
+      heel: toLocal({ x: EXTRA.heel[0], y: EXTRA.heel[1] }, footA),         // heel, in the foot's frame
+    };
+    // standing pose = the art itself (far limbs nudged so both read)
+    const spineA = angTo(hip, rib), uA = angTo(sh, el), fA = angTo(el, wr), tA = angTo(hip, kn), sA = angTo(kn, an);
+    const a = { spine: spineA / R, chest: (chestA - spineA) / R, neck: (neckA - chestA) / R, head: 0,
+      uArmN: (uA - chestA) / R, fArmN: (fA - uA) / R, handN: 8, thighN: tA / R, shinN: (sA - tA) / R, footN: (footA - sA) / R };
+    Object.assign(a, { uArmF: a.uArmN + 9, fArmF: a.fArmN + 6, handF: 8, thighF: a.thighN - 5, shinF: a.shinN + 6, footF: a.footN - 1 });
+    for (const n of NAMES) a[n] = wrapDeg(a[n]);
+    B.rest = { x: hip.x, y: hip.y, face: 1, pinN: false, pinF: false, ease: 'linear', a, sh: {} };
+    return B;
+  }
+
+  const clonePose = p => ({ x: p.x, y: p.y, face: p.face || 1, pinN: !!p.pinN, pinF: !!p.pinF, ease: p.ease || 'linear', a: { ...p.a }, sh: { ...p.sh } });
+  const boneLen = (B, p, s, n) => B.len[lenKey(n)] * s * (1 - (p.sh[n] || 0));
+
+  // Forward kinematics: joint positions J and absolute bone angles A (radians).
+  function fk(B, p, s) {
+    const f = p.face || 1, J = {}, A = {};
+    const a = n => (p.a[n] || 0) * R, L = n => boneLen(B, p, s, n);
+    const off = (o, l, ang) => { const w = toWorld({ u: l.u * s, v: l.v * s * f }, ang); return { x: o.x + w.x, y: o.y + w.y }; };
+    J.hip = { x: p.x, y: p.y };
+    A.spine = a('spine'); J.rib = go(J.hip, A.spine, L('spine'));
+    A.chest = A.spine + a('chest'); J.neck = go(J.rib, A.chest, L('chest'));
+    J.shoulder = off(J.rib, { u: B.shAt.u * (1 - (p.sh.chest || 0)), v: B.shAt.v }, A.chest);
+    A.neck = A.chest + a('neck'); J.headPivot = go(J.neck, A.neck, L('neck'));
+    A.head = A.neck + a('head'); J.head = off(J.headPivot, B.headOff, A.head);
+    J.nose = go(J.head, A.head + f * B.faceA, B.headR * s);
+    for (const S of SIDES) {
+      A['uArm' + S] = A.chest + a('uArm' + S); J['elbow' + S] = go(J.shoulder, A['uArm' + S], L('uArm' + S));
+      A['fArm' + S] = A['uArm' + S] + a('fArm' + S); J['wrist' + S] = go(J['elbow' + S], A['fArm' + S], L('fArm' + S));
+      A['hand' + S] = A['fArm' + S] + a('hand' + S); J['handTip' + S] = go(J['wrist' + S], A['hand' + S], L('hand' + S));
+      A['thigh' + S] = a('thigh' + S); J['knee' + S] = go(J.hip, A['thigh' + S], L('thigh' + S));
+      A['shin' + S] = A['thigh' + S] + a('shin' + S); J['ankle' + S] = go(J['knee' + S], A['shin' + S], L('shin' + S));
+      A['foot' + S] = A['shin' + S] + a('foot' + S); J['toe' + S] = go(J['ankle' + S], A['foot' + S], L('foot' + S));
+      J['heel' + S] = off(J['ankle' + S], { u: B.heel.u * (1 - (p.sh['foot' + S] || 0)), v: B.heel.v }, A['foot' + S]);
+    }
+    return { J, A, headR: B.headR * s };
+  }
+
+  // Two-bone IK: angles that put the end of l1 + l2 (from root) on target. sign picks the side the middle
+  // joint bends to. Out of reach = the limb points straight at the target (reached false).
+  function ik2(root, target, l1, l2, sign) {
+    const dx = target.x - root.x, dy = target.y - root.y, D = Math.hypot(dx, dy), base = Math.atan2(dy, dx);
+    const d = Math.min(Math.max(D, Math.abs(l1 - l2) + 1e-6), l1 + l2 - 1e-6);
+    const A = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
+    const a1 = base + sign * A, mid = go(root, a1, l1), end = go(root, base, d);
+    return { a1, a2: angTo(mid, end), reached: D <= l1 + l2 + 0.5 && D >= Math.abs(l1 - l2) - 0.5 };
+  }
+  const bendSign = (root, mid, end) => ((end.x - root.x) * (mid.y - root.y) - (end.y - root.y) * (mid.x - root.x)) >= 0 ? 1 : -1;
+
+  // Limb parts: leg = thigh / shin / foot from the hip, arm = upper arm / forearm / hand from the shoulder.
+  const limbOf = (kind, S) => kind === 'leg'
+    ? { n1: 'thigh' + S, n2: 'shin' + S, n3: 'foot' + S, root: 'hip', mid: 'knee' + S, end: 'ankle' + S }
+    : { n1: 'uArm' + S, n2: 'fArm' + S, n3: 'hand' + S, root: 'shoulder', mid: 'elbow' + S, end: 'wrist' + S };
+  // Which way a limb bends now. A (nearly) straight limb has no clear side, so it gets the natural one:
+  // knees bend toward the face, elbows away from it (mirrored when the figure faces left).
+  function limbSign(B, p, s, kind, S) {
+    const { J } = fk(B, p, s), m = limbOf(kind, S), r = J[m.root], md = J[m.mid], e = J[m.end];
+    const cross = (e.x - r.x) * (md.y - r.y) - (e.y - r.y) * (md.x - r.x);
+    const sin = cross / ((Math.hypot(e.x - r.x, e.y - r.y) * Math.hypot(md.x - r.x, md.y - r.y)) || 1);
+    if (Math.abs(sin) > 0.1) return cross >= 0 ? 1 : -1;
+    return (kind === 'leg' ? -1 : 1) * (p.face || 1);
+  }
+  // Put a limb's end (ankle / wrist) on target. endAbs (radians): the foot / hand keeps this world angle
+  // (null = it keeps its angle to the shin / forearm). Changes p; returns whether the target was reached.
+  function solveLimb(B, p, s, kind, S, target, sign, endAbs) {
+    const { J, A } = fk(B, p, s), m = limbOf(kind, S);
+    const parentA = kind === 'leg' ? 0 : A.chest;
+    if (!sign) sign = limbSign(B, p, s, kind, S);
+    const r = ik2(J[m.root], target, boneLen(B, p, s, m.n1), boneLen(B, p, s, m.n2), sign);
+    p.a[m.n1] = wrapDeg((r.a1 - parentA) / R);
+    p.a[m.n2] = wrapDeg((r.a2 - r.a1) / R);
+    if (endAbs != null) p.a[m.n3] = wrapDeg((endAbs - r.a2) / R);
+    return r.reached;
+  }
+
+  function easeK(k, e) {
+    if (e === 'in') return k * k;
+    if (e === 'out') return 1 - (1 - k) * (1 - k);
+    if (e === 'both') return k < 0.5 ? 2 * k * k : 1 - 2 * (1 - k) * (1 - k);
+    return k;
+  }
+  // The pose between key poses p (k = 0) and q (k = 1); k already eased.
+  function blend(B, s, p, q, k) {
+    const o = clonePose(p);
+    o.x = lerp(p.x, q.x, k); o.y = lerp(p.y, q.y, k);
+    for (const n of NAMES) {
+      o.a[n] = wrapDeg((p.a[n] || 0) + wrapDeg((q.a[n] || 0) - (p.a[n] || 0)) * k);
+      const sh = lerp(p.sh[n] || 0, q.sh[n] || 0, k); if (sh > 1e-4) o.sh[n] = sh; else delete o.sh[n];
+    }
+    o.pinN = p.pinN && q.pinN; o.pinF = p.pinF && q.pinF;
+    // a foot pinned on both keys stays on the floor: blend the ankle position, then bend the leg to it
+    for (const S of SIDES) {
+      if (!o['pin' + S]) continue;
+      const P = fk(B, p, s), Q = fk(B, q, s), a0 = P.J['ankle' + S], a1 = Q.J['ankle' + S];
+      const fA = P.A['foot' + S] + wrapDeg((Q.A['foot' + S] - P.A['foot' + S]) / R) * R * k;
+      solveLimb(B, o, s, 'leg', S, { x: lerp(a0.x, a1.x, k), y: lerp(a0.y, a1.y, k) }, limbSign(B, p, s, 'leg', S), fA);
+    }
+    return o;
+  }
+  // live = keys sorted by frame index: [{i, k: {p}}]. Returns the pose on frame i.
+  function at(B, s, live, i, rest) {
+    if (!live.length) return clonePose(rest);
+    if (i <= live[0].i) return clonePose(live[0].k.p);
+    const last = live[live.length - 1];
+    if (i >= last.i) return clonePose(last.k.p);
+    for (let j = 0; j < live.length - 1; j++) {
+      const p = live[j], q = live[j + 1];
+      if (i >= p.i && i <= q.i) return blend(B, s, p.k.p, q.k.p, easeK((i - p.i) / (q.i - p.i), p.k.p.ease));
+    }
+    return clonePose(last.k.p);
+  }
+
+  // Mirror a pose left <-> right about its own hip.
+  function mirror(p) {
+    const o = clonePose(p);
+    o.face = -(p.face || 1);
+    for (const n of NAMES) {
+      const world = n === 'spine' || n.startsWith('thigh');
+      o.a[n] = wrapDeg(world ? 180 - (p.a[n] || 0) : -(p.a[n] || 0));
+    }
+    return o;
+  }
+
+  // Draw one figure. o: { lw, alpha, farAlpha, sel (bone name), ghosts (dashed full length of shortened bones) }
+  const COLORS = { near: '#00ffff', far: '#dc4ce8', core: '#fecd39', pin: '#58e84c', ghost: '#c4b5fd', ink: '#170032' };
+  function draw(ctx, B, p, s, o = {}) {
+    const lw = o.lw || 3, { J, A, headR } = fk(B, p, s);
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const base = o.alpha == null ? 1 : o.alpha;
+    const seg = (a, b, col, w, al) => {
+      ctx.globalAlpha = base * al * 0.55; ctx.strokeStyle = COLORS.ink; ctx.lineWidth = w + lw * 1.4;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      ctx.globalAlpha = base * al; ctx.strokeStyle = col; ctx.lineWidth = w;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    };
+    const dot = (q, col, r, al) => { ctx.globalAlpha = base * al; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill(); };
+    const ghost = (n, from) => {
+      if (!o.ghosts || !(p.sh[n] > 0)) return;
+      const full = go(from, A[n], B.len[lenKey(n)] * s);
+      ctx.globalAlpha = base * 0.7; ctx.strokeStyle = COLORS.ghost; ctx.lineWidth = lw * 0.8; ctx.setLineDash([lw * 3, lw * 2.5]);
+      ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(full.x, full.y); ctx.stroke(); ctx.setLineDash([]);
+    };
+    const W = lw * 2.2;
+    const limbs = (S, col, al) => {
+      for (const [n, a, b] of [['thigh' + S, 'hip', 'knee' + S], ['shin' + S, 'knee' + S, 'ankle' + S]]) { ghost(n, J[a]); seg(J[a], J[b], o.sel === n ? '#ffffff' : col, W, al); }
+      // foot: heel - ankle - toe triangle
+      ghost('foot' + S, J['ankle' + S]);
+      const fc = o.sel === 'foot' + S ? '#ffffff' : col;
+      seg(J['ankle' + S], J['toe' + S], fc, W * 0.8, al); seg(J['ankle' + S], J['heel' + S], fc, W * 0.6, al); seg(J['heel' + S], J['toe' + S], fc, W * 0.6, al);
+      if (p['pin' + S]) {
+        ctx.globalAlpha = base * al; ctx.strokeStyle = COLORS.pin; ctx.lineWidth = lw * 1.2;
+        const g = { x: (J['heel' + S].x + J['toe' + S].x) / 2, y: Math.max(J['heel' + S].y, J['toe' + S].y) + lw * 3 };
+        ctx.beginPath(); ctx.moveTo(g.x - lw * 9, g.y); ctx.lineTo(g.x + lw * 9, g.y);
+        for (let t = -2; t <= 2; t++) { ctx.moveTo(g.x + t * lw * 4, g.y); ctx.lineTo(g.x + t * lw * 4 - lw * 2.5, g.y + lw * 2.5); }
+        ctx.stroke();
+      }
+      for (const [n, a, b] of [['uArm' + S, 'shoulder', 'elbow' + S], ['fArm' + S, 'elbow' + S, 'wrist' + S], ['hand' + S, 'wrist' + S, 'handTip' + S]]) {
+        ghost(n, J[a]); seg(J[a], J[b], o.sel === n ? '#ffffff' : col, n.startsWith('hand') ? W * 1.6 : W, al);
+      }
+      for (const j of ['knee', 'ankle', 'elbow', 'wrist']) dot(J[j + S], col, lw * 1.6, al);
+    };
+    limbs('F', COLORS.far, o.farAlpha == null ? 0.75 : o.farAlpha);
+    // torso, neck, head
+    ghost('spine', J.hip); ghost('chest', J.rib); ghost('neck', J.neck);
+    seg(J.hip, J.rib, o.sel === 'spine' ? '#ffffff' : COLORS.core, W * 1.5, 1);
+    seg(J.rib, J.neck, o.sel === 'chest' ? '#ffffff' : COLORS.core, W * 1.5, 1);
+    seg(J.neck, J.headPivot, o.sel === 'neck' ? '#ffffff' : COLORS.core, W, 1);
+    ctx.globalAlpha = base * 0.55; ctx.strokeStyle = COLORS.ink; ctx.lineWidth = W + lw * 1.4;
+    ctx.beginPath(); ctx.arc(J.head.x, J.head.y, headR, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = base; ctx.strokeStyle = o.sel === 'head' ? '#ffffff' : COLORS.core; ctx.lineWidth = W;
+    ctx.beginPath(); ctx.arc(J.head.x, J.head.y, headR, 0, Math.PI * 2); ctx.stroke();
+    seg(J.head, J.nose, o.sel === 'head' ? '#ffffff' : COLORS.core, W * 0.8, 1);   // face direction
+    dot(J.hip, COLORS.core, lw * 2, 1); dot(J.rib, COLORS.core, lw * 1.6, 1); dot(J.neck, COLORS.core, lw * 1.6, 1);
+    limbs('N', COLORS.near, 1);
+    ctx.restore();
+    return { J, A };
+  }
+
+  return { NAMES, SIDES, PIV_NAMES, DEFAULT_PIV, body, clonePose, boneLen, fk, ik2, bendSign, limbOf, limbSign, solveLimb,
+    easeK, blend, at, mirror, draw, wrapDeg, lenKey, COLORS };
+})();
+
+
+/* =====================================================================
    UI
    ===================================================================== */
 (() => {
@@ -3014,6 +3309,7 @@ const Bend = (() => {
 
   function requestGuide() {
     if (bendReady) requestBend();               // the bend preview can follow a guide
+    if (poseReady) requestPose();
     if (guideRaf) return;
     guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
   }
@@ -3158,6 +3454,7 @@ const Bend = (() => {
       ? 'Drag from the ROOT (where it is attached) to the TIP to place the guide. It goes on every frame.'
       : 'Round handles move the rail ends, the square moves the whole guide. Dragging on a frame without a key makes one there; frames between keys slide between them.';
     if (bendReady) syncBendUI();
+    if (poseReady) syncPoseUI();
   }
   function guideSet(key, v) { const g = curGuide(); if (g) g[key] = v; }
   const wvSlider = (id, key, label, map = v => v) => {
@@ -3505,6 +3802,306 @@ const Bend = (() => {
   bendReady = true;
   syncBendUI();
 
+  /* ---------- pose guide (POSE tool, F) ----------
+     A stick figure on its own canvas (never exported unless you BAKE it). Its bones turn but never stretch.
+     Handles: square = hips (moves the figure; pinned feet stay put), round = joints. Dragging a joint
+     turns the bone that ends there (knee turns the thigh, elbow the upper arm, ...); the ankle and wrist
+     are IK handles: drag the foot or fist where it should go and the knee / elbow works itself out.
+     Dragging on a frame without a key makes a key there; frames between keys blend the bone angles.
+     Keys, size and body are undoable and saved in the project (`pose`); SHOW / opacity are view settings. */
+  var poseReady = false;                        // var: requestGuide / syncWaveUI above check it before this runs
+  const poseEl = $('#posePrev'), pctx = poseEl.getContext('2d');
+  const pose = { show: true, opacity: 0.85, side: 'both', size: 100, body: 'default', keys: [], sel: null };
+  let poseRaf = 0, pdrag = null, psBefore = null, poseClip = null, poseBodies = { default: Pose.DEFAULT_PIV };
+  let poseB = Pose.body(Pose.DEFAULT_PIV);
+  const BONE_LABEL = { spine: 'lower spine', chest: 'chest', neck: 'neck', head: 'head', uArm: 'upper arm', fArm: 'forearm', hand: 'hand',
+    thigh: 'thigh', shin: 'shin', foot: 'foot' };
+  const boneLabel = n => (n.endsWith('N') ? 'near ' : n.endsWith('F') ? 'far ' : '') + BONE_LABEL[Pose.lenKey(n)];
+
+  const artK = () => project.width / 800;                     // project px per rig art px
+  const poseS = () => artK() * pose.size / 100;
+  function poseRest() { const r = Pose.clonePose(poseB.rest); r.x *= artK(); r.y *= artK(); return r; }
+  const poseLive = () => pose.keys.map(k => ({ i: project.frames.indexOf(k.frame), k })).filter(o => o.i >= 0).sort((a, b) => a.i - b.i);
+  const poseAt = i => Pose.at(poseB, poseS(), poseLive(), i, poseRest());
+  const poseKeyOn = () => pose.keys.find(k => k.frame === project.frame) || null;
+  function poseKeyHere() {
+    let k = poseKeyOn();
+    if (!k) { k = { frame: project.frame, p: poseAt(project.currentFrame) }; pose.keys.push(k); }
+    return k;
+  }
+  // the key whose EASE applies to this frame: the one on it, or the last one before it
+  function poseEaseKey() {
+    const live = poseLive(), i = project.currentFrame;
+    let best = null; for (const o of live) if (o.i <= i) best = o;
+    return best ? best.k : null;
+  }
+
+  function requestPose() {
+    if (poseRaf) return;
+    poseRaf = requestAnimationFrame(() => { poseRaf = 0; drawPose(); });
+  }
+  // Handles from the current joints: [joint, action, bone, side]
+  function poseHandles(J) {
+    const H = [['hip', 'move', null, ''], ['rib', 'rot', 'spine', ''], ['neck', 'rot', 'chest', ''], ['head', 'rot', 'neck', ''], ['nose', 'rot', 'head', '']];
+    for (const S of ['N', 'F']) {
+      if (pose.side !== 'both' && pose.side !== S) continue;
+      H.push(['elbow' + S, 'rot', 'uArm' + S, S], ['wrist' + S, 'ik', 'fArm' + S, S], ['handTip' + S, 'rot', 'hand' + S, S],
+        ['knee' + S, 'rot', 'thigh' + S, S], ['ankle' + S, 'ik', 'shin' + S, S], ['toe' + S, 'rot', 'foot' + S, S]);
+    }
+    return H;
+  }
+  // the joint a bone turns around
+  const PIVOT_OF = { spine: 'hip', chest: 'rib', neck: 'neck', head: 'headPivot', uArm: 'shoulder', fArm: 'elbow', hand: 'wrist', thigh: 'hip', shin: 'knee', foot: 'ankle' };
+  const pivotOf = n => { const b = Pose.lenKey(n), side = n.slice(b.length); return PIVOT_OF[b] + (['shoulder', 'hip', 'rib', 'neck', 'headPivot'].includes(PIVOT_OF[b]) ? '' : side); };
+
+  function drawPose() {
+    pctx.clearRect(0, 0, poseEl.width, poseEl.height);
+    const editing = state.tool === 'pose';
+    const vis = editing || (pose.show && pose.keys.length > 0);
+    poseEl.style.display = vis ? '' : 'none';
+    if (!vis) return;
+    poseEl.style.opacity = pose.show ? pose.opacity : 0.5;
+    const z = state.zoom, lw = clamp(2.2 / z, 0.8, 12), s = poseS();
+    const p = pdrag ? pdrag.k.p : poseAt(project.currentFrame);
+    const { J } = Pose.draw(pctx, poseB, p, s, { lw, sel: editing ? pose.sel : null, ghosts: true });
+    if (!editing || playing) return;
+    const keyed = !!poseKeyOn(), Rh = 8 / z;
+    pctx.save(); pctx.lineWidth = 2 / z;
+    for (const [j, act, , S] of poseHandles(J)) {
+      const q = J[j], col = S === 'N' ? Pose.COLORS.near : S === 'F' ? Pose.COLORS.far : Pose.COLORS.core;
+      pctx.fillStyle = keyed ? col : '#170032'; pctx.strokeStyle = col;
+      pctx.beginPath();
+      if (act === 'move') pctx.rect(q.x - Rh * 1.2, q.y - Rh * 1.2, Rh * 2.4, Rh * 2.4);
+      else if (act === 'ik') { pctx.moveTo(q.x, q.y - Rh * 1.3); pctx.lineTo(q.x + Rh * 1.3, q.y); pctx.lineTo(q.x, q.y + Rh * 1.3); pctx.lineTo(q.x - Rh * 1.3, q.y); pctx.closePath(); }
+      else pctx.arc(q.x, q.y, Rh, 0, Math.PI * 2);
+      pctx.fill(); pctx.stroke();
+    }
+    if (pdrag && pdrag.act === 'ik' && pdrag.miss) {             // the hand / foot can't reach: show where you asked for
+      const t = pdrag.target; pctx.strokeStyle = '#ff2a2a'; pctx.lineWidth = 2.5 / z;
+      pctx.beginPath(); pctx.moveTo(t.x - 9 / z, t.y - 9 / z); pctx.lineTo(t.x + 9 / z, t.y + 9 / z); pctx.moveTo(t.x + 9 / z, t.y - 9 / z); pctx.lineTo(t.x - 9 / z, t.y + 9 / z); pctx.stroke();
+    }
+    pctx.restore();
+  }
+
+  /* undo: whole-state snapshots (keys keep their frame objects) */
+  const psSnap = () => ({ size: pose.size, keys: pose.keys.map(k => ({ frame: k.frame, p: Pose.clonePose(k.p) })) });
+  function psRestore(s) { pose.size = s.size; pose.keys = s.keys.map(k => ({ frame: k.frame, p: Pose.clonePose(k.p) })); syncPoseUI(); requestPose(); }
+  function psCommit(before, label) {
+    const after = psSnap(), ser = o => JSON.stringify(o, (k, v) => k === 'frame' ? project.frames.indexOf(v) : v);
+    if (ser(after) === ser(before)) return false;
+    project.dirty = true;
+    history.push({ label, bytes: 0, undo: () => psRestore(before), redo: () => psRestore(after) });
+    return true;
+  }
+  function psEdit(label, fn) { const before = psSnap(); if (fn() === false) return; psCommit(before, label); syncPoseUI(); requestPose(); }
+  function psLive(fn) { if (!psBefore) psBefore = psSnap(); fn(); syncPoseUI(); requestPose(); }
+  function psSettle(label) { if (psBefore) { const b = psBefore; psBefore = null; psCommit(b, label); } }
+
+  /* pointer (called from the stage handlers) */
+  function poseDown(e, p) {
+    const z = state.zoom, s = poseS();
+    const cur = poseAt(project.currentFrame), { J } = Pose.fk(poseB, cur, s);
+    let best = null, bd = HANDLE_PX / z;
+    for (const h of poseHandles(J)) { const d = Math.hypot(J[h[0]].x - p.x, J[h[0]].y - p.y); if (d < bd) { bd = d; best = h; } }
+    if (!best) { flash('Drag a handle: square = hips, diamonds = hand / foot (IK), circles turn a bone'); return; }
+    const before = psSnap(), k = poseKeyHere(), p0 = Pose.clonePose(k.p), F0 = Pose.fk(poseB, p0, s);
+    const [joint, act, bone, S] = best;
+    pdrag = { id: e.pointerId, act, bone, S, joint, start: p, before, k, p0, F0, target: p, miss: false };
+    if (act === 'ik') pdrag.sign = Pose.limbSign(poseB, p0, s, joint.startsWith('ankle') ? 'leg' : 'arm', S);
+    if (bone) pose.sel = bone;
+    syncPoseUI(); requestPose();
+  }
+  function poseMove(p) {
+    const d = pdrag, s = poseS(), q = d.k.p, F0 = d.F0;
+    if (d.act === 'move') {
+      q.x = Math.round((d.p0.x + p.x - d.start.x) * 10) / 10; q.y = Math.round((d.p0.y + p.y - d.start.y) * 10) / 10;
+      for (const S of ['N', 'F']) if (q['pin' + S]) {
+        Object.assign(q.a, { ['thigh' + S]: d.p0.a['thigh' + S], ['shin' + S]: d.p0.a['shin' + S] });
+        Pose.solveLimb(poseB, q, s, 'leg', S, F0.J['ankle' + S], Pose.limbSign(poseB, d.p0, s, 'leg', S), F0.A['foot' + S]);
+      }
+    } else if (d.act === 'rot') {
+      const pv = F0.J[pivotOf(d.bone)];
+      const da = Math.atan2(p.y - pv.y, p.x - pv.x) - Math.atan2(d.start.y - pv.y, d.start.x - pv.x);
+      q.a[d.bone] = Pose.wrapDeg(d.p0.a[d.bone] + da * 180 / Math.PI);
+    } else {
+      const leg = d.joint.startsWith('ankle');
+      Object.assign(q.a, d.p0.a);
+      d.target = p;
+      d.miss = !Pose.solveLimb(poseB, q, s, leg ? 'leg' : 'arm', d.S, p, d.sign, leg ? F0.A['foot' + d.S] : null);
+    }
+    requestPose();
+  }
+  function poseUp(ok) {
+    const d = pdrag; pdrag = null;
+    if (ok) psCommit(d.before, d.act === 'move' ? 'Move pose' : d.act === 'ik' ? 'Move ' + (d.S === 'N' ? 'near ' : 'far ') + (d.joint.startsWith('ankle') ? 'foot' : 'hand') : 'Turn ' + boneLabel(d.bone));
+    else psRestore(d.before);
+    syncPoseUI(); requestPose();
+  }
+  function cancelPoseDrag() { if (pdrag) { const d = pdrag; pdrag = null; psRestore(d.before); } }
+
+  /* settings panel */
+  function syncPoseUI() {
+    if (!poseReady) return;
+    $('#psShow').classList.toggle('on', pose.show); $('#psShow').textContent = 'SHOW: ' + (pose.show ? 'ON' : 'OFF');
+    $('#psOp').value = Math.round(pose.opacity * 100); $('#psOpOut').textContent = Math.round(pose.opacity * 100) + '%';
+    $('#psSize').value = pose.size; $('#psSizeOut').textContent = pose.size + '%';
+    $$('#psSide button').forEach(b => b.classList.toggle('on', b.dataset.v === pose.side));
+    const live = poseLive(), cur = poseKeyOn(), p = cur ? cur.p : poseAt(project.currentFrame);
+    for (const S of ['N', 'F']) { const b = $('#psPin' + S); b.classList.toggle('on', !!p['pin' + S]); b.textContent = (S === 'N' ? 'NEAR' : 'FAR') + (p['pin' + S] ? ': PINNED' : ''); }
+    const sel = pose.sel;
+    $('#psBone').textContent = sel ? boneLabel(sel) : 'drag a joint to pick one';
+    const sh = sel ? Math.round((p.sh[sel] || 0) * 100) : 0;
+    $('#psTurn').value = sh; $('#psTurnOut').textContent = sh + '%'; $('#psTurn').disabled = !sel;
+    $('#psBend').disabled = !(sel && /^(uArm|fArm|hand|thigh|shin|foot)[NF]$/.test(sel));
+    const ek = poseEaseKey();
+    $$('#psEase button').forEach(b => { b.classList.toggle('on', !!ek && b.dataset.v === ek.p.ease); b.disabled = !ek; });
+    $('#psKeys').textContent = live.length ? 'frame ' + live.map(o => o.i + 1).join(', ') : '- (standing pose)';
+    $('#psKeyDel').disabled = !cur;
+    $('#psKeyOne').disabled = live.length < 2;
+    $('#psPaste').disabled = !poseClip;
+    $('#psBake').disabled = !live.length;
+    $('#psNote').textContent = !live.length
+      ? 'Drag any handle to start: the first drag makes a key on this frame. Bones turn but never stretch.'
+      : (cur ? 'Key on this frame. ' : 'In-between frame: dragging makes a key here. ') +
+        'EASE shapes the frames after ' + (ek ? 'frame ' + (project.frames.indexOf(ek.frame) + 1) : 'a key') + '. Pinned feet stay on the floor between two pinned keys.';
+  }
+  $('#psShow').addEventListener('click', () => { pose.show = !pose.show; syncPoseUI(); requestPose(); settingsChanged(); });
+  $('#psOp').addEventListener('input', e => { pose.opacity = +e.target.value / 100; syncPoseUI(); requestPose(); });
+  $('#psOp').addEventListener('change', () => settingsChanged());
+  $('#psSize').addEventListener('input', e => psLive(() => { pose.size = +e.target.value; }));
+  $('#psSize').addEventListener('change', () => psSettle('Pose size'));
+  $$('#psSide button').forEach(b => b.addEventListener('click', () => { pose.side = b.dataset.v; syncPoseUI(); requestPose(); }));
+  for (const S of ['N', 'F']) $('#psPin' + S).addEventListener('click', () => psEdit((S === 'N' ? 'Pin near' : 'Pin far') + ' foot', () => {
+    const k = poseKeyHere(); k.p['pin' + S] = !k.p['pin' + S];
+  }));
+  $('#psTurn').addEventListener('input', e => psLive(() => {
+    if (!pose.sel) return; const k = poseKeyHere(), v = +e.target.value / 100;
+    if (v > 0) k.p.sh[pose.sel] = v; else delete k.p.sh[pose.sel];
+  }));
+  $('#psTurn').addEventListener('change', () => psSettle('Turn ' + (pose.sel ? boneLabel(pose.sel) : 'bone')));
+  $('#psBend').addEventListener('click', () => psEdit('Flip bend', () => {
+    const sel = pose.sel; if (!sel) return false;
+    const m = /^(uArm|fArm|hand|thigh|shin|foot)([NF])$/.exec(sel); if (!m) return false;
+    const kind = /^(thigh|shin|foot)$/.test(m[1]) ? 'leg' : 'arm', S = m[2], s = poseS();
+    const k = poseKeyHere(), F = Pose.fk(poseB, k.p, s), end = F.J[kind === 'leg' ? 'ankle' + S : 'wrist' + S];
+    Pose.solveLimb(poseB, k.p, s, kind, S, end, -Pose.limbSign(poseB, k.p, s, kind, S), kind === 'leg' ? F.A['foot' + S] : null);
+  }));
+  $('#psFace').addEventListener('click', () => psEdit('Face the other way', () => {
+    if (!pose.keys.length) poseKeyHere();
+    pose.keys.forEach(k => { k.p = Pose.mirror(k.p); });
+  }));
+  $$('#psEase button').forEach(b => b.addEventListener('click', () => psEdit('Pose ease', () => {
+    const k = poseEaseKey(); if (!k) return false; k.p.ease = b.dataset.v;
+  })));
+  $('#psKeyDel').addEventListener('click', () => psEdit('Delete pose key', () => {
+    const i = pose.keys.findIndex(k => k.frame === project.frame); if (i < 0) return false;
+    pose.keys.splice(i, 1);
+  }));
+  $('#psKeyOne').addEventListener('click', () => psEdit('Pose same on all frames', () => {
+    pose.keys = [{ frame: project.frame, p: poseAt(project.currentFrame) }];
+  }));
+  $('#psReset').addEventListener('click', () => psEdit('Standing pose', () => {
+    const k = poseKeyHere(), face = k.p.face, r = Object.assign(poseRest(), { x: k.p.x, y: k.p.y });
+    k.p = face === -1 ? Pose.mirror(r) : r;
+  }));
+  $('#psCopy').addEventListener('click', () => { poseClip = poseAt(project.currentFrame); syncPoseUI(); flash('Pose copied from frame ' + (project.currentFrame + 1)); });
+  $('#psPaste').addEventListener('click', () => {
+    if (!poseClip) return;
+    psEdit('Paste pose', () => { poseKeyHere().p = Pose.clonePose(poseClip); });
+    flash('Pose pasted as a key on frame ' + (project.currentFrame + 1));
+  });
+  // Paint the figure into a new top layer on every frame, as one undo step.
+  $('#psBake').addEventListener('click', () => {
+    if (!poseLive().length || !frameGuard()) return;
+    const added = [], s = poseS();
+    project.frames.forEach((f, i) => {
+      const l = new Engine.Layer(project.width, project.height, 'Pose guide');
+      Pose.draw(l.ctx, poseB, poseAt(i), s, { lw: 2.5 });
+      l.onion = false;
+      added.push({ f, l, prev: f.activeLayer });
+    });
+    const put = () => added.forEach(a => { a.f.layers.push(a.l); a.f.activeLayer = a.f.layers.length - 1; });
+    put(); project.dirty = true;
+    history.push({ label: 'Bake pose guide', bytes: added.length * project.width * project.height * 4, thumbsAll: true,
+      undo: () => added.forEach(a => { const k = a.f.layers.indexOf(a.l); if (k >= 0) a.f.layers.splice(k, 1); a.f.activeLayer = Math.min(a.prev, a.f.layers.length - 1); }),
+      redo: put });
+    project.frames.forEach((_, i) => drawThumb(i));
+    pose.show = false; syncPoseUI(); requestPose(); settingsChanged();
+    flash('Baked into ' + added.length + ' layer' + (added.length > 1 ? 's' : '') + ' (live guide hidden)');
+  });
+
+  /* body proportions: the rig files, or a library character's side-view part pivots */
+  const poseHosted = () => !!(window.OSWClient && window.OSWClient.hosted);
+  async function poseRefreshBodies() {
+    if (!poseHosted()) return;
+    try {
+      const items = await OSWClient.library.list({ type: 'part' }), found = {};
+      for (const it of items) {
+        const m = it.meta || {}, ch = m.character;
+        if (!ch || m.view !== 'side' || !m.pivots || typeof m.pivots !== 'object') continue;
+        if (Array.isArray(m.canvas) && +m.canvas[0] !== 800) continue;          // pivots are 800x800 art px
+        const piv = found[ch] || (found[ch] = {});
+        for (const [n, v] of Object.entries(m.pivots)) if (Pose.PIV_NAMES.includes(n) && Array.isArray(v) && isFinite(+v[0]) && isFinite(+v[1])) piv[n] = [+v[0], +v[1]];
+      }
+      poseBodies = { default: Pose.DEFAULT_PIV, ...found };
+    } catch (err) { /* library unavailable: keep what we have */ }
+    syncPoseBodies();
+  }
+  function syncPoseBodies() {
+    const sel = $('#psBody'); sel.innerHTML = '';
+    sel.add(new Option('Rig files (default)', 'default'));
+    for (const ch of Object.keys(poseBodies).filter(c => c !== 'default').sort()) {
+      const n = Object.keys(poseBodies[ch]).length;
+      sel.add(new Option(ch + ' (library, ' + n + '/' + Pose.PIV_NAMES.length + ' pivots)', ch));
+    }
+    if (!poseBodies[pose.body]) sel.add(new Option(pose.body + ' (not found, using defaults)', pose.body));
+    sel.value = pose.body;
+    poseB = Pose.body(poseBodies[pose.body] || Pose.DEFAULT_PIV);
+    requestPose();
+  }
+  $('#psBody').addEventListener('change', e => { pose.body = e.target.value; syncPoseBodies(); syncPoseUI(); settingsChanged(); e.target.blur(); });
+  if (window.OSWClient) OSWClient.on('library.changed', () => { poseRefreshBodies(); });
+
+  /* saving / loading (keys are stored by frame index) */
+  function poseManifest() {
+    const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
+    return {
+      show: pose.show, opacity: pose.opacity, size: pose.size, body: pose.body,
+      keys: poseLive().map(o => {
+        const p = o.k.p, sh = {};
+        for (const n of Pose.NAMES) if (p.sh[n] > 0) sh[n] = r3(p.sh[n]);
+        return { frame: o.i, x: r1(p.x), y: r1(p.y), face: p.face, pinN: p.pinN, pinF: p.pinF, ease: p.ease,
+          a: Object.fromEntries(Pose.NAMES.map(n => [n, r1(p.a[n] || 0)])), sh };
+      })
+    };
+  }
+  function loadPose(m, frames) {
+    pdrag = null; psBefore = null;
+    Object.assign(pose, { show: true, opacity: 0.85, size: 100, body: 'default', keys: [], sel: null });
+    if (m && typeof m === 'object') {
+      const num = (v, a, b, d) => isFinite(+v) ? clamp(+v, a, b) : d;
+      pose.show = m.show !== false; pose.opacity = num(m.opacity, 0.1, 1, 0.85);
+      pose.size = Math.round(num(m.size, 30, 250, 100));
+      if (typeof m.body === 'string' && /^[a-z0-9_]{1,40}$/.test(m.body)) pose.body = m.body;
+      for (const kd of (Array.isArray(m.keys) ? m.keys : []).slice(0, 500)) {
+        const f = kd && frames[kd.frame | 0]; if (!f || pose.keys.some(k => k.frame === f)) continue;
+        if (!isFinite(+kd.x) || !isFinite(+kd.y) || !kd.a || typeof kd.a !== 'object') continue;
+        const p = { x: +kd.x, y: +kd.y, face: +kd.face === -1 ? -1 : 1, pinN: !!kd.pinN, pinF: !!kd.pinF,
+          ease: ['in', 'out', 'both'].includes(kd.ease) ? kd.ease : 'linear', a: {}, sh: {} };
+        for (const n of Pose.NAMES) p.a[n] = Pose.wrapDeg(num(kd.a[n], -1e4, 1e4, 0));
+        if (kd.sh && typeof kd.sh === 'object') for (const n of Pose.NAMES) { const v = num(kd.sh[n], 0, 0.7, 0); if (v > 0) p.sh[n] = v; }
+        pose.keys.push({ frame: f, p });
+      }
+    }
+    syncPoseBodies(); syncPoseUI(); requestPose();
+    poseRefreshBodies();
+  }
+  poseReady = true;
+  syncPoseBodies(); syncPoseUI();
+  // test hook (headless checks): current joints and keys
+  window.__pose = { joints: () => Pose.fk(poseB, pdrag ? pdrag.k.p : poseAt(project.currentFrame), poseS()).J, at: i => poseAt(i), keys: () => poseLive().map(o => ({ i: o.i, p: o.k.p })), body: () => poseB, scale: () => poseS() };
+  poseRefreshBodies();
+
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
   let popBg = '', popPix = '', popLbl = '', popPlaced = false;
@@ -3636,6 +4233,9 @@ const Bend = (() => {
     $('#textureSec').hidden = t !== 'texture';
     $('#waveSec').hidden = t !== 'wave';
     $('#bendSec').hidden = t !== 'bend';
+    $('#poseSec').hidden = t !== 'pose';
+    if (t !== 'pose') cancelPoseDrag();
+    if (t === 'pose') { syncPoseUI(); poseRefreshBodies(); }
     if (t !== 'wave') cancelWaveDrag();
     if (t !== 'bend') cancelBendDrag();
     if (t === 'bend') syncBendUI();
@@ -3651,7 +4251,7 @@ const Bend = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.tool === 'pose' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -3683,7 +4283,7 @@ const Bend = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
-    cancelWaveDrag(); cancelBendDrag();
+    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -3956,6 +4556,9 @@ const Bend = (() => {
     } else if (state.tool === 'bend') {
       if (chain) finishChain();
       bendDown(e, p);
+    } else if (state.tool === 'pose') {
+      if (chain) finishChain();
+      poseDown(e, p);
     }
   });
 
@@ -3974,6 +4577,7 @@ const Bend = (() => {
     if (pickId === e.pointerId) { pickAt(e); return; }
     if (gdrag && gdrag.id === e.pointerId) { waveMove(p); return; }
     if (bdrag && bdrag.id === e.pointerId) { bendMove(p); return; }
+    if (pdrag && pdrag.id === e.pointerId) { poseMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -3994,6 +4598,7 @@ const Bend = (() => {
     if (pickId === e.pointerId) { pickId = null; return; }
     if (gdrag && gdrag.id === e.pointerId) { waveUp(e.type === 'pointerup'); return; }
     if (bdrag && bdrag.id === e.pointerId) { bendUp(e.type === 'pointerup'); return; }
+    if (pdrag && pdrag.id === e.pointerId) { poseUp(e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -4082,7 +4687,7 @@ const Bend = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag || gdrag || bdrag) return false;
+    if (stroke || shape || drag || gdrag || bdrag || pdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -4644,8 +5249,8 @@ const Bend = (() => {
   $('#playBtn').addEventListener('click', () => { playing ? stopPlayback() : startPlayback(); });
 
   /* ---------- undo / redo ---------- */
-  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag || bdrag) return; history.undo(); }
-  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag || bdrag) return; history.redo(); }
+  function doUndo() { stopPlayback(); flushNudge(); if (chain) { cancelChain(); return; } if (stroke || shape || gdrag || bdrag || pdrag) return; history.undo(); }
+  function doRedo() { stopPlayback(); flushNudge(); if (chain || stroke || shape || gdrag || bdrag || pdrag) return; history.redo(); }
   $('#undoBtn').addEventListener('click', doUndo);
   $('#redoBtn').addEventListener('click', doRedo);
 
@@ -4990,6 +5595,7 @@ const Bend = (() => {
                              (name, visible, opacity, locked, onion, clip, file),
                              plus waveGuides (wave guide settings + rail keys by frame index)
                              and bend (bend strip settings, hand curve, strip as a PNG data URL)
+                             and pose (pose guide: size, body, keys by frame index with hip x/y + bone angles)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -5006,7 +5612,7 @@ const Bend = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -5039,6 +5645,7 @@ const Bend = (() => {
       onion: { prev: onion.prev, prevOpacity: onion.prevOpacity },
       waveGuides: waveManifest(),
       bend: bendManifest(),
+      pose: poseManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
         hold: s.frame.hold, activeLayer: Math.min(s.frame.activeLayer, s.layers.length - 1),
@@ -5132,6 +5739,7 @@ const Bend = (() => {
     proj.handle = handle; proj.name = cleanName(name) || 'untitled';
     loadWave(m.waveGuides, frames);
     loadBend(m.bend);
+    loadPose(m.pose, frames);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
   }
@@ -5396,6 +6004,7 @@ const Bend = (() => {
       case 'q': setTool('picker'); break;
       case 'j': setTool('wave'); break;
       case 'y': setTool('bend'); break;
+      case 'f': setTool('pose'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -5417,7 +6026,7 @@ const Bend = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
