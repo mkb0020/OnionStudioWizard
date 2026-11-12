@@ -262,7 +262,15 @@ async function loadAssets() {
   IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
-  for (const [kind, K] of Object.entries(CRITTER_KINDS)) for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
+  for (const [kind, K] of Object.entries(CRITTER_KINDS)) {
+    for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
+    if (K.pat) try { const im = await loadImg(CRITTER_DIR + K.pat.src); IMG['critter_' + kind + '_pat'] = im; K.pat.tops = measureHeadTops(im, K.pat); } catch (e) { console.warn('[play] ' + kind + ': no head pat sheet (' + e.message + ')'); }
+  }
+  try {   // HEAD PAT ARM: OPTIONAL, PLAY RUNS WITHOUT IT
+    IMG.petArm = await loadImg(SHEET_DIR + PET_ARM.src);
+    if (PET_ARM.upperSrc && PET_ARM.lowerSrc) { IMG.petUpper = await loadImg(SHEET_DIR + PET_ARM.upperSrc); IMG.petLower = await loadImg(SHEET_DIR + PET_ARM.lowerSrc); }
+    buildPetArm();
+  } catch (e) { console.warn('[play] head pats off: ' + e.message); }
 }
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
 function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX SHIFT (FORWARD-MIRRORED / DOWN)
@@ -295,7 +303,7 @@ const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET, fy: GROUND_Y - CAM_Y_OFFSET };
 let showHitboxes = false, physSource = 'defaults (Kaplay values)';
 
 function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
-  Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 });
+  Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 }); cancelPet();
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
   airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
@@ -412,6 +420,7 @@ const CRITTER_KINDS = {
   aetherling: {
     idle: { src: 'aetherling_idle.png', frames: 8, fps: 8 },
     walk: { src: 'aetherling_walk_cycle.png', frames: 8, fps: 10 },
+    pat:  { src: 'aetherling_head_pat.png', frames: 8, fps: 8, headX: 344, headY: 198, sink: 2 },   // HEAD PATS (C): SEE THE HEAD PAT BLOCK BELOW
     frame: 400, scale: 1, anchorX: 255, stepPx: 12, hitW: 110, hitH: 110, stepUp: 12,
     idleTime: [1.5, 4], walkTime: [2.5, 6], turnChance: 0.45, pauseAfterTurn: [0.6, 1.6], leash: 600,   // leash = HOW FAR (WORLD PX) HE STRAYS FROM WHERE HE SPAWNED BEFORE HEADING BACK
   },
@@ -432,7 +441,7 @@ function critBlocked(x, y, K) {   // A SOLID STANDS IN FRONT OF THE BODY (TALLER
   return false;
 }
 function spawnCritters() {
-  critters.length = 0;
+  resetPet(); critters.length = 0;
   const list = MAP.on ? [{ kind: 'aetherling', x: SPAWN.x + CRITTER_SPAWNS.mapCells * MAP.cell }] : CRITTER_SPAWNS.test;
   for (const d of list) {
     const K = CRITTER_KINDS[d.kind]; if (!K) continue;
@@ -443,6 +452,7 @@ function spawnCritters() {
   }
 }
 function stepCritter(c, dt) {
+  if (c === pet.c && (c.state === 'come' || c.state === 'pat')) { c.px = c.x; c.py = c.y; stepPetCritter(c, dt); return; }   // BUSY WITH NOVA
   const K = CRITTER_KINDS[c.kind]; c.px = c.x; c.py = c.y; c.t -= dt; c.animT += dt;
   if (c.t <= 0) {
     if (c.state === 'idle') { c.state = 'walk'; c.t = critRand(K.walkTime); if (Math.abs(c.x - c.home) > K.leash) c.dir = Math.sign(c.home - c.x); else if (Math.random() < K.turnChance) c.dir = -c.dir; }
@@ -464,7 +474,7 @@ function stepCritters(dt) { if (crittersOn) for (const c of critters) stepCritte
 function drawCritters(alpha) {
   if (!crittersOn) return;
   for (const c of critters) {
-    const K = CRITTER_KINDS[c.kind], A = K[c.state], im = IMG['critter_' + c.kind + '_' + c.state]; if (!im) continue;
+    const st = c.state === 'come' ? 'walk' : c.state, K = CRITTER_KINDS[c.kind], A = K[st], im = IMG['critter_' + c.kind + '_' + st]; if (!im) continue;
     const x = c.px + (c.x - c.px) * alpha, y = c.py + (c.y - c.py) * alpha, cw = im.naturalWidth / A.frames, ch = im.naturalHeight;
     const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch);
     ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -K.anchorX * ch / K.frame, -ch, cw, ch); ctx.restore();
@@ -472,11 +482,151 @@ function drawCritters(alpha) {
   }
 }
 
+/* ---------- HEAD PATS (C) ----------
+   PRESS C NEAR A CRITTER THAT HAS A `pat` SHEET: NOVA TURNS TO HIM AND STAYS IN HER IDLE POSE, HE WALKS OVER TO THE PAT SPOT (gap ART PX IN FRONT OF HER,
+   MEASURED OFF nova_and_aetherling.png), TURNS TO FACE HER AND PLAYS HIS HEAD PAT LOOP. HOLD C TO KEEP PATTING; LET GO AND THE CURRENT LOOP FINISHES
+   (AT LEAST minLoops LOOPS IN ALL). ANY MOVE, JUMP, DASH, ATTACK OR RESPAWN STOPS IT AT ONCE.
+   THE ARM (pet.png) IS ONE 400x400 IMAGE IN THE SAME SPACE AS AN IDLE FRAME (IT WAS DRAWN ON IDLE FRAME 3). IT IS DRAWN AFTER THE CRITTER AND THE CAPE BUT
+   BEFORE NOVA'S BODY, SO THE SHOULDER HIDES BEHIND HER AND THE HAND LIES ON TOP OF HIS HEAD. IN CODE IT IS CUT IN TWO AT THE ELBOW (`cut`) AND BENT WITH
+   TWO-BONE IK: THE SHOULDER RIDES THE IDLE FRAME (shoulderBob), THE PALM FOLLOWS THE TOP EDGE OF HIS HEAD (SCANNED PER FRAME FROM THE SHEET AT headX WHEN IT LOADS),
+   AND THE ELBOW BENDS TO MAKE UP THE DIFFERENCE. NOTHING STRETCHES AND THE ARM NEVER LEAVES THE SHOULDER. F1 SHOWS THE JOINTS (CYAN SHOULDER / ELBOW / PALM, PINK = WHERE HIS HEAD IS).
+   SEPARATE ART: SET upperSrc + lowerSrc TO TWO IMAGES IN THE SAME 400x400 SPACE (ROUNDED, OVERLAPPING ELBOW ENDS) AND THE CUT IS SKIPPED. */
+const PET_ARM = {
+  src: 'pet.png', upperSrc: '', lowerSrc: '',                  // IN SHEET_DIR
+  shoulder: [251, 180], elbow: [265, 201], palm: [316, 192],   // ART PX: THE TWO PIVOTS AND THE SPOT ON THE PALM THAT RESTS ON THE HEAD
+  cut: [[266, 192], [263, 211]], overlap: 3,                   // ELBOW SPLIT LINE (INNER CORNER -> OUTER CORNER); THE UPPER ARM KEEPS overlap PX PAST IT, UNDER THE FOREARM
+  shoulderBob: [3, 2, 1, 0, 1, 2],                             // ART PX DOWN PER IDLE FRAME, COMPARED WITH FRAME 3 (MEASURED OFF idle.png). REDRAW THE IDLE = RE-MEASURE THIS
+};
+const PET = { gap: 205, reach: 320, comeSpeed: 1.3, comeTimeout: 3, minLoops: 2, reachTime: 0.16, tuck: [20, 45] };
+// gap = ART PX FROM NOVA'S FEET TO THE CRITTER'S anchorX. reach = WORLD PX A CRITTER CAN BE FROM THE PAT SPOT AND STILL COME OVER. comeSpeed = x HIS WALK SPEED.
+// reachTime = SECONDS FOR THE ARM TO GO OUT / COME BACK. tuck = WHERE THE PALM STARTS AND ENDS (ART PX FROM THE SHOULDER: TUCKED BEHIND HER BODY)
+const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r']);
+const pet = { phase: 'none', c: null, spot: 0, dir: 1, k: 0, t: 0, endAt: 0, msg: '', msgT: 0, dbg: null };   // phase: none | wait (HE IS COMING) | pat | release (ARM GOING BACK)
+const petArm = { upper: null, lower: null, L1: 0, L2: 0, bend: 1 };
+function resetPet() { Object.assign(pet, { phase: 'none', c: null, k: 0, t: 0, endAt: 0, dbg: null }); }
+function petMsg(m) { pet.msg = m; pet.msgT = 2; }
+function petSheet(c) { const K = CRITTER_KINDS[c.kind]; return K && K.pat && IMG['critter_' + c.kind + '_pat'] ? K.pat : null; }
+function measureHeadTops(img, A) {   // PER FRAME: THE TOP EDGE OF THE HEAD AT headX (AVERAGE OF 7 COLUMNS), SHEET PX. FAILS SOFT TO headY
+  try {
+    const cw = Math.floor(img.naturalWidth / A.frames), ch = img.naturalHeight, cv = document.createElement('canvas'); cv.width = img.naturalWidth; cv.height = ch;
+    const cx = cv.getContext('2d', { willReadFrequently: true }); cx.drawImage(img, 0, 0); const px = cx.getImageData(0, 0, cv.width, ch).data, tops = [];
+    for (let f = 0; f < A.frames; f++) {
+      let sum = 0, n = 0;
+      for (let x = A.headX - 3; x <= A.headX + 3; x++) { const X = f * cw + x; if (x < 0 || x >= cw) continue; for (let y = 0; y < ch; y++) if (px[(y * cv.width + X) * 4 + 3] > FOOT_ALPHA_MIN) { sum += y; n++; break; } }
+      tops.push(n ? sum / n : A.headY);
+    }
+    return tops;
+  } catch (e) { console.warn('[play] head pat: could not scan the head (' + e.message + '), using headY'); return null; }
+}
+function buildPetArm() {   // SPLITS pet.png AT THE ELBOW WITH TWO HALF-PLANE CLIPS (NO PIXEL READS)
+  const A = PET_ARM, [sx, sy] = A.shoulder, [ex, ey] = A.elbow, [hx, hy] = A.palm;
+  petArm.L1 = Math.hypot(ex - sx, ey - sy); petArm.L2 = Math.hypot(hx - ex, hy - ey);
+  petArm.bend = Math.sign((ex - sx) * (hy - sy) - (ey - sy) * (hx - sx)) || 1;   // WHICH WAY THE ELBOW POINTS IN THE ART (KEPT BY THE IK)
+  if (IMG.petUpper && IMG.petLower) { petArm.upper = IMG.petUpper; petArm.lower = IMG.petLower; return; }
+  const im = IMG.petArm, w = im.naturalWidth, h = im.naturalHeight, [[ax, ay], [bx, by]] = A.cut;
+  let tx = bx - ax, ty = by - ay; const tl = Math.hypot(tx, ty); tx /= tl; ty /= tl;
+  let nx = -ty, ny = tx; if ((sx - ax) * nx + (sy - ay) * ny < 0) { nx = -nx; ny = -ny; }   // n POINTS TO THE SHOULDER SIDE
+  const half = (off, side) => {   // CANVAS HOLDING THE PART OF THE IMAGE ON ONE SIDE OF THE CUT LINE (SHIFTED off PX TOWARD THE OTHER SIDE)
+    const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const g = cv.getContext('2d'), B = 4 * (w + h);
+    const px = ax - nx * off * side, py = ay - ny * off * side;
+    g.beginPath(); g.moveTo(px - tx * B, py - ty * B); g.lineTo(px + tx * B, py + ty * B);
+    g.lineTo(px + tx * B + nx * side * B, py + ty * B + ny * side * B); g.lineTo(px - tx * B + nx * side * B, py - ty * B + ny * side * B); g.closePath();
+    g.clip(); g.drawImage(im, 0, 0); return cv;
+  };
+  petArm.upper = half(A.overlap, 1); petArm.lower = half(0, -1);
+}
+function pressPet() {
+  if (pet.phase === 'release' && pet.c) { pet.phase = 'pat'; pet.endAt = 0; return; }   // PRESSED AGAIN WHILE THE ARM WAS GOING BACK: KEEP PATTING
+  if (pet.phase !== 'none') return;
+  if (!petArm.upper) return petMsg('no arm art (pet.png did not load)');
+  if (!crittersOn) return petMsg('critters are off (N)');
+  if (!P.grounded || isAttacking || dashTimer > 0 || dissolveAmount > 0 || down('left', 'right', 'a', 'd')) return petMsg('stand still on the ground first');
+  let best = null, bestD = Infinity;
+  for (const c of critters) { if (!petSheet(c) || c.vy !== 0 || Math.abs(c.y - P.y) > 4) continue; const d = Math.abs(c.x - P.x); if (d < bestD) { best = c; bestD = d; } }
+  if (!best) return petMsg('no critter on this floor');
+  const K = CRITTER_KINDS[best.kind], dir = best.x < P.x ? -1 : 1, spot = P.x + dir * PET.gap * SCALE;
+  if (Math.abs(best.x - spot) > PET.reach) return petMsg('too far away');
+  if (spot < LEVEL_MIN_X + K.hitW / 2 || spot > LEVEL_MAX_X - K.hitW / 2 || critGround(spot, P.y, K.stepUp) - P.y > K.stepUp || critBlocked(spot, P.y, K)) return petMsg('no room for him on that side');
+  P.flip = dir === -1; playAnim('idle');
+  Object.assign(pet, { phase: 'wait', c: best, spot, dir, k: 0, t: 0, endAt: 0, msg: '', msgT: 0 });
+  best.state = 'come'; best.animT = 0;
+}
+function endPet(pause) {   // HE GOES BACK TO WANDERING
+  const c = pet.c; resetPet();
+  if (c && (c.state === 'come' || c.state === 'pat')) { const K = CRITTER_KINDS[c.kind]; c.state = 'idle'; c.t = critRand(pause ? K.pauseAfterTurn : K.idleTime); c.animT = 0; }
+}
+const cancelPet = () => endPet(true);
+function stepPetCritter(c, dt) {
+  const K = CRITTER_KINDS[c.kind];
+  if (c.state === 'pat') { c.animT += dt; return; }
+  const to = pet.spot - c.x, step = critSpeed(K) * PET.comeSpeed * dt; c.animT += dt * PET.comeSpeed;   // FASTER WALK = FASTER FEET, SO THEY DO NOT SKATE
+  if (Math.abs(to) <= step) { c.x = pet.spot; c.dir = -pet.dir; c.state = 'pat'; c.animT = 0; pet.phase = 'pat'; pet.t = 0; return; }   // ARRIVED: FACE NOVA
+  c.dir = Math.sign(to); const nx = c.x + c.dir * step;
+  if (critBlocked(nx, c.y, K) || critGround(nx, c.y, K.stepUp) - c.y > K.stepUp) { petMsg('he could not get there'); cancelPet(); return; }
+  c.x = nx;
+}
+function stepPet(dt) {   // RUNS INSTEAD OF mainUpdate WHILE A PAT IS ON: NOVA STANDS STILL IN IDLE
+  P.mx = 0; playAnim('idle'); pet.t += dt;
+  const c = pet.c;
+  if (!c || !crittersOn || !P.grounded || !critters.includes(c)) return cancelPet();
+  if (pet.phase === 'wait') { if (pet.t > PET.comeTimeout) { petMsg('he took too long'); cancelPet(); } return; }
+  if (pet.phase === 'pat') {
+    pet.k = Math.min(1, pet.k + dt / PET.reachTime);
+    const A = petSheet(c), loop = A.frames / A.fps;
+    if (down('c')) pet.endAt = 0;   // HELD: KEEP GOING
+    else if (!pet.endAt) pet.endAt = Math.max(PET.minLoops, Math.ceil((c.animT + 1e-6) / loop)) * loop;   // LET GO: FINISH THIS LOOP
+    if (pet.endAt && c.animT >= pet.endAt) pet.phase = 'release';
+  } else if (pet.phase === 'release') {
+    pet.k = Math.max(0, pet.k - dt / PET.reachTime);
+    if (pet.k <= 0) endPet(false);
+  }
+}
+function solveArm(S, T) {   // TWO-BONE IK IN ART PX: SHOULDER S, TARGET T -> ELBOW E AND THE PALM H (= T WHEN IN REACH)
+  const { L1, L2, bend } = petArm, dx = T[0] - S[0], dy = T[1] - S[1], d = Math.hypot(dx, dy);
+  const dc = Math.min(L1 + L2 - 1e-3, Math.max(Math.abs(L1 - L2) + 1e-3, d)), a = Math.atan2(dy, dx);
+  const A = Math.acos(Math.max(-1, Math.min(1, (L1 * L1 + dc * dc - L2 * L2) / (2 * L1 * dc)))), ang = a - bend * A;
+  const E = [S[0] + L1 * Math.cos(ang), S[1] + L1 * Math.sin(ang)], b = Math.atan2(T[1] - E[1], T[0] - E[0]);
+  return { E, H: [E[0] + L2 * Math.cos(b), E[1] + L2 * Math.sin(b)], reach: d / (L1 + L2) };
+}
+function drawPetArm(x, y, alpha) {   // z 9.7: OVER THE CRITTER AND THE CAPE, UNDER NOVA'S BODY
+  const c = pet.c; pet.dbg = null;
+  if (!c || pet.k <= 0 || c.state !== 'pat' || P.sheet !== 'idle' || dissolveAmount > 0 || !petArm.upper) return;
+  const A = petSheet(c), K = CRITTER_KINDS[c.kind], cim = IMG['critter_' + c.kind + '_pat'], im = IMG.idle; if (!A || !cim || !im) return;
+  // WHERE HIS HEAD IS (WORLD), SAME PLACEMENT MATH AS drawCritters
+  const ch = cim.naturalHeight, cs = SCALE * K.scale * (K.frame / ch), f = Math.floor(c.animT * A.fps) % A.frames;
+  const top = (A.tops ? A.tops[f] : A.headY) + A.sink, cx = c.px + (c.x - c.px) * alpha, cy = c.py + (c.y - c.py) * alpha;
+  const wx = cx + c.dir * cs * (A.headX - K.anchorX * ch / K.frame), wy = cy + cs * (top - ch);
+  // WORLD -> NOVA'S ART PX (THE INVERSE OF drawPlayer'S TRANSFORMS)
+  const pl = sheetPlace('idle', P.frame, P.flip), cw = Math.floor(im.naturalWidth / PLAYER_SHEETS.idle.frames), ih = im.naturalHeight, sz = PLAYER_FRAME * pl.s, u = sz / cw, fx = P.flip ? -1 : 1;
+  const lx = (wx - x) / (SCALE * squash.x) - wallSlideHOffset - pl.ox, ly = (wy - y) / (SCALE * squash.y) + visualLift - pl.oy;
+  const head = [(fx * lx + sz / 2) / u, (ly + sz) / u];
+  const S0 = PET_ARM.shoulder, E0 = PET_ARM.elbow, H0 = PET_ARM.palm, bob = PET_ARM.shoulderBob[P.frame] || 0, S = [S0[0], S0[1] + bob];
+  const e = pet.k * pet.k * (3 - 2 * pet.k), tuck = [S[0] + PET.tuck[0], S[1] + PET.tuck[1]];   // SMOOTHSTEP FROM TUCKED TO ON HIS HEAD
+  const T = [tuck[0] + (head[0] - tuck[0]) * e, tuck[1] + (head[1] - tuck[1]) * e], { E, H, reach } = solveArm(S, T);
+  const r1 = Math.atan2(E[1] - S[1], E[0] - S[0]) - Math.atan2(E0[1] - S0[1], E0[0] - S0[0]);
+  const r2 = Math.atan2(H[1] - E[1], H[0] - E[0]) - Math.atan2(H0[1] - E0[1], H0[0] - E0[0]);
+  pet.dbg = { S, E, H, head, reach, r1: r1 * 180 / Math.PI, r2: r2 * 180 / Math.PI };
+  ctx.save(); ctx.translate(x, y); ctx.scale(SCALE * squash.x, SCALE * squash.y); ctx.translate(wallSlideHOffset, -visualLift);
+  ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1); ctx.translate(-sz / 2, -sz); ctx.scale(u, u);   // NOW 1 UNIT = 1 ART PX OF THE IDLE CELL
+  ctx.globalAlpha = Math.min(1, pet.k * 2.5);
+  ctx.save(); ctx.translate(S[0], S[1]); ctx.rotate(r1); ctx.translate(-S0[0], -S0[1]); ctx.drawImage(petArm.upper, 0, 0, cw, ih); ctx.restore();
+  ctx.save(); ctx.translate(E[0], E[1]); ctx.rotate(r2); ctx.translate(-E0[0], -E0[1]); ctx.drawImage(petArm.lower, 0, 0, cw, ih); ctx.restore();
+  if (showHitboxes) {
+    ctx.globalAlpha = 1; ctx.lineWidth = 1 / u;
+    ctx.strokeStyle = '#00ffff'; ctx.beginPath(); ctx.moveTo(S[0], S[1]); ctx.lineTo(E[0], E[1]); ctx.lineTo(H[0], H[1]); ctx.stroke();
+    for (const p of [S, E, H]) { ctx.beginPath(); ctx.arc(p[0], p[1], 2.5, 0, Math.PI * 2); ctx.stroke(); }
+    ctx.strokeStyle = '#ff69b4'; ctx.beginPath(); ctx.arc(head[0], head[1], 4, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function tick(dt) {
   while (pressQ.length) {   // KEY PRESSES (EDGE EVENTS) FIRST, THEN THE HELD-KEY LOGIC
     const k = pressQ.shift();
+    if (pet.phase !== 'none' && PET_STOP_KEYS.has(k)) cancelPet();   // ANY OTHER MOVE ENDS A HEAD PAT AT ONCE
     if (k === 'up' || k === 'w' || k === 'space') pressJump();
-    else if (k === 'shift' || k === 'c') tryDash();
+    else if (k === 'shift') tryDash();
+    else if (k === 'c') pressPet();
     else if (k === 'z') playAttack();
     else if (k === 'x') pressKick();
     else if (k === 'r') dissolveOutAndRespawn();
@@ -488,12 +638,15 @@ function tick(dt) {
     else if (k === 'l') lighting.on = !lighting.on;
     else if (k === 'n') crittersOn = !crittersOn;
   }
+  if (pet.phase !== 'none' && down('left', 'right', 'a', 'd')) cancelPet();
   P.mx = 0;
   if (isAttacking) {
     wasAirborne = false; airPeakFall = 0; jumpStartTimer = 0; landTimer = 0;
     if (attackT > 0) { attackT -= dt; if (attackT <= 0) isAttacking = false; }   // THE GROUND ATTACKS END ON A TIMER (k.wait IN THE KAPLAY BUILD)
-  } else mainUpdate(dt);
+  } else if (pet.phase !== 'none') stepPet(dt);
+  else mainUpdate(dt);
   stepCritters(dt);
+  if (pet.msgT > 0) pet.msgT -= dt;
   updateAirKick(dt); updateDoubleJump(dt);
   if (P.grounded) coyoteT = PHYS.coyote; else if (coyoteT > 0) coyoteT -= dt;
   physics(dt);
@@ -1241,7 +1394,8 @@ function drawHud() {
     'sheet cape (F3): ' + (capeProf.data ? (capeProf.on ? 'ON' : 'OFF') + '   ' : '') + capeProf.note,
     'cape config: ' + capeCfgSrc,
     'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
-    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift/C dash   Z spell   X kick   R respawn   F1 hitboxes',
+    'pet (C): ' + (pet.phase === 'none' ? (pet.msgT > 0 ? pet.msg : 'ready') : pet.phase + (pet.dbg ? '   reach ' + (pet.dbg.reach * 100).toFixed(0) + '%   shoulder ' + pet.dbg.r1.toFixed(1) + 'deg   elbow ' + pet.dbg.r2.toFixed(1) + 'deg' : '')),
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   R respawn   F1 hitboxes',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
 }
@@ -1258,6 +1412,7 @@ function render(alpha) {
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
   drawCloth(x, y);                                                        // z 9.5: THE VERLET CAPE, BEHIND THE BODY
+  drawPetArm(x, y, alpha);                                                // z 9.7: HEAD PAT ARM, OVER THE CRITTER, UNDER THE BODY
   drawPlayer(x, y);
   drawOneShots(true);                                                     // z 11: THE SPAWN BEAM
   drawSwooshes();                                                         // z 11: IN FRONT
@@ -1357,7 +1512,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { pet, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
