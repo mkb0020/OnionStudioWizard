@@ -1,12 +1,22 @@
 // ONION STUDIO WIZARD - EXPORTS FOLDER
 // TOOLS SAVE EXPORTS (SPRITE SHEETS, TIMING JSON, ZIPS) STRAIGHT TO DISK THROUGH THE APP INSTEAD OF AS BROWSER DOWNLOADS,
 // SO WEBVIEW2'S "ALLOW MULTIPLE DOWNLOADS?" PROMPT CAN NEVER BLOCK THEM.
-// DEFAULT FOLDER = <Downloads>/Onion Studio Wizard. A CHOSEN FOLDER IS REMEMBERED AS ONE LINE IN export_dir.txt (APP CONFIG DIR).
+// DEFAULT FOLDER = <OneDrive>/OnionStudioWizardExports WHEN THAT FOLDER EXISTS (ONEDRIVE IS A LOCAL SYNCED FOLDER, SO THIS ALSO
+// WORKS OFFLINE: FILES SAVE THERE AND UPLOAD WHEN THE INTERNET IS BACK), OTHERWISE <Downloads>/Onion Studio Wizard. A CHOSEN FOLDER IS REMEMBERED AS ONE LINE IN export_dir.txt (APP CONFIG DIR).
 // AN EXPORT WITH THE SAME NAME OVERWRITES THE OLD ONE ON PURPOSE: THE TIMING JSON NAMES ITS SHEET FILE, SO "(1)" SUFFIXES WOULD BREAK THAT LINK.
 // PURE std (NO TAURI) SO THE TESTS BELOW RUN WITH A PLAIN `rustc --test src/exports.rs`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
+
+pub const ONEDRIVE_FOLDER: &str = "OnionStudioWizardExports";
+
+// THE ONEDRIVE EXPORTS FOLDER, IF ONE OF THE ONEDRIVE ROOTS HAS IT. roots = %OneDrive%, %OneDriveConsumer%, <home>/OneDrive
+// (WINDOWS SETS THE ENV VARS WHEN ONEDRIVE IS SIGNED IN). THE FOLDER MUST ALREADY EXIST: IT IS NEVER CREATED HERE, SO A PC
+// WITHOUT IT SIMPLY USES DOWNLOADS.
+pub fn onedrive_dir(roots: &[PathBuf]) -> Option<PathBuf> {
+    roots.iter().map(|r| r.join(ONEDRIVE_FOLDER)).find(|d| d.is_dir())
+}
 
 pub const MAX_BYTES: usize = 512 * 1024 * 1024;
 
@@ -125,6 +135,19 @@ mod tests {
         write_dir_setting(&file, None).unwrap();
         assert_eq!(read_dir_setting(&file), None);
         write_dir_setting(&file, None).unwrap();   // ALREADY GONE IS FINE
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn onedrive_pick() {
+        let root = scratch("onedrive");
+        let a = root.join("OneDrive - Work");
+        let b = root.join("OneDrive");
+        fs::create_dir_all(&a).unwrap();
+        fs::create_dir_all(b.join(ONEDRIVE_FOLDER)).unwrap();
+        assert_eq!(onedrive_dir(&[a.clone(), b.clone()]), Some(b.join(ONEDRIVE_FOLDER)));   // FIRST ROOT THAT HAS THE FOLDER
+        assert_eq!(onedrive_dir(&[a]), None);                                                 // NO FOLDER = NO ONEDRIVE
+        assert_eq!(onedrive_dir(&[]), None);
         let _ = fs::remove_dir_all(&root);
     }
 

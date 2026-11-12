@@ -140,7 +140,7 @@ fn export_setting_file(app: &AppHandle) -> Result<PathBuf, String> {
         .map_err(|e| format!("IO: {e}"))
 }
 
-fn default_export_dir(app: &AppHandle) -> Result<PathBuf, String> {
+fn downloads_export_dir(app: &AppHandle) -> Result<PathBuf, String> {
     let base = app
         .path()
         .download_dir()
@@ -148,6 +148,23 @@ fn default_export_dir(app: &AppHandle) -> Result<PathBuf, String> {
         .or_else(|_| app.path().home_dir())
         .map_err(|e| format!("IO: no Downloads folder found: {e}"))?;
     Ok(base.join("Onion Studio Wizard"))
+}
+
+// <OneDrive>/OnionStudioWizardExports IF IT EXISTS, ELSE <Downloads>/Onion Studio Wizard
+fn default_export_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let mut roots: Vec<PathBuf> = ["OneDrive", "OneDriveConsumer"]
+        .iter()
+        .filter_map(|v| std::env::var_os(v))
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .collect();
+    if let Ok(home) = app.path().home_dir() {
+        roots.push(home.join("OneDrive"));
+    }
+    match exports::onedrive_dir(&roots) {
+        Some(d) => Ok(d),
+        None => downloads_export_dir(app),
+    }
 }
 
 // (FOLDER, true IF IT IS THE DEFAULT)
@@ -190,8 +207,19 @@ async fn export_set_dir(app: AppHandle, path: Option<String>) -> Result<ExportIn
 #[tauri::command]
 async fn export_write(app: AppHandle, name: String, data: String) -> Result<String, String> {
     let bytes = B64.decode(data.as_bytes()).map_err(|e| format!("BAD_DATA: {e}"))?;
-    let (dir, _) = current_export_dir(&app)?;
-    exports::write_export(&dir, &name, &bytes).map(|p| p.to_string_lossy().into_owned())
+    let (dir, is_default) = current_export_dir(&app)?;
+    match exports::write_export(&dir, &name, &bytes) {
+        Ok(p) => Ok(p.to_string_lossy().into_owned()),
+        Err(e) if is_default => {
+            // THE DEFAULT (ONEDRIVE) FOLDER COULD NOT BE WRITTEN: SAVE TO DOWNLOADS RATHER THAN LOSE THE EXPORT
+            let fallback = downloads_export_dir(&app)?;
+            if fallback == dir {
+                return Err(e);
+            }
+            exports::write_export(&fallback, &name, &bytes).map(|p| p.to_string_lossy().into_owned())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 // OPENS THE EXPORTS FOLDER IN EXPLORER / FINDER (MAKING IT FIRST IF NOTHING HAS BEEN EXPORTED YET)

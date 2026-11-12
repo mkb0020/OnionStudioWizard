@@ -23,7 +23,7 @@
    OSWClient.library.cape.list()          -> [cape slug]                (library/capes/<slug>.json, CAPE LAB SETTINGS)
    OSWClient.library.cape.get(slug)       -> object | null
    OSWClient.library.cape.save(slug, obj)                               (FREE-FORM JSON OBJECT, MAX 1 MB)
-   OSWClient.exports.info()               -> { dir, isDefault, defaultDir }      WHERE EXPORTS GO (DEFAULT <Downloads>/Onion Studio Wizard)
+   OSWClient.exports.info()               -> { dir, isDefault, defaultDir }      WHERE EXPORTS GO (DEFAULT <OneDrive>/OnionStudioWizardExports IF IT EXISTS, ELSE <Downloads>/Onion Studio Wizard)
    OSWClient.exports.save({name, blob})   -> { path }      WRITES THE FILE THERE (SAME NAME = OVERWRITE). NO BROWSER DOWNLOAD, SO NO
                                           "DOWNLOAD MULTIPLE FILES?" PROMPT. FAILS WITH "NOT_DESKTOP" IN A PLAIN BROWSER: FALL BACK TO A DOWNLOAD.
    OSWClient.exports.chooseDir()          -> info (+ cancelled: true IF THE PICKER WAS CLOSED)
