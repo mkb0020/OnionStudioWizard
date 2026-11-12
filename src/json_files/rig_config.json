@@ -2,47 +2,27 @@
   "meta": {
     "name": "mannequin",
     "description": "Rig Lab slider defaults for one character.",
-    "exported": "2026-11-04T09:17:08.406Z"
+    "exported": "2026-11-12T00:14:12.691Z"
   },
   "shared": {
     "body": {
-      "chestDepth": 48,
-      "neckLen": 8,
+      "chestDepth": 30,
+      "neckLen": 50,
       "headR": 27,
       "neckW": 21,
-      "neckTrim": 20,
-      "waistTrim": 8,
-      "pelvisTilt": 0.75,
-      "headFollow": 0.3,
+      "neckTrim": 31,
+      "waistTrim": 0,
+      "pelvisTilt": 1,
+      "headFollow": 1,
       "stomach": true,
-      "stomachWChest": 38,
-      "stomachWPelvis": 36,
+      "stomachWChest": 40,
+      "stomachWPelvis": 33,
       "stomachColor": "#1c0142"
     },
-    "motion": {
-      "range": 0.4,
-      "lag": 1.2,
-      "footLag": 0
-    },
-    "poseSpeed": {
-      "spPassing": 1.2,
-      "spTakeoff": 0.6,
-      "spUp": 0,
-      "spContact": 0.35,
-      "spDown": 0.4
-    },
-    "feet": {
-      "bootOn": true,
-      "soleOff": 93,
-      "footLen": 123,
-      "heelFrac": 0.34
-    },
-    "art": {
-      "art": true,
-      "skel": false,
-      "farTint": 0.6,
-      "nearLegOver": false
-    },
+    "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
+    "poseSpeed": { "spPassing": 1.2, "spTakeoff": 0.6, "spUp": 0, "spContact": 0.35, "spDown": 0.4 },
+    "feet": { "bootOn": true, "soleOff": 93, "footLen": 123, "heelFrac": 0.34 },
+    "art": { "art": true, "skel": false, "farTint": 0.6, "nearLegOver": false },
     "view": {
       "bgLight": true,
       "bgGrid": true,
@@ -57,7 +37,7 @@
       "tint": true
     },
     "bag": {
-      "bag": true,
+      "bag": false,
       "bagOverArm": false,
       "bagScale": 0.24,
       "bagSwing": 0.35,
@@ -78,11 +58,11 @@
     "run": {
       "params": {
         "spineAngle": 56,
-        "chestAngle": 46,
-        "neckAngle": 50,
+        "chestAngle": 58,
+        "neckAngle": 36,
         "cycleSec": 2,
-        "airtime": 14,
-        "twist": 10,
+        "airtime": 10,
+        "twist": 16,
         "hipTwist": 4,
         "headBob": 0.5,
         "headJut": 1,
@@ -113,217 +93,68 @@
     }
   },
   "footPresets": {
-    "boot": {
-      "soleOff": 93,
-      "footLen": 123,
-      "heelFrac": 0.34
-    },
-    "bare": {
-      "soleOff": 39,
-      "footLen": 90,
-      "heelFrac": 0.22
-    }
+    "boot": { "soleOff": 93, "footLen": 123, "heelFrac": 0.34 },
+    "bare": { "soleOff": 39, "footLen": 90, "heelFrac": 0.22 }
   },
   "squashStretch": {
     "run": {
-      "passing": {
-        "fl": -3,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": -2
-      },
-      "takeoff": {
-        "fl": 2,
-        "bl": 4,
-        "fa": 3,
-        "ba": 0,
-        "t": -2
-      },
-      "up": {
-        "fl": 0,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": -2
-      },
-      "contact": {
-        "fl": -7,
-        "bl": 0,
-        "fa": -5,
-        "ba": -2,
-        "t": -5
-      }
+      "passing": { "fl": -3, "bl": 0, "fa": 0, "ba": 0, "t": -2 },
+      "takeoff": { "fl": 2, "bl": 4, "fa": 3, "ba": 0, "t": -2 },
+      "up": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": -2 },
+      "contact": { "fl": -7, "bl": 0, "fa": -5, "ba": -2, "t": -5 }
     },
     "walk": {
-      "contact": {
-        "fl": 0,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": 0
-      },
-      "down": {
-        "fl": 0,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": 0
-      },
-      "passing": {
-        "fl": 0,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": 0
-      },
-      "up": {
-        "fl": 0,
-        "bl": 0,
-        "fa": 0,
-        "ba": 0,
-        "t": 0
-      }
+      "contact": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "down": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "passing": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 },
+      "up": { "fl": 0, "bl": 0, "fa": 0, "ba": 0, "t": 0 }
     }
   },
   "footAngles": {
     "bare": {
       "run": {
-        "passing": {
-          "f": 80,
-          "b": 0
-        },
-        "takeoff": {
-          "f": 55,
-          "b": 45
-        },
-        "up": {
-          "f": 30,
-          "b": 75
-        },
-        "contact": {
-          "f": -15,
-          "b": 85
-        }
+        "passing": { "f": 80, "b": 0 },
+        "takeoff": { "f": 55, "b": 45 },
+        "up": { "f": 30, "b": 75 },
+        "contact": { "f": -15, "b": 85 }
       },
       "walk": {
-        "contact": {
-          "f": -15,
-          "b": 50
-        },
-        "down": {
-          "f": 0,
-          "b": 60
-        },
-        "passing": {
-          "f": 25,
-          "b": 0
-        },
-        "up": {
-          "f": -5,
-          "b": 40
-        }
+        "contact": { "f": -15, "b": 50 },
+        "down": { "f": 0, "b": 60 },
+        "passing": { "f": 25, "b": 0 },
+        "up": { "f": -5, "b": 40 }
       }
     },
     "boot": {
       "run": {
-        "passing": {
-          "f": 90,
-          "b": 0
-        },
-        "takeoff": {
-          "f": 40,
-          "b": 35
-        },
-        "up": {
-          "f": 0,
-          "b": 75
-        },
-        "contact": {
-          "f": 1,
-          "b": 90
-        }
+        "passing": { "f": 90, "b": 0 },
+        "takeoff": { "f": 40, "b": 35 },
+        "up": { "f": 0, "b": 75 },
+        "contact": { "f": 1, "b": 90 }
       },
       "walk": {
-        "contact": {
-          "f": 0,
-          "b": 35
-        },
-        "down": {
-          "f": 0,
-          "b": 40
-        },
-        "passing": {
-          "f": 20,
-          "b": 0
-        },
-        "up": {
-          "f": 0,
-          "b": 30
-        }
+        "contact": { "f": 0, "b": 35 },
+        "down": { "f": 0, "b": 40 },
+        "passing": { "f": 20, "b": 0 },
+        "up": { "f": 0, "b": 30 }
       }
     }
   },
   "pivots": {
-    "hip": [
-      539.1,
-      589.4
-    ],
-    "knee": [
-      545.2,
-      729.1
-    ],
-    "ankle": [
-      535.6,
-      895.9
-    ],
-    "shoulder": [
-      512.3,
-      441.6
-    ],
-    "elbow": [
-      504.1,
-      524.6
-    ],
-    "wrist": [
-      510.3,
-      613.0
-    ],
-    "rib": [
-      548.2,
-      535.9
-    ],
-    "neck": [
-      522.0,
-      408.0
-    ],
-    "headPivot": [
-      530.0,
-      392.0
-    ],
-    "neckFrom": [
-      522.0,
-      412.0
-    ],
-    "neckTo": [
-      530.0,
-      385.0
-    ],
-    "stomachFrom": [
-      545.0,
-      565.0
-    ],
-    "stomachTo": [
-      548.0,
-      530.0
-    ],
-    "bagHip": [
-      521.5,
-      547.5
-    ],
-    "strapTop": [
-      538.0,
-      437.5
-    ]
+    "hip": [542, 597],
+    "knee": [549, 733],
+    "ankle": [535.6, 895.9],
+    "shoulder": [513.5, 446.5],
+    "elbow": [499.5, 525],
+    "wrist": [504.5, 597],
+    "rib": [547, 538],
+    "neck": [522, 449],
+    "headPivot": [515, 405],
+    "neckFrom": [531.5, 455.5],
+    "neckTo": [531, 409],
+    "stomachFrom": [527, 564],
+    "stomachTo": [526.5, 491],
+    "bagHip": [800.5, 574],
+    "strapTop": [824, 431.5]
   }
 }
