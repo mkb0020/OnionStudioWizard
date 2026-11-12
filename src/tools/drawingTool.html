@@ -931,6 +931,10 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <span class="lbl" style="width:40px">ON</span>
         <button class="tgl" id="xfAll" style="width:auto;flex:1">THIS FRAME</button>
       </div>
+      <div class="onion-row" style="margin:8px 0 0">
+        <span class="lbl" style="width:40px">CLONE</span>
+        <button class="btn sm" id="cloneAllBtn" style="flex:1" title="Copy this layer into every other frame. Frames that already have a layer with this name get it replaced (locked ones are skipped); the rest get a new copy at the same spot in the stack. One undo.">TO ALL FRAMES</button>
+      </div>
   </div>
 
 
@@ -1263,6 +1267,50 @@ const Engine = (() => {
         redo: () => { f.layers.splice(at, 0, l); f.activeLayer = at; }
       });
       return true;
+    }
+
+    // Clone the active layer into every other frame. Layers are matched by name (same as ALL FRAMES):
+    // a frame that already has a layer with this name gets its pixels and settings replaced (locked ones
+    // are skipped); a frame without one gets a copy inserted at the same spot in its stack.
+    // One undo step. Returns { replaced, added, locked }.
+    cloneLayerToAll() {
+      const w = this.width, h = this.height, src = this.layer, si = this.activeLayer;
+      const props = ['visible', 'opacity', 'onion', 'clip'];
+      const rep = [], add = [];
+      let locked = 0;
+      for (const f of this.frames) {
+        if (f === this.frame) continue;
+        const m = f.layers.find(l => l.name === src.name);
+        if (m) {
+          if (m.locked) { locked++; continue; }
+          const r = { l: m, before: m.ctx.getImageData(0, 0, w, h), oldP: props.map(k => m[k]) };
+          m.ctx.clearRect(0, 0, w, h); m.ctx.drawImage(src.canvas, 0, 0);
+          props.forEach(k => { m[k] = src[k]; });
+          r.after = m.ctx.getImageData(0, 0, w, h); r.newP = props.map(k => m[k]);
+          rep.push(r);
+        } else {
+          const l = src.clone(w, h); l.locked = false; l.ver++;
+          const at = Math.min(si, f.layers.length), prevActive = f.activeLayer;
+          f.layers.splice(at, 0, l);
+          if (at <= f.activeLayer && f.layers.length > 1) f.activeLayer++;
+          add.push({ f, l, at, prevActive, newActive: f.activeLayer });
+        }
+      }
+      if (!rep.length && !add.length) return { replaced: 0, added: 0, locked };
+      this.dirty = true;
+      this.history.push({
+        label: 'Clone layer to all frames', frame: this.frame, layer: src, touched: rep.map(r => r.l), thumbsAll: true,
+        bytes: (rep.length * 2 + add.length) * w * h * 4,
+        undo: () => {
+          rep.forEach(r => { r.l.ctx.putImageData(r.before, 0, 0); props.forEach((k, j) => { r.l[k] = r.oldP[j]; }); });
+          add.forEach(a => { const k = a.f.layers.indexOf(a.l); if (k >= 0) a.f.layers.splice(k, 1); a.f.activeLayer = a.prevActive; });
+        },
+        redo: () => {
+          rep.forEach(r => { r.l.ctx.putImageData(r.after, 0, 0); props.forEach((k, j) => { r.l[k] = r.newP[j]; }); });
+          add.forEach(a => { a.f.layers.splice(a.at, 0, a.l); a.f.activeLayer = a.newActive; });
+        }
+      });
+      return { replaced: rep.length, added: add.length, locked };
     }
 
     // Merge the active layer down into the layer below (this frame only). The lower layer keeps its
@@ -5430,6 +5478,18 @@ const Pose = (() => {
     if (xfAll) { project.frames.forEach((_, i) => drawThumb(i)); flash('Aligned "' + project.layer.name + '" ' + word + ' in ' + r.moved + (r.moved === 1 ? ' frame' : ' frames') + ' (others already aligned or empty)'); }
     else flash('Aligned layer ' + word);
   }
+  $('#cloneAllBtn').addEventListener('click', e => {
+    e.currentTarget.blur();
+    if (!frameGuard()) return;
+    if (project.frames.length < 2) { flash('Only one frame: nothing to clone to'); return; }
+    const r = project.cloneLayerToAll();
+    project.frames.forEach((_, i) => drawThumb(i));
+    const parts = [];
+    if (r.added) parts.push('added to ' + r.added);
+    if (r.replaced) parts.push('replaced in ' + r.replaced);
+    if (r.locked) parts.push(r.locked + ' locked skipped');
+    flash(parts.length && (r.added || r.replaced) ? 'Cloned "' + project.layer.name + '": ' + parts.join(', ') : 'Nothing cloned: every match is locked');
+  });
   $('#alignL').addEventListener('click', e => { alignLayer('left'); e.currentTarget.blur(); });
   $('#alignR').addEventListener('click', e => { alignLayer('right'); e.currentTarget.blur(); });
   $('#alignT').addEventListener('click', e => { alignLayer('top'); e.currentTarget.blur(); });
