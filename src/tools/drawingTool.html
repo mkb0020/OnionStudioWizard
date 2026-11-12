@@ -912,6 +912,13 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
         <button class="btn sm" id="centerV" style="flex:1">V</button>
       </div>
       <div class="onion-row">
+        <span class="lbl" style="width:40px">ALIGN</span>
+        <button class="btn sm" id="alignL" style="flex:1" title="Push the layer left until its leftmost pixel touches the left edge">&#8676; L</button>
+        <button class="btn sm" id="alignR" style="flex:1" title="Push the layer right until its rightmost pixel touches the right edge">R &#8677;</button>
+        <button class="btn sm" id="alignT" style="flex:1" title="Push the layer up until its topmost pixel touches the top edge">&#10514; T</button>
+        <button class="btn sm" id="alignB" style="flex:1" title="Push the layer down until its bottommost pixel touches the bottom edge">B &#10515;</button>
+      </div>
+      <div class="onion-row">
         <span class="lbl" style="width:40px">BRIGHT</span>
         <input type="range" id="brightAmt" min="-100" max="100" value="0" step="1" style="flex:1;min-width:0"><output id="brightOut" style="font-family:var(--mono);font-size:11px;color:var(--cy);min-width:34px;text-align:right">0</output>
       </div>
@@ -1324,11 +1331,15 @@ const Engine = (() => {
       return layers.length;
     }
 
-    // Center the layer: finds the bounding box of every non-transparent pixel and moves the layer so the middle
-    // of that box lands on the middle of the frame. axis = 'both' | 'h' | 'v'. With allFrames, each matching layer
-    // is centered on its own. Whole pixels only, so nothing is resampled (a box whose size doesn't match the
-    // frame's parity ends up half a pixel off, rounded). One undo step. Returns { moved, empty }.
-    centerLayer(axis, allFrames) {
+    // Center or align the layer: finds the bounding box of every non-transparent pixel, then moves the layer.
+    // mode = 'both' | 'h' | 'v' centers that box on the middle of the frame (a box whose size doesn't match the
+    // frame's parity ends up half a pixel off, rounded); mode = 'left' | 'right' | 'top' | 'bottom' pushes the
+    // layer until its outermost pixel on that side touches that edge of the frame (only that axis moves).
+    // With allFrames, each matching layer is measured and moved on its own. Whole pixels only, so nothing is
+    // resampled. One undo step. Returns { moved, empty }.
+    centerLayer(axis, allFrames) { return this.alignLayer(axis, allFrames); }
+    alignLayer(mode, allFrames) {
+      const axis = mode;
       const w = this.width, h = this.height;
       const todo = [];
       let empty = 0;
@@ -1339,7 +1350,15 @@ const Engine = (() => {
           if (px[i]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
         }
         if (x1 < 0) { empty++; continue; }
-        const dx = axis === 'v' ? 0 : Math.round((w - (x0 + x1 + 1)) / 2), dy = axis === 'h' ? 0 : Math.round((h - (y0 + y1 + 1)) / 2);
+        let dx = 0, dy = 0;
+        if (axis === 'left') dx = -x0;
+        else if (axis === 'right') dx = (w - 1) - x1;
+        else if (axis === 'top') dy = -y0;
+        else if (axis === 'bottom') dy = (h - 1) - y1;
+        else {
+          dx = axis === 'v' ? 0 : Math.round((w - (x0 + x1 + 1)) / 2);
+          dy = axis === 'h' ? 0 : Math.round((h - (y0 + y1 + 1)) / 2);
+        }
         if (dx || dy) todo.push({ l, dx, dy, before: d });
       }
       if (!todo.length) return { moved: 0, empty };
@@ -1352,7 +1371,7 @@ const Engine = (() => {
       const layers = todo.map(t => t.l);
       this.dirty = true; layers.forEach(l => l.ver++);
       this.history.push({
-        label: 'Center layer', frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
+        label: ['left', 'right', 'top', 'bottom'].includes(axis) ? 'Align layer ' + axis : 'Center layer', frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
         undo: () => todo.forEach(t => t.l.ctx.putImageData(t.before, 0, 0)),
         redo: () => todo.forEach(t => t.l.ctx.putImageData(t.after, 0, 0))
       });
@@ -5403,6 +5422,18 @@ const Pose = (() => {
   $('#centerBoth').addEventListener('click', e => { centerLayer('both'); e.currentTarget.blur(); });
   $('#centerH').addEventListener('click', e => { centerLayer('h'); e.currentTarget.blur(); });
   $('#centerV').addEventListener('click', e => { centerLayer('v'); e.currentTarget.blur(); });
+  function alignLayer(side) {
+    if (!frameGuard()) return;
+    if (project.layer.locked) { flash(project.layer.name + ' is locked: unlock it to align'); return; }
+    const r = project.alignLayer(side, xfAll), word = side.toUpperCase();
+    if (!r.moved) { flash(r.empty ? 'Nothing to align: layer is empty' : 'Already aligned ' + side); return; }
+    if (xfAll) { project.frames.forEach((_, i) => drawThumb(i)); flash('Aligned "' + project.layer.name + '" ' + word + ' in ' + r.moved + (r.moved === 1 ? ' frame' : ' frames') + ' (others already aligned or empty)'); }
+    else flash('Aligned layer ' + word);
+  }
+  $('#alignL').addEventListener('click', e => { alignLayer('left'); e.currentTarget.blur(); });
+  $('#alignR').addEventListener('click', e => { alignLayer('right'); e.currentTarget.blur(); });
+  $('#alignT').addEventListener('click', e => { alignLayer('top'); e.currentTarget.blur(); });
+  $('#alignB').addEventListener('click', e => { alignLayer('bottom'); e.currentTarget.blur(); });
   $('#rotApply').addEventListener('click', () => {
     const v = parseFloat($('#rotDeg').value);
     $('#rotDeg').blur();
