@@ -37,6 +37,8 @@
   - Drawing tool: ALIGN row (L / R / T / B) under CENTER in the layer transform panel: pushes the selected layer until its outermost non-transparent pixel on that side touches that edge of the frame (other axis untouched). Respects THIS FRAME / ALL FRAMES (each frame measured on its own), whole pixels only, one undo step. Tested in headless Chrome (each edge exact, repeat = no-op, undo); needs a first look in the real app
   - Drawing tool: CLONE TO ALL FRAMES button at the bottom of the LAYER menu: copies the active layer (pixels + visible / opacity / onion / clip) into every other frame. Matched by name like ALL FRAMES: frames with a same-named layer get it replaced (locked ones skipped), frames without one get a copy at the same stack position. One undo step. Tested in headless Chrome (add + replace, settings copied, undo / redo exact); needs a first look in the real app
 
+  - PLAY backdrop: three layers of repeating `background_column.png` arcades between `background.png` and `parallax_column.png` (far = small, hazy, slow; near = big, dark, faster; B toggles), plus the `background_bottom.png` floor strip pinned to the bottom of the screen. Tuning lives in `ARCADE` / `BG_BOTTOM` at the top of play.html. Tested in headless Chrome; needs a first look in the real app
+
  ## Todo Items
 
   - [x] Scaffold the Tauri 2 shell in OnionStudioWizard (static frontend, no bundler), with the rail, the PrettyKit chrome, and the draw tool and Rig Lab loaded as-is.

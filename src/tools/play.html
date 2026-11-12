@@ -148,6 +148,25 @@ const BG = '#030013';
    VERTICAL: vBg / vCol = HOW MUCH THE BACKGROUND / THE COLUMNS FOLLOW THE CAMERA'S HEIGHT (FAR = SMALL, NEAR = BIGGER). refY = THE CAMERA HEIGHT WHERE THEY SIT EXACTLY AS DRAWN.
    WHEN THE BACKGROUND SLIDES, THE GAP AT ITS TOP / BOTTOM IS FILLED BY STRETCHING ITS EDGE ROW (THE DARK BANDS), SO NO NEW ART IS NEEDED. */
 const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: 24, bottomY: 399, speed: 0.5, spacing: 4.5, vBg: 0.12, vCol: 0.2, refY: GROUND_Y - CAM_Y_OFFSET, on: true };
+/* ---------- BACKDROP ARCADES: LAYERS OF REPEATING background_column.png, BETWEEN background.png AND THE PARALLAX COLUMNS (B TOGGLES) ----------
+   DRAWN FAR -> NEAR: EACH LAYER IS BIGGER, DARKER AND SCROLLS FASTER THAN THE ONE BEFORE, AND ALL OF THEM ARE SLOWER THAN parallax_column (speed 0.5), SO THEY READ AS FARTHER AWAY.
+   SOURCE PX (background_column.png IS 1000 x 1000): cropX / cropW = ONE SEAMLESS TILE (THE HALF ARCHES ON EACH SIDE JOIN UP), baseY = THE ROW WHERE THE COLUMN BASE ENDS,
+   wallTop..wallBot = SOLID BRICK ROWS THAT ARE REPEATED UPWARD WHEN A SMALL LAYER'S TOP WOULD LEAVE A GAP UNDER THE TOP OF THE SCREEN.
+   PER LAYER: size = DRAWN HEIGHT OF THE WHOLE 1000 PX IMAGE, AS A FRACTION OF THE WINDOW HEIGHT. base = WHERE THE COLUMN BASES LAND (FRACTION OF THE WINDOW HEIGHT, 0 = TOP).
+   speed = SIDEWAYS CAMERA FOLLOW (SAME MEANING AS BACKDROP.speed). v = VERTICAL CAMERA FOLLOW (LIKE vCol). haze = HOW MUCH hazeColor IS MIXED IN (LIGHTER = FARTHER).
+   shade = HOW MUCH shadeColor IS MIXED IN (DARKER = NEARER). offset = SIDEWAYS NUDGE IN TILE WIDTHS, SO THE LAYERS' ARCHES DON'T LINE UP. */
+const ARCADE = {
+  src: 'assets/images/map/background_column.png', cropX: 180, cropW: 640, cropH: 900, baseY: 887, wallTop: 20, wallBot: 260,
+  hazeColor: '#463f7c', shadeColor: '#020008', on: true,
+  layers: [
+    { size: 0.46, base: 0.68, speed: 0.12, v: 0.05, haze: 0.55, shade: 0,    offset: 0.30 },   // FAR: SMALL, LIGHT, SLOW
+    { size: 0.66, base: 0.78, speed: 0.22, v: 0.09, haze: 0.30, shade: 0.05, offset: 0.72 },
+    { size: 0.90, base: 0.89, speed: 0.34, v: 0.14, haze: 0.08, shade: 0.30, offset: 0.05 },   // NEAR: BIG, DARK, FASTER
+  ],
+};
+/* THE FLOOR STRIP (background_bottom.png): PINNED TO THE BOTTOM OF THE SCREEN, OVER THE BACKDROP, SO NOTHING SHOWS THROUGH UNDER THE LEVEL. top / bot = ITS OPAQUE ROWS (SOURCE PX).
+   height = DRAWN HEIGHT AS A FRACTION OF THE WINDOW HEIGHT. speed / v = CAMERA FOLLOW. overParallax = DRAW IT OVER parallax_column TOO (false = BETWEEN THE ARCADES AND parallax_column). */
+const BG_BOTTOM = { src: 'assets/images/map/background_bottom.png', w: 1000, top: 746, bot: 998, height: 0.2, speed: 0.6, v: 0.3, overParallax: true, on: true };
 let FALL_Y = GROUND_Y + 300, FLOOR_MAX = GROUND_Y, SPAWN = { x: 100, y: GROUND_Y };   // PER LEVEL: RESPAWN DEPTH, CAPE FLOOR CAP, WHERE THE PLAYER STARTS
 
 function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
@@ -262,6 +281,8 @@ async function loadAssets() {
   IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
+  try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
+  try { IMG.bgBottom = await loadImg(BG_BOTTOM.src); } catch (e) { console.warn('[play] no floor strip (' + e.message + ')'); }
   for (const [kind, K] of Object.entries(CRITTER_KINDS)) {
     for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
     if (K.pat) try { const im = await loadImg(CRITTER_DIR + K.pat.src); IMG['critter_' + kind + '_pat'] = im; K.pat.tops = measureHeadTops(im, K.pat); } catch (e) { console.warn('[play] ' + kind + ': no head pat sheet (' + e.message + ')'); }
@@ -282,7 +303,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { keys.delete(keyName(e)); });
@@ -637,6 +658,7 @@ function tick(dt) {
     else if (k === 'g') CAPE_DISSOLVE.enabled = !CAPE_DISSOLVE.enabled;
     else if (k === 'l') lighting.on = !lighting.on;
     else if (k === 'n') crittersOn = !crittersOn;
+    else if (k === 'b') ARCADE.on = !ARCADE.on;
   }
   if (pet.phase !== 'none' && down('left', 'right', 'a', 'd')) cancelPet();
   P.mx = 0;
@@ -1347,7 +1369,47 @@ function drawBackdrop() {   // SCREEN SPACE (CALLED BEFORE THE WORLD TRANSFORM):
   ctx.drawImage(bg, 0, 0, B.bgW, B.bgH, bx, bgDy, bw, H);
   const top = B.topY * s + colDy, colH = (B.bottomY - B.topY) * s, colW = colH * col.naturalWidth / col.naturalHeight, gap = colW * B.spacing;
   const shift = cam.x * B.speed, first = Math.floor((shift - W / 2 - colW) / gap), last = Math.ceil((shift + W / 2 + colW) / gap);
+  drawArcades(rise);                                         // BIGGER + DARKER EACH LAYER, ALL BEHIND THE PARALLAX COLUMNS
+  if (!BG_BOTTOM.overParallax) drawBgBottom(rise);
   for (let i = first; i <= last; i++) ctx.drawImage(col, Math.round(W / 2 + i * gap - shift - colW / 2), Math.round(top), Math.ceil(colW), Math.round(colH));
+  if (BG_BOTTOM.overParallax) drawBgBottom(rise);
+}
+let arcadeTiles = [];
+function buildArcade() {   // ONE PRE-TINTED TILE PER LAYER (HAZE / SHADE BAKED IN WITH source-atop, SO THE ARCH OPENINGS STAY SEE-THROUGH). CALL AGAIN AFTER EDITING ARCADE.layers
+  const A = ARCADE, im = IMG.arcade; if (!im) return;
+  arcadeTiles = A.layers.map(L => {
+    const c = document.createElement('canvas'); c.width = A.cropW; c.height = A.cropH; const g = c.getContext('2d');
+    g.drawImage(im, A.cropX, 0, A.cropW, A.cropH, 0, 0, A.cropW, A.cropH); g.globalCompositeOperation = 'source-atop';
+    if (L.haze > 0) { g.globalAlpha = L.haze; g.fillStyle = A.hazeColor; g.fillRect(0, 0, A.cropW, A.cropH); }
+    if (L.shade > 0) { g.globalAlpha = L.shade; g.fillStyle = A.shadeColor; g.fillRect(0, 0, A.cropW, A.cropH); }
+    return c;
+  });
+}
+function drawArcades(rise) {
+  const A = ARCADE; if (!A.on || !arcadeTiles.length) return;
+  A.layers.forEach((L, n) => {
+    const t = arcadeTiles[n]; if (!t) return;
+    const k = L.size * H / 1000, tw = A.cropW * k, th = A.cropH * k;               // k = SCREEN PX PER SOURCE PX
+    const y0 = Math.round(L.base * H + rise * L.v - A.baseY * k);                // SCREEN Y OF SOURCE ROW 0
+    const shift = cam.x * L.speed + L.offset * tw, first = Math.floor((shift - W / 2) / tw) - 1, last = Math.ceil((shift + W / 2) / tw);
+    const wallH = (A.wallBot - A.wallTop) * k;
+    for (let i = first; i <= last; i++) {
+      const x = Math.round(W / 2 + i * tw - shift), w = Math.round(W / 2 + (i + 1) * tw - shift) - x + 1;   // +1 PX OVERLAP: NO HAIRLINE SEAMS
+      ctx.drawImage(t, x, y0, w, Math.round(th));
+      for (let y = y0 + A.wallTop * k - wallH; y + wallH > 0; y -= wallH)          // GAP ABOVE A SMALL LAYER: KEEP STACKING BRICK UP TO THE TOP OF THE SCREEN
+        ctx.drawImage(t, 0, A.wallTop, A.cropW, A.wallBot - A.wallTop, x, Math.round(y), w, Math.round(y + wallH) - Math.round(y) + 1);
+    }
+  });
+}
+function drawBgBottom(rise) {   // THE FLOOR STRIP, TILED SIDEWAYS. IF IT RISES OFF THE BOTTOM EDGE, ITS LAST ROW IS STRETCHED DOWN TO FILL THE GAP
+  const B = BG_BOTTOM, im = IMG.bgBottom; if (!B.on || !im) return;
+  const sh = B.bot - B.top, h = B.height * H, k = h / sh, tw = B.w * k, y = Math.round(H - h + rise * B.v), hh = Math.round(h);
+  const shift = cam.x * B.speed, first = Math.floor((shift - W / 2) / tw) - 1, last = Math.ceil((shift + W / 2) / tw);
+  for (let i = first; i <= last; i++) {
+    const x = Math.round(W / 2 + i * tw - shift), w = Math.round(W / 2 + (i + 1) * tw - shift) - x + 1;
+    ctx.drawImage(im, 0, B.top, B.w, sh, x, y, w, hh);
+    if (y + hh < H) ctx.drawImage(im, 0, B.bot - 1, B.w, 1, x, y + hh - 1, w, H - y - hh + 1);
+  }
 }
 function drawLevel(vl, vr) {
   if (MAP.on) { drawMapLevel(vl, vr); return; }
@@ -1390,7 +1452,7 @@ function drawHud() {
     'physics: ' + physSource,
     'move ' + PHYS.move + '  jump ' + PHYS.jump + '  gravity ' + PHYS.gravity + '  maxFall ' + PHYS.maxFall + '  wallSlide ' + PHYS.wallSlide + '  wallJump ' + PHYS.wallJump + '  airCtl ' + PHYS.airControl + '  coyote ' + Math.round(PHYS.coyote * 1000) + 'ms',
     'fx: ' + (FX.on ? 'ON' : 'OFF') + '   dissolve ' + dissolveAmount.toFixed(2) + '   squash ' + squash.x.toFixed(2) + ' x ' + squash.y.toFixed(2) + '   particles ' + particles.length + '   ghosts ' + ghosts.length + '   F2 toggles',
-    'light (L): ' + (lighting.on ? 'on' : 'off') + '   cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
+    'light (L): ' + (lighting.on ? 'on' : 'off') + '   cape (V): ' + CAPE_MODES[cape.mode] + '   ghost tail (G): ' + (CAPE_DISSOLVE.enabled ? 'on' : 'off') + '   arcades (B): ' + (ARCADE.on ? 'on' : 'off') + '   spring ' + cape.spring.a.toFixed(1) + 'deg',
     'sheet cape (F3): ' + (capeProf.data ? (capeProf.on ? 'ON' : 'OFF') + '   ' : '') + capeProf.note,
     'cape config: ' + capeCfgSrc,
     'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
@@ -1512,7 +1574,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { pet, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
