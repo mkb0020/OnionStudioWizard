@@ -837,6 +837,14 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       </div>
       <button class="btn" id="exportBtn" style="width:100%">EXPORT</button>
       <p class="note" id="exInfo" style="margin-top:6px"></p>
+      <div id="exWhereBox" hidden>
+        <p class="note" style="margin-top:6px">SAVES TO <b id="exWhere" style="word-break:break-all"></b></p>
+        <div class="onion-row" style="margin-top:4px">
+          <button class="btn" id="exDirPick" title="Choose the folder exports are saved to">FOLDER…</button>
+          <button class="btn" id="exDirOpen" title="Open the exports folder in Explorer">OPEN</button>
+          <button class="btn" id="exDirReset" title="Back to Downloads\Onion Studio Wizard" hidden>DEFAULT</button>
+        </div>
+      </div>
       <div class="libhr"></div>
       <h2>Save to library <span class="sub" id="libWhere"></span></h2>
       <p class="note" id="libOff" hidden>Open this tool inside Onion Studio Wizard to use the library.</p>
@@ -5951,6 +5959,39 @@ const Pose = (() => {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   }
+  /* EXPORTS: INSIDE THE DESKTOP APP THEY ARE WRITTEN STRAIGHT TO THE EXPORTS FOLDER BY THE APP (NO BROWSER DOWNLOAD, SO
+     WEBVIEW2'S "DOWNLOAD MULTIPLE FILES?" PROMPT CAN'T BLOCK THE TIMING JSON). OPENED ON ITS OWN IN A BROWSER: A NORMAL DOWNLOAD.
+     A FILE WITH THE SAME NAME IS OVERWRITTEN (THE TIMING JSON NAMES ITS SHEET, SO "(1)" COPIES WOULD BREAK THAT). */
+  let exDir = null;                                      // { dir, isDefault } ONCE THE APP HAS ANSWERED; null = BROWSER DOWNLOADS
+  const exHosted = () => !!(window.OSWClient && window.OSWClient.hosted);
+  function showExDir(info) {
+    exDir = info && info.dir ? info : null;
+    $('#exWhereBox').hidden = !exDir;
+    if (!exDir) return;
+    $('#exWhere').textContent = exDir.dir; $('#exWhere').title = exDir.dir;
+    $('#exDirReset').hidden = !!exDir.isDefault;
+  }
+  async function saveExport(blob, filename) {
+    if (exHosted()) {
+      try { const r = await window.OSWClient.exports.save({ name: filename, blob }); return r.path; }
+      catch (err) { if (!/^NOT_DESKTOP|^BAD_REQUEST/.test(err.message)) throw err; }   // PLAIN BROWSER SHELL / OLDER SHELL: FALL THROUGH
+    }
+    download(blob, filename); return null;
+  }
+  const exDone = (msg, path) => flash(path && exDir ? msg + ' \u2192 ' + exDir.dir : msg);
+  if (exHosted()) {
+    window.OSWClient.exports.info().then(showExDir).catch(() => showExDir(null));
+    window.OSWClient.on('export.changed', showExDir);
+    $('#exDirPick').addEventListener('click', async () => {
+      try { const i = await window.OSWClient.exports.chooseDir(); showExDir(i); if (!i.cancelled) flash('Exports now save to ' + i.dir); }
+      catch (err) { flash('Could not change the folder: ' + err.message.replace(/^[A-Z_]+:\s*/, '')); }
+    });
+    $('#exDirOpen').addEventListener('click', () => window.OSWClient.exports.openDir().catch(err => flash('Could not open the folder: ' + err.message.replace(/^[A-Z_]+:\s*/, ''))));
+    $('#exDirReset').addEventListener('click', async () => {
+      try { const i = await window.OSWClient.exports.resetDir(); showExDir(i); flash('Exports now save to ' + i.dir); }
+      catch (err) { flash('Could not change the folder: ' + err.message.replace(/^[A-Z_]+:\s*/, '')); }
+    });
+  }
   let exJson = true;
   $('#exJson').addEventListener('click', () => { exJson = !exJson; $('#exJson').classList.toggle('on', exJson); $('#exJson').textContent = exJson ? '+ TIMING JSON' : 'NO TIMING JSON'; updateExportInfo(); });
   // Timing for every frame. `expandedFrames` repeats each frame index `hold` times, so playing it at the
@@ -6008,7 +6049,8 @@ const Pose = (() => {
     try {
       if (mode === 'frame') {
         const cur = project.currentFrame;
-        download(await toBlob(Engine.exportFrame(project, cur, size)), `${name}_${pad(cur + 1)}.png`);
+        const path = await saveExport(await toBlob(Engine.exportFrame(project, cur, size)), `${name}_${pad(cur + 1)}.png`);
+        exDone(`Exported frame ${cur + 1}`, path);
       } else if (mode === 'seq') {
         const files = [];
         for (let i = 0; i < n; i++) {
@@ -6017,16 +6059,16 @@ const Pose = (() => {
           files.push({ name: `${name}_${pad(i + 1)}.png`, data: new Uint8Array(await blob.arrayBuffer()) });
         }
         if (exJson) files.push({ name: `${name}_timing.json`, data: new TextEncoder().encode(timingJson(name, size, { files: files.map(f => f.name) })) });
-        download(Engine.makeZip(files), `${name}_frames_${size}px.zip`);
-        project.dirty = false; flash(`Exported ${n} frames`);
+        const path = await saveExport(Engine.makeZip(files), `${name}_frames_${size}px.zip`);
+        project.dirty = false; exDone(`Exported ${n} frames`, path);
       } else {
         const d = sheetDims();
         if (d.tooBig) { flash('Sheet too big: lower the size or use a grid'); return; }
         const { canvas } = Engine.exportSheet(project, size, d.cols);
         const sheetFile = `${name}_sheet_${size}px_${d.cols}x${d.rows}.png`;
-        download(await toBlob(canvas), sheetFile);
-        if (exJson) download(new Blob([timingJson(name, size, { sheet: { file: sheetFile, cols: d.cols, rows: d.rows } })], { type: 'application/json' }), `${name}_timing.json`);
-        project.dirty = false; flash(`Exported sheet ${d.cols}\u00d7${d.rows}` + (exJson ? ' + timing.json' : ''));
+        const path = await saveExport(await toBlob(canvas), sheetFile);
+        if (exJson) await saveExport(new Blob([timingJson(name, size, { sheet: { file: sheetFile, cols: d.cols, rows: d.rows } })], { type: 'application/json' }), `${name}_timing.json`);
+        project.dirty = false; exDone(`Exported sheet ${d.cols}\u00d7${d.rows}` + (exJson ? ' + timing.json' : ''), path);
       }
     } catch (err) {
       flash('Export failed: ' + err.message);

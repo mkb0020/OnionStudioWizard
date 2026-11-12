@@ -23,6 +23,13 @@
    OSWClient.library.cape.list()          -> [cape slug]                (library/capes/<slug>.json, CAPE LAB SETTINGS)
    OSWClient.library.cape.get(slug)       -> object | null
    OSWClient.library.cape.save(slug, obj)                               (FREE-FORM JSON OBJECT, MAX 1 MB)
+   OSWClient.exports.info()               -> { dir, isDefault, defaultDir }      WHERE EXPORTS GO (DEFAULT <Downloads>/Onion Studio Wizard)
+   OSWClient.exports.save({name, blob})   -> { path }      WRITES THE FILE THERE (SAME NAME = OVERWRITE). NO BROWSER DOWNLOAD, SO NO
+                                          "DOWNLOAD MULTIPLE FILES?" PROMPT. FAILS WITH "NOT_DESKTOP" IN A PLAIN BROWSER: FALL BACK TO A DOWNLOAD.
+   OSWClient.exports.chooseDir()          -> info (+ cancelled: true IF THE PICKER WAS CLOSED)
+   OSWClient.exports.resetDir()           -> info          BACK TO THE DEFAULT FOLDER
+   OSWClient.exports.openDir()            OPENS THE FOLDER IN EXPLORER
+   OSWClient.on('export.changed', fn)     fn(info) WHEN THE FOLDER CHANGES (FROM ANY TOOL)
    OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root'|'character'|'map'|'cape', id?})
    OSWClient.off(name, fn)
 
@@ -53,11 +60,11 @@
     }
   });
 
-  function request(type, args) {
+  function request(type, args, timeoutMs) {
     if (!hosted) return Promise.reject(new Error('NOT_HOSTED: this tool is not running inside Onion Studio Wizard'));
     return new Promise(function (resolve, reject) {
       var id = ++seq;
-      var timer = setTimeout(function () { delete pending[id]; reject(new Error('TIMEOUT: no answer from the Wizard for ' + type)); }, TIMEOUT_MS);
+      var timer = setTimeout(function () { delete pending[id]; reject(new Error('TIMEOUT: no answer from the Wizard for ' + type)); }, timeoutMs || TIMEOUT_MS);
       pending[id] = { resolve: resolve, reject: reject, timer: timer };
       window.parent.postMessage({ osw: 1, kind: 'request', id: id, type: type, args: args || {} }, target);
     });
@@ -89,6 +96,13 @@
         get: function (slug) { return request('library.character.get', { character: slug }); },
         save: function (slug, data) { return request('library.character.save', { character: slug, data: data }); },
       },
+    },
+    exports: {
+      info: function () { return request('export.info'); },
+      save: function (opts) { return request('export.save', opts, 120000); },
+      chooseDir: function () { return request('export.chooseDir', {}, 600000); },   // WAITS FOR THE USER IN THE PICKER
+      resetDir: function () { return request('export.resetDir'); },
+      openDir: function () { return request('export.openDir'); },
     },
     on: function (name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
     off: function (name, fn) { listeners[name] = (listeners[name] || []).filter(function (f) { return f !== fn; }); },

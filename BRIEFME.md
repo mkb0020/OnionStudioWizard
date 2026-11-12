@@ -39,6 +39,8 @@
 
   - PLAY backdrop: three layers of repeating `background_column.png` arcades between `background.png` and `parallax_column.png` (far = small, hazy, slow; near = big, dark, faster; B toggles), plus the `background_bottom.png` floor strip pinned to the bottom of the screen. Tuning lives in `ARCADE` / `BG_BOTTOM` at the top of play.html. Tested in headless Chrome; needs a first look in the real app
 
+  - Exports through the app: the drawing tool's EXPORT (sheet, timing JSON, zip, frame) is written straight to disk by Rust (`export_write`, `src-tauri/src/exports.rs`) instead of as browser downloads, so WebView2's "download multiple files?" prompt can't block it. Default folder `Downloads\\Onion Studio Wizard`; FOLDER… (native picker via tauri-plugin-dialog), OPEN, DEFAULT in the export menu. Same name = overwrite (the timing JSON names its sheet). Tools reach it with `OSWClient.exports.*`; a plain browser falls back to downloads. Rust unit-tested + `cargo check`, JS tested in headless Chrome with a mocked invoke; needs a first look in the real app (`npm run dev` will fetch the new dialog plugin crate)
+
  ## Todo Items
 
   - [x] Scaffold the Tauri 2 shell in OnionStudioWizard (static frontend, no bundler), with the rail, the PrettyKit chrome, and the draw tool and Rig Lab loaded as-is.
