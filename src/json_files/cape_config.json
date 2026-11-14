@@ -5,9 +5,9 @@
   },
   "sim": {
     "C": {
-      "segments": 10, "segLen": 9, "gravity": 1700, "drag": 2.2, "nDrag": 9, "tDrag": 0.4, "lift": 0.55, "flutter": 260,
-      "backBias": 1000, "wind": 190, "hangDeg": 47, "sag": 0.55, "vRef": 500, "restPull": 45, "iterations": 8, "bend": 0.35,
-      "step": 0.008333333333333333, "maxSteps": 6, "spanMin": 0.5, "maxBendDeg": 28, "collide": true, "thick": 6,
+      "segments": 10, "segLen": 9, "gravity": 1000, "drag": 2.2, "nDrag": 9, "tDrag": 0.4, "lift": 0.35, "flutter": 260,
+      "backBias": 100, "wind": 90, "hangDeg": 10, "sag": 0.55, "vRef": 500, "restPull": 5, "iterations": 3, "bend": 0.35,
+      "step": 0.008333333333333333, "maxSteps": 6, "spanMin": 0.5, "maxBendDeg": 18, "collide": true, "thick": 6,
       "groundPad": 14, "groundFric": 0.35, "shear": 1, "rung": 0.3
     },
     "L": {
@@ -16,12 +16,12 @@
       "disGlow": 0.2, "disColA": "#1C90D6", "disColB": "#8D2EC2"
     }
   },
-  "pins": { "a": { "x": 186, "y": 138 }, "b": { "x": 194, "y": 183 } },
+  "pins": { "a": { "x": 169, "y": 182 }, "b": { "x": 167, "y": 173 } },
   "pinPoses": {},
-  "rootOffset": { "x": -60, "y": -210 },
+  "rootOffset": { "x": -65, "y": -205 },
   "spring": { "stiffness": 150, "damping": 80, "runAngle": 0, "fallAngle": 12, "kick": 260, "strips": 50, "ampMin": 6, "ampMax": 24, "freqMin": 1, "freqMax": 3, "phase": 5 },
   "idle": {
-    "enabled": true, "root": { "x": 90, "y": -220 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 1550, "gust": 1050,
+    "enabled": true, "root": { "x": 85, "y": -240 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 1550, "gust": 1050,
     "gustHz": 0.35, "flutter": 150, "layered": false, "topWidth": 0, "liningShift": 0.12,
     "liningColors": ["#0000FF", "#0000FF", "#0000FF"], "liningEdge": "#0000FF", "liningGlow": "#0000ff"
   },
