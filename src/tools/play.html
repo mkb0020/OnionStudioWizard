@@ -264,7 +264,7 @@ function drawMapLevel(vl, vr) {
 const IMG = {};            // name -> HTMLImageElement
 const sheetScales = {};    // SCALE-TO-FIT PER SHEET (1 WHEN IT IS ALREADY 400 TALL)
 const footGaps = {};       // PER-FRAME PX BETWEEN THE LOWEST VISIBLE PIXEL AND THE CELL BOTTOM (snapFeet SHEETS ONLY)
-const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });
+const loadImg = src => new Promise((res, rej) => { const im = new Image(); im.onload = () => im.decode().catch(() => {}).then(() => res(im)); im.onerror = () => rej(new Error('could not load ' + src)); im.src = src; });   // decode() UP FRONT: OTHERWISE A SHEET IS DECODED THE FIRST TIME IT IS DRAWN (THE HITCH ON THE FIRST RUN / JUMP)
 function measureFootGaps(key, img, frames) {   // SCANS THE SHEET ONCE. FAILS SOFT (USE offsetY INSTEAD)
   try {
     const cw = Math.floor(img.width / frames), ch = img.height, cv = document.createElement('canvas'); cv.width = img.width; cv.height = ch;
@@ -1384,22 +1384,39 @@ function buildArcade() {   // ONE PRE-TINTED TILE PER LAYER (HAZE / SHADE BAKED 
     if (L.shade > 0) { g.globalAlpha = L.shade; g.fillStyle = A.shadeColor; g.fillRect(0, 0, A.cropW, A.cropH); }
     return c;
   });
+  arcadeBaked.key = '';   // RE-BAKE THE SCREEN-SIZE COPIES ON THE NEXT FRAME
+}
+/* PERFORMANCE: SHRINKING A 640 x 900 TILE TO SCREEN SIZE WITH 'high' SMOOTHING ON EVERY DRAW (PLUS ~60 BRICK STRIPS ABOVE THE SMALL LAYERS) COST
+   MORE THAN THE REST OF THE FRAME PUT TOGETHER. SO EACH LAYER IS BAKED ONCE PER WINDOW SIZE, AT ITS FINAL SIZE IN DEVICE PX, WITH ONE SCREEN OF
+   STACKED BRICK ALREADY ABOVE IT, AND EACH FRAME IS JUST A FEW 1:1 COPIES AT WHOLE-PIXEL POSITIONS (NO RESAMPLING AT ALL). */
+const arcadeBaked = { key: '', layers: [] };
+function arcadeLayers() {
+  const key = W + 'x' + H + '@' + DPR; if (arcadeBaked.key === key) return arcadeBaked.layers;
+  const A = ARCADE;
+  arcadeBaked.layers = arcadeTiles.map((t, n) => {
+    const L = A.layers[n], k = L.size * H / 1000 * DPR;                          // k = DEVICE PX PER SOURCE PX
+    const tw = Math.max(1, Math.round(A.cropW * k)), th = Math.round(A.cropH * k), above = Math.ceil(H * DPR), wallH = (A.wallBot - A.wallTop) * k;
+    const c = document.createElement('canvas'); c.width = tw; c.height = th + above; const g = c.getContext('2d');
+    g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+    g.drawImage(t, 0, 0, A.cropW, A.cropH, 0, above, tw, th);
+    for (let y = above + A.wallTop * k - wallH; y + wallH > 0; y -= wallH)        // ONE SCREEN OF BRICK ABOVE A SMALL LAYER, SO NO GAP SHOWS UNDER THE TOP OF THE SCREEN
+      g.drawImage(t, 0, A.wallTop, A.cropW, A.wallBot - A.wallTop, 0, Math.round(y), tw, Math.round(y + wallH) - Math.round(y) + 1);
+    return { c, tw, above };
+  });
+  arcadeBaked.key = key; return arcadeBaked.layers;
 }
 function drawArcades(rise) {
   const A = ARCADE; if (!A.on || !arcadeTiles.length) return;
+  const baked = arcadeLayers(), cx = Math.round(W * DPR / 2);
+  ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0);                                // DEVICE PX: 1 SOURCE PX = 1 SCREEN PX
   A.layers.forEach((L, n) => {
-    const t = arcadeTiles[n]; if (!t) return;
-    const k = L.size * H / 1000, tw = A.cropW * k, th = A.cropH * k;               // k = SCREEN PX PER SOURCE PX
-    const y0 = Math.round(L.base * H + rise * L.v - A.baseY * k);                // SCREEN Y OF SOURCE ROW 0
-    const shift = cam.x * L.speed + L.offset * tw, first = Math.floor((shift - W / 2) / tw) - 1, last = Math.ceil((shift + W / 2) / tw);
-    const wallH = (A.wallBot - A.wallTop) * k;
-    for (let i = first; i <= last; i++) {
-      const x = Math.round(W / 2 + i * tw - shift), w = Math.round(W / 2 + (i + 1) * tw - shift) - x + 1;   // +1 PX OVERLAP: NO HAIRLINE SEAMS
-      ctx.drawImage(t, x, y0, w, Math.round(th));
-      for (let y = y0 + A.wallTop * k - wallH; y + wallH > 0; y -= wallH)          // GAP ABOVE A SMALL LAYER: KEEP STACKING BRICK UP TO THE TOP OF THE SCREEN
-        ctx.drawImage(t, 0, A.wallTop, A.cropW, A.wallBot - A.wallTop, x, Math.round(y), w, Math.round(y + wallH) - Math.round(y) + 1);
-    }
+    const b = baked[n]; if (!b) return;
+    const k = L.size * H / 1000;                                                 // SCREEN (CSS) PX PER SOURCE PX
+    const y = Math.round((L.base * H + rise * L.v - A.baseY * k) * DPR) - b.above; // DEVICE Y OF THE BAKED CANVAS'S TOP
+    const shift = Math.round(cam.x * L.speed * DPR + L.offset * b.tw), first = Math.floor((shift - cx) / b.tw) - 1, last = Math.ceil((shift + cx) / b.tw);
+    for (let i = first; i <= last; i++) ctx.drawImage(b.c, cx + i * b.tw - shift, y);
   });
+  ctx.restore();
 }
 function drawBgBottom(rise) {   // THE FLOOR STRIP, TILED SIDEWAYS. IF IT RISES OFF THE BOTTOM EDGE, ITS LAST ROW IS STRETCHED DOWN TO FILL THE GAP
   const B = BG_BOTTOM, im = IMG.bgBottom; if (!B.on || !im) return;
