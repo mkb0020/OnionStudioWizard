@@ -61,7 +61,7 @@ const LABEL_KEYS = {
 };
 
 /* ---------- PLAYER SHEETS (ONE ROW OF 400x400 FRAMES EACH) ---------- */
-const PLAYER_FRAME = 400, SCALE = 0.5, FIXED_DT = 1 / 50; // TEMPORARILY SCALED TO 0.9 TO TEST SPRITE SHEETS
+const PLAYER_FRAME = 400, SCALE = 0.5, FIXED_DT = 1 / 50; // <- NOTE TO SELF SO I CAN FIND THIS EASILY AGAIN - THIS IS WHERE THE SCALE IS SET - 0.5 IS WHERE IT SHOULD BE BUT IF IT'S SET TO 0.9, IT'S BECAUSE I AM TESTING A NEW SPRITE SHEET
 const SHEET_DIR = 'assets/images/nova/sprites/';
 const PLAYER_SHEETS = {
   run:        { src: 'run.png',        frames: 8 },
@@ -127,7 +127,7 @@ const PLAYER_ANIMS = {
 };
 
 /* ---------- LEVEL (SAME LAYOUT AS THE KAPLAY PLAYGROUND) ---------- */
-const GROUND_Y = 460, GROUND_W = 16000, GROUND_H = 80, GROUND_TILE_W = 160;
+const GROUND_Y = 460, GROUND_W = 16000, GROUND_H = 80, GROUND_TILE_W = 381;
 const TILE_SIZE = 50, PLATFORM_H = 50, TILE_FRAME_COUNT = 6, TILE_SEED = 1337;
 const COLUMN_FRAME = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3, 4, 5], COLUMN_BASE = 6;
 const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;
@@ -279,7 +279,7 @@ async function loadAssets() {
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
   IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
-  IMG.ground = await loadImg('assets/images/map/pillars.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
+  IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
   try { IMG.bgBottom = await loadImg(BG_BOTTOM.src); } catch (e) { console.warn('[play] no floor strip (' + e.message + ')'); }
