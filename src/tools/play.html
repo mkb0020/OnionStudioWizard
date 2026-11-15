@@ -53,7 +53,7 @@ const DEFAULT_PHYS = {   // NOV 2026 "DANCER" TUNING: SNAPPY ON THE GROUND, FLOA
   coyote: 0.1,        // SECONDS OF JUMP FORGIVENESS AFTER WALKING OFF AN EDGE (WAS 0)
   // ----- NEW "FEEL" KNOBS -----
   fallGravity: 1,     // x GRAVITY WHILE FALLING (>1 = SNAPPIER FALL. 1 = SAME AS RISING)
-  apexHang: 0.35,     // x GRAVITY NEAR THE TOP OF A JUMP (|vy| < APEX_BAND). LOWER = LONGER HANG. 1 = OFF
+  apexHang: 0.3,      // x GRAVITY NEAR THE TOP OF A JUMP (|vy| < APEX_BAND). LOWER = LONGER HANG. 1 = OFF
   jumpCut: 0.5,       // x UPWARD SPEED WHEN JUMP IS RELEASED EARLY (TAP = SHORT HOP, HOLD = FULL JUMP). 1 = OFF
   jumpBuffer: 0.1,    // SECONDS A JUMP PRESSED JUST BEFORE LANDING IS REMEMBERED. 0 = OFF
   groundAccel: 10000, // px/s^2 SPEEDING UP ON THE GROUND (650 / 10000 = 0.065 s TO FULL SPEED - HIGH TRACTION)
@@ -61,7 +61,7 @@ const DEFAULT_PHYS = {   // NOV 2026 "DANCER" TUNING: SNAPPY ON THE GROUND, FLOA
   airAccel: 8000,     // px/s^2 SPEEDING UP IN THE AIR (A LITTLE SOFTER THAN GROUND = FLOWIER ARCS)
   airDecel: 5000,     // px/s^2 SLOWING DOWN IN THE AIR WHEN NO DIRECTION IS HELD
 };
-const APEX_BAND = 220;   // px/s: |vy| BELOW THIS COUNTS AS "THE TOP OF THE JUMP" FOR apexHang
+const APEX_BAND = 400;   // px/s: |vy| BELOW THIS COUNTS AS "THE TOP OF THE JUMP" FOR apexHang
 const PHYS = Object.assign({}, DEFAULT_PHYS);
 // character.json LABEL (LOWERCASE, LETTERS ONLY) -> [PHYS KEY, UNIT DIVISOR, MIN, MAX]
 const LABEL_KEYS = {
@@ -444,7 +444,7 @@ function pressJump() {
   else jumpBufT = PHYS.jumpBuffer;   // NOTHING TO JUMP FROM YET: REMEMBER THE PRESS FOR A MOMENT (JUMP BUFFER)
 }
 function releaseJump() {   // VARIABLE JUMP HEIGHT: LETTING GO WHILE STILL RISING CUTS THE UPWARD SPEED
-  if (jumpCutReady && P.vy < 0 && dashTimer <= 0) P.vy *= PHYS.jumpCut;
+  if (jumpCutReady && P.vy < -APEX_BAND && dashTimer <= 0) P.vy = Math.min(P.vy * PHYS.jumpCut, -APEX_BAND);   // ONLY WHILE CLEARLY RISING, AND NEVER BELOW THE APEX BAND (A RELEASE NEAR THE TOP CHANGES NOTHING, SO NO HITCH)
   jumpCutReady = false;
 }
 const approach = (v, target, step) => v < target ? Math.min(v + step, target) : Math.max(v - step, target);
@@ -750,7 +750,11 @@ function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
 function physics(dt) {
   P.px = P.x; P.py = P.y;
   let g = PHYS.gravity * P.gs;
-  if (!P.grounded) { if (Math.abs(P.vy) < APEX_BAND) g *= PHYS.apexHang; else if (P.vy > 0) g *= PHYS.fallGravity; }   // FLOATY TOP, SNAPPIER FALL
+  if (!P.grounded) {   // FLOATY TOP, SMOOTHLY: GRAVITY EASES DOWN TO apexHang AT THE VERY TOP AND BACK UP (NO HARD SWITCH = NO LURCH)
+    const u = Math.min(1, Math.abs(P.vy) / APEX_BAND), ease = u * u * (3 - 2 * u);   // SMOOTHSTEP: 0 AT THE PEAK, 1 AT THE EDGE OF THE BAND
+    const outside = P.vy > 0 ? PHYS.fallGravity : 1;   // WHAT GRAVITY BLENDS BACK TO: FALL GRAVITY ON THE WAY DOWN, NORMAL ON THE WAY UP
+    g *= PHYS.apexHang + (outside - PHYS.apexHang) * ease;
+  }
   P.vy += g * dt;   // VELOCITY FIRST, THEN POSITION (SEMI-IMPLICIT EULER)
   if (P.vy > PHYS.maxFall) P.vy = PHYS.maxFall;
   P.x += P.mx * dt;
