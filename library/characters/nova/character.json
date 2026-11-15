@@ -21,17 +21,17 @@
     },
     {
       "label": "Jump force",
-      "value": 1000,
+      "value": 730,
       "unit": "px/s"
     },
     {
       "label": "Gravity",
-      "value": 1800,
+      "value": 1300,
       "unit": "px/s²"
     },
     {
       "label": "Max fall speed",
-      "value": 1500,
+      "value": 1100,
       "unit": "px/s"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "label": "Wall jump force",
-      "value": 850,
+      "value": 680,
       "unit": "px/s"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "label": "Double jump force",
-      "value": 900,
+      "value": 600,
       "unit": "px/s"
     },
     {
@@ -66,8 +66,48 @@
     },
     {
       "label": "Coyote time",
-      "value": 0,
+      "value": 100,
       "unit": "ms"
+    },
+    {
+      "label": "Fall gravity",
+      "value": 1.4,
+      "unit": "×"
+    },
+    {
+      "label": "Apex hang",
+      "value": 0.55,
+      "unit": "×"
+    },
+    {
+      "label": "Jump cut",
+      "value": 0.5,
+      "unit": "×"
+    },
+    {
+      "label": "Jump buffer",
+      "value": 100,
+      "unit": "ms"
+    },
+    {
+      "label": "Ground accel",
+      "value": 10000,
+      "unit": "px/s²"
+    },
+    {
+      "label": "Ground decel",
+      "value": 14000,
+      "unit": "px/s²"
+    },
+    {
+      "label": "Air accel",
+      "value": 5000,
+      "unit": "px/s²"
+    },
+    {
+      "label": "Air decel",
+      "value": 3500,
+      "unit": "px/s²"
     },
     {
       "label": "New stat",

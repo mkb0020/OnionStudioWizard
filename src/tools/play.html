@@ -39,25 +39,37 @@
    ====================================================================== */
 
 /* ---------- PHYSICS (OVERRIDDEN BY THE CHARACTER SHEET) ---------- */
-const DEFAULT_PHYS = {
+const DEFAULT_PHYS = {   // NOV 2026 "DANCER" TUNING: SNAPPY ON THE GROUND, FLOATY AT THE TOP OF A JUMP, SHORT-ISH BASE JUMP (~200 px = 5 TILES, FULL HOLD)
   move: 650,          // px/s
-  jump: 1000,         // px/s UPWARD
-  gravity: 1800,      // px/s^2
-  maxFall: 1500,      // px/s (STOPS TUNNELING THROUGH THIN PLATFORMS)
+  jump: 730,          // px/s UPWARD (WAS 1000)
+  gravity: 1300,      // px/s^2 (WAS 1800) - LOWER = FLOATIER
+  maxFall: 1100,      // px/s (WAS 1500) (STOPS TUNNELING THROUGH THIN PLATFORMS)
   wallSlide: 150,     // px/s MAX FALL WHILE CLINGING
-  wallJump: 850,      // px/s UPWARD KICK OF A WALL JUMP
+  wallJump: 680,      // px/s UPWARD KICK OF A WALL JUMP (WAS 850)
   wallPush: 480,      // px/s PUSHED AWAY FROM THE WALL
   dash: 1500,         // px/s
-  doubleJump: 900,    // px/s UPWARD
-  airControl: 1,      // x MULTIPLIER ON SIDEWAYS SPEED WHILE AIRBORNE (1 = FULL, AS BEFORE)
-  coyote: 0,          // SECONDS OF JUMP FORGIVENESS AFTER WALKING OFF AN EDGE (0 = NONE, AS BEFORE)
+  doubleJump: 600,    // px/s UPWARD (WAS 900) - ADDS ~140 px (3.5 TILES)
+  airControl: 1,      // x MULTIPLIER ON SIDEWAYS SPEED WHILE AIRBORNE (1 = FULL)
+  coyote: 0.1,        // SECONDS OF JUMP FORGIVENESS AFTER WALKING OFF AN EDGE (WAS 0)
+  // ----- NEW "FEEL" KNOBS -----
+  fallGravity: 1.4,   // x GRAVITY WHILE FALLING (FLOATY RISE, SNAPPIER FALL. 1 = SAME AS RISING)
+  apexHang: 0.55,     // x GRAVITY NEAR THE TOP OF A JUMP (|vy| < APEX_BAND). LOWER = LONGER HANG. 1 = OFF
+  jumpCut: 0.5,       // x UPWARD SPEED WHEN JUMP IS RELEASED EARLY (TAP = SHORT HOP, HOLD = FULL JUMP). 1 = OFF
+  jumpBuffer: 0.1,    // SECONDS A JUMP PRESSED JUST BEFORE LANDING IS REMEMBERED. 0 = OFF
+  groundAccel: 10000, // px/s^2 SPEEDING UP ON THE GROUND (650 / 10000 = 0.065 s TO FULL SPEED - HIGH TRACTION)
+  groundDecel: 14000, // px/s^2 STOPPING / TURNING ON THE GROUND
+  airAccel: 5000,     // px/s^2 SPEEDING UP IN THE AIR (A LITTLE SOFTER = FLOWIER ARCS)
+  airDecel: 3500,     // px/s^2 SLOWING DOWN IN THE AIR WHEN NO DIRECTION IS HELD
 };
+const APEX_BAND = 140;   // px/s: |vy| BELOW THIS COUNTS AS "THE TOP OF THE JUMP" FOR apexHang
 const PHYS = Object.assign({}, DEFAULT_PHYS);
 // character.json LABEL (LOWERCASE, LETTERS ONLY) -> [PHYS KEY, UNIT DIVISOR, MIN, MAX]
 const LABEL_KEYS = {
   movespeed: ['move', 1, 1, 5000], jumpforce: ['jump', 1, 1, 5000], gravity: ['gravity', 1, 1, 20000], maxfallspeed: ['maxFall', 1, 50, 10000],
   wallslidespeed: ['wallSlide', 1, 1, 5000], walljumpforce: ['wallJump', 1, 1, 5000], walljumppush: ['wallPush', 1, 0, 5000],
   dashspeed: ['dash', 1, 1, 8000], doublejumpforce: ['doubleJump', 1, 1, 5000], aircontrol: ['airControl', 1, 0, 3], coyotetime: ['coyote', 1000, 0, 1000],
+  fallgravity: ['fallGravity', 1, 0.1, 5], apexhang: ['apexHang', 1, 0.05, 1], jumpcut: ['jumpCut', 1, 0, 1], jumpbuffer: ['jumpBuffer', 1000, 0, 1000],
+  groundaccel: ['groundAccel', 1, 1, 100000], grounddecel: ['groundDecel', 1, 1, 100000], airaccel: ['airAccel', 1, 1, 100000], airdecel: ['airDecel', 1, 1, 100000],
 };
 
 /* ---------- PLAYER SHEETS (ONE ROW OF 400x400 FRAMES EACH) ---------- */
@@ -301,12 +313,12 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 }
 
 /* ---------- INPUT ---------- */
-const keys = new Set(), pressQ = [];
+const keys = new Set(), pressQ = [], releaseQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
 const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
-addEventListener('keyup', e => { keys.delete(keyName(e)); });
+addEventListener('keyup', e => { const k = keyName(e); keys.delete(k); if (k === 'up' || k === 'w' || k === 'space') releaseQ.push(k); });
 addEventListener('blur', () => keys.clear());
 const down = (...n) => n.some(k => keys.has(k));
 
@@ -317,6 +329,7 @@ let runIdx = 0, runTimer = 0, visualLift = 0;
 let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0;
 let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpReady = true, airKickReady = true;
 let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
+let jumpBufT = 0, jumpCutReady = false;   // JUMP BUFFER TIMER; TRUE WHILE THE CURRENT JUMP CAN STILL BE CUT SHORT BY LETTING GO
 const airKick = { t: 0, dir: 1, hit: false, ghostAcc: 0, ghostN: 0 };
 const doubleJump = { t: 0, pre: 0, post: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };   // pre / post = TIME LEFT ON THE flipIn / flipOut FRAMES (t = TIME LEFT ON THE SPIN)
 const spells = [], swooshes = [];
@@ -326,7 +339,7 @@ let showHitboxes = false, physSource = 'defaults (Kaplay values)';
 function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 }); cancelPet();
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
-  dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0;
+  dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0; jumpBufT = 0; jumpCutReady = false; P.vx = 0;
   airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
@@ -419,14 +432,22 @@ function updateDoubleJump(dt) {
   while (doubleJump.moteAcc >= D.moteInterval) { doubleJump.moteAcc -= D.moteInterval; spawnSpiralMotes(c, ang); }
 }
 function pressJump() {
-  if (isAttacking) return;
+  if (isAttacking) { jumpBufT = PHYS.jumpBuffer; return; }
   if (P.grounded || coyoteT > 0) {
+    jumpBufT = 0; jumpCutReady = true;
     P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0; kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
   } else if (touching) {   // WALL JUMP: UP AND AWAY FROM THE WALL BEING CLUNG TO
+    jumpBufT = 0; jumpCutReady = true;
     wallJumpPushDir = touching.dir * -1; P.vy = -PHYS.wallJump; wallJumpLock = WALL_JUMP_LOCK_TIME; touching = null;
     P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart'); kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
-  } else if (DOUBLE_JUMP.enabled && airJumpReady) startDoubleJump();
+  } else if (DOUBLE_JUMP.enabled && airJumpReady) { jumpBufT = 0; jumpCutReady = true; startDoubleJump(); }
+  else jumpBufT = PHYS.jumpBuffer;   // NOTHING TO JUMP FROM YET: REMEMBER THE PRESS FOR A MOMENT (JUMP BUFFER)
 }
+function releaseJump() {   // VARIABLE JUMP HEIGHT: LETTING GO WHILE STILL RISING CUTS THE UPWARD SPEED
+  if (jumpCutReady && P.vy < 0 && dashTimer <= 0) P.vy *= PHYS.jumpCut;
+  jumpCutReady = false;
+}
+const approach = (v, target, step) => v < target ? Math.min(v + step, target) : Math.max(v - step, target);
 
 /* ---------- ONE FIXED STEP ---------- */
 /* ---------- CRITTERS (FRIENDLY WANDERERS: NO COMBAT, NO PLAYER COLLISION) ----------
@@ -660,6 +681,11 @@ function tick(dt) {
     else if (k === 'n') crittersOn = !crittersOn;
     else if (k === 'b') ARCADE.on = !ARCADE.on;
   }
+  while (releaseQ.length) { releaseQ.shift(); if (!down('up', 'w', 'space')) releaseJump(); }
+  if (jumpBufT > 0) {   // A BUFFERED JUMP FIRES THE MOMENT SHE CAN JUMP; IF THE KEY IS ALREADY UP BY THEN IT IS A SHORT HOP
+    jumpBufT -= dt;
+    if (!isAttacking && pet.phase === 'none' && (P.grounded || coyoteT > 0 || touching)) { pressJump(); if (!down('up', 'w', 'space')) releaseJump(); }
+  }
   if (pet.phase !== 'none' && down('left', 'right', 'a', 'd')) cancelPet();
   P.mx = 0;
   if (isAttacking) {
@@ -670,6 +696,7 @@ function tick(dt) {
   stepCritters(dt);
   if (pet.msgT > 0) pet.msgT -= dt;
   updateAirKick(dt); updateDoubleJump(dt);
+  if (isAttacking || pet.phase !== 'none') P.vx = P.mx;   // ATTACKS / HEAD PAT DRIVE SIDEWAYS SPEED DIRECTLY (NO ACCEL SMOOTHING)
   if (P.grounded) coyoteT = PHYS.coyote; else if (coyoteT > 0) coyoteT -= dt;
   physics(dt);
   stepAnim(dt);
@@ -683,12 +710,17 @@ function tick(dt) {
 function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
   let moving = false;
   if (dashCooldown > 0) dashCooldown -= dt;
-  if (dashTimer > 0) { dashTimer -= dt; P.mx = dashDir * PHYS.dash; P.flip = dashDir === -1; if (!P.grounded) P.vy = 0; moving = true; }
-  else if (wallJumpLock > 0) { wallJumpLock -= dt; P.mx = wallJumpPushDir * PHYS.wallPush; P.flip = wallJumpPushDir === -1; moving = true; }
+  if (dashTimer > 0) { dashTimer -= dt; P.mx = P.vx = dashDir * PHYS.dash; P.flip = dashDir === -1; if (!P.grounded) P.vy = 0; moving = true; }
+  else if (wallJumpLock > 0) { wallJumpLock -= dt; P.mx = P.vx = wallJumpPushDir * PHYS.wallPush; P.flip = wallJumpPushDir === -1; moving = true; }
   else {
     const air = P.grounded ? 1 : PHYS.airControl;
-    if (down('left', 'a')) { P.mx -= PHYS.move * air; P.flip = true; moving = true; }
-    if (down('right', 'd')) { P.mx += PHYS.move * air; P.flip = false; moving = true; }
+    let target = 0;
+    if (down('left', 'a')) { target -= PHYS.move * air; P.flip = true; moving = true; }
+    if (down('right', 'd')) { target += PHYS.move * air; P.flip = false; moving = true; }
+    // ACCELERATE TOWARD THE TARGET SPEED. SPEEDING UP USES accel; STOPPING OR TURNING AROUND USES decel. AFTER A DASH THIS ALSO GIVES A SHORT SLIDE-OUT
+    const speedingUp = target !== 0 && Math.sign(target) === Math.sign(P.vx) && Math.abs(target) > Math.abs(P.vx) || P.vx === 0;
+    const rate = P.grounded ? (speedingUp ? PHYS.groundAccel : PHYS.groundDecel) : (speedingUp ? PHYS.airAccel : PHYS.airDecel);
+    P.vx = approach(P.vx, target, rate * dt); P.mx = P.vx;
   }
   if (P.vy > PHYS.maxFall) P.vy = PHYS.maxFall;
   const grounded = P.grounded;
@@ -717,11 +749,13 @@ function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
 /* ---------- PHYSICS (AABB, X THEN Y, KAPLAY'S STEP ORDER) ---------- */
 function physics(dt) {
   P.px = P.x; P.py = P.y;
-  P.vy += PHYS.gravity * P.gs * dt;   // VELOCITY FIRST, THEN POSITION (SEMI-IMPLICIT EULER)
+  let g = PHYS.gravity * P.gs;
+  if (!P.grounded) { if (Math.abs(P.vy) < APEX_BAND) g *= PHYS.apexHang; else if (P.vy > 0) g *= PHYS.fallGravity; }   // FLOATY TOP, SNAPPIER FALL
+  P.vy += g * dt;   // VELOCITY FIRST, THEN POSITION (SEMI-IMPLICIT EULER)
   if (P.vy > PHYS.maxFall) P.vy = PHYS.maxFall;
   P.x += P.mx * dt;
   if (P.mx !== 0) for (const s of solids) {   // SIDES: ONLY SOLIDS BLOCK. ONE-WAY PLATFORMS IGNORE THE SIDES
-    if (P.y - HIT_H < s.y + s.h && P.y > s.y && P.x - HIT_W / 2 < s.x + s.w && P.x + HIT_W / 2 > s.x) P.x = P.mx > 0 ? s.x - HIT_W / 2 : s.x + s.w + HIT_W / 2;
+    if (P.y - HIT_H < s.y + s.h && P.y > s.y && P.x - HIT_W / 2 < s.x + s.w && P.x + HIT_W / 2 > s.x) { P.x = P.mx > 0 ? s.x - HIT_W / 2 : s.x + s.w + HIT_W / 2; P.vx = 0; }
   }
   const prevBottom = P.y; P.y += P.vy * dt; P.grounded = false;
   const l = P.x - HIT_W / 2, r = P.x + HIT_W / 2;
