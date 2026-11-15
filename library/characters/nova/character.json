@@ -21,7 +21,7 @@
     },
     {
       "label": "Jump force",
-      "value": 920,
+      "value": 960,
       "unit": "px/s"
     },
     {
@@ -41,7 +41,7 @@
     },
     {
       "label": "Wall jump force",
-      "value": 830,
+      "value": 860,
       "unit": "px/s"
     },
     {
@@ -56,7 +56,7 @@
     },
     {
       "label": "Double jump force",
-      "value": 750,
+      "value": 780,
       "unit": "px/s"
     },
     {
@@ -76,7 +76,7 @@
     },
     {
       "label": "Apex hang",
-      "value": 0.3,
+      "value": 0.45,
       "unit": "×"
     },
     {
