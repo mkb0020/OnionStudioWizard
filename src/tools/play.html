@@ -147,7 +147,7 @@ const BG = '#030013';
    speed = HOW MUCH OF THE CAMERA'S MOVEMENT THE COLUMNS FOLLOW (1 = LOCKED TO THE LEVEL, 0 = LOCKED TO THE SCREEN). spacing = GAP BETWEEN COLUMN CENTRES, IN COLUMN WIDTHS.
    VERTICAL: vBg / vCol = HOW MUCH THE BACKGROUND / THE COLUMNS FOLLOW THE CAMERA'S HEIGHT (FAR = SMALL, NEAR = BIGGER). refY = THE CAMERA HEIGHT WHERE THEY SIT EXACTLY AS DRAWN.
    WHEN THE BACKGROUND SLIDES, THE GAP AT ITS TOP / BOTTOM IS FILLED BY STRETCHING ITS EDGE ROW (THE DARK BANDS), SO NO NEW ART IS NEEDED. */
-const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: 24, bottomY: 399, speed: 0.5, spacing: 4.5, vBg: 0.12, vCol: 0.2, refY: GROUND_Y - CAM_Y_OFFSET, on: true };
+const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/images/map/parallax_column.png', bgW: 800, bgH: 450, topY: -20, bottomY: 373, speed: 0.5, spacing: 4.5, vBg: 0.12, vCol: 0.2, refY: GROUND_Y - CAM_Y_OFFSET, on: true };
 /* ---------- BACKDROP ARCADES: LAYERS OF REPEATING background_column.png, BETWEEN background.png AND THE PARALLAX COLUMNS (B TOGGLES) ----------
    DRAWN FAR -> NEAR: EACH LAYER IS BIGGER, DARKER AND SCROLLS FASTER THAN THE ONE BEFORE, AND ALL OF THEM ARE SLOWER THAN parallax_column (speed 0.5), SO THEY READ AS FARTHER AWAY.
    SOURCE PX (background_column.png IS 1000 x 1000): cropX / cropW = ONE SEAMLESS TILE (THE HALF ARCHES ON EACH SIDE JOIN UP), baseY = THE ROW WHERE THE COLUMN BASE ENDS,
@@ -166,7 +166,7 @@ const ARCADE = {
 };
 /* THE FLOOR STRIP (background_bottom.png): PINNED TO THE BOTTOM OF THE SCREEN, OVER THE BACKDROP, SO NOTHING SHOWS THROUGH UNDER THE LEVEL. top / bot = ITS OPAQUE ROWS (SOURCE PX).
    height = DRAWN HEIGHT AS A FRACTION OF THE WINDOW HEIGHT. speed / v = CAMERA FOLLOW. overParallax = DRAW IT OVER parallax_column TOO (false = BETWEEN THE ARCADES AND parallax_column). */
-const BG_BOTTOM = { src: 'assets/images/map/background_bottom.png', w: 1000, top: 746, bot: 998, height: 0.2, speed: 0.6, v: 0.3, overParallax: true, on: true };
+const BG_BOTTOM = { src: 'assets/images/map/background_bottom.png', w: 1000, top: 746, bot: 998, height: 0.17, speed: 0.6, v: 0.3, overParallax: true, on: true };
 let FALL_Y = GROUND_Y + 300, FLOOR_MAX = GROUND_Y, SPAWN = { x: 100, y: GROUND_Y };   // PER LEVEL: RESPAWN DEPTH, CAPE FLOOR CAP, WHERE THE PLAYER STARTS
 
 function makeRng(seed) {   // MULBERRY32: THE SAME "RANDOM" TILE PATTERN AS THE KAPLAY BUILD
