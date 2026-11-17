@@ -113,6 +113,13 @@ header .tb.hb svg{width:16px;height:16px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
 #view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev{pointer-events:none}
 #ruler[hidden]{display:none}
+/* tile mode grid: plain DOM over the canvases (no pixels, never exported) */
+#tileGrid{pointer-events:none;overflow:hidden;--cs:250px;
+  background-image:linear-gradient(90deg,#00ffffaa 2px,transparent 2px),linear-gradient(#00ffffaa 2px,transparent 2px);
+  background-size:var(--cs) var(--cs);background-position:-1px -1px;box-shadow:inset -1px -1px 0 #00ffffaa}
+#tileGrid[hidden],#tileSel[hidden]{display:none}
+#tileSel{position:absolute;box-shadow:inset 0 0 0 3px #ff69b4,0 0 14px #ff69b4aa}
+#tileGrid.dim #tileSel{box-shadow:inset 0 0 0 3px #ff69b4,0 0 0 2000px #17003240}
 #world.pixview canvas{image-rendering:pixelated}
 #cursor{position:absolute;pointer-events:none;border:1.5px solid #000;border-radius:50%;
   box-shadow:0 0 0 1px #fff;transform:translate(-50%,-50%);display:none;z-index:4}
@@ -393,7 +400,22 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="pose" title="Pose guide (F): a stick figure whose bones turn but never stretch, for one-shot moves"><svg viewBox="0 0 24 24"><circle cx="8" cy="4" r="2"/><path d="M8 6.5l1 6"/><path d="M8.5 8.5l-3.5 3M8.5 8.5l4 1.5"/><path d="M9 12.5l-2.5 4.5L7 21"/><path d="M9 12.5l6 1 6-3"/></svg></button>
       <button class="tb" data-tool="squash" title="Squash &amp; stretch (S): squash or stretch a layer, keeping its volume; ANIMATE sets it per frame"><svg viewBox="0 0 24 24"><ellipse cx="7" cy="17" rx="5" ry="3"/><ellipse cx="17" cy="10" rx="3" ry="7"/><path d="M7 4v6M5 8l2 2 2-2" opacity=".7"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
+      <button class="tb" id="tileBtn" title="Tile mode: split the canvas into a grid; every stroke, fill, move and transform stays inside one cell"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M7.5 3v18M12 3v18M16.5 3v18M3 7.5h18M3 12h18M3 16.5h18" opacity=".7"/><rect x="12" y="7.5" width="4.5" height="4.5" fill="currentColor" stroke="none"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
+      </div>
+    </div>
+
+    <div class="sec" id="tileSec" hidden>
+      <h2>Tiles <span class="sub">each cell is its own space</span></h2>
+      <div class="seg" id="tileN"><button data-n="2">2&times;2</button><button data-n="4" class="on">4&times;4</button><button data-n="5">5&times;5</button><button data-n="8">8&times;8</button></div>
+      <div class="onion-row" style="margin-top:8px"><span class="lbl">CELL</span><output id="tileCellOut" style="flex:1;font-family:var(--mono);font-size:11px;color:var(--cy)">TAP A CELL</output></div>
+      <div class="onion-row">
+        <button class="btn sm" id="tileClear" style="flex:1" title="Clear the selected cell on this layer (ALL FRAMES in the layer menu: every frame)">CLEAR</button>
+        <button class="btn sm" id="tileCopy" style="flex:1" title="Copy the selected cell of this layer">COPY</button>
+        <button class="btn sm" id="tilePaste" style="flex:1" title="Replace the selected cell with the copied one (works across frames)">PASTE</button>
+      </div>
+      <div class="onion-row" style="margin-bottom:0">
+        <button class="tgl on" id="tileDim" style="width:auto;flex:1" title="Dim the other cells so the one you are on stands out">DIM OTHERS</button>
       </div>
     </div>
 
@@ -777,6 +799,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="posePrev" width="1000" height="1000"></canvas>
       <canvas id="sqPrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
+      <div id="tileGrid" hidden><div id="tileSel" hidden></div></div>
     </div>
     <div id="target"></div>
     <div id="cursor"></div>
@@ -1125,7 +1148,65 @@ const Engine = (() => {
       this.fps = 12;
       this.history = new History();
       this.dirty = false;            // true when there is work not yet exported
+      // TILE MODE: the canvas is split into an n x n grid and every edit stays inside one cell (sel), as if each
+      // cell were its own layer. No extra canvases: edits are clipped to the cell, and anything that writes pixels
+      // directly is put back outside the cell from the "before" copy every edit already keeps (see PixelEdit).
+      this.tile = { on: false, n: 4, sel: -1 };
       scratch.width = w; scratch.height = h;
+    }
+    // Cell i (row-major) of an n x n grid. Edges are rounded so the cells always tile the canvas exactly.
+    cellRect(i, n = this.tile.n) {
+      const cx = i % n, cy = (i / n) | 0, W = this.width, H = this.height;
+      const x0 = Math.round(cx * W / n), x1 = Math.round((cx + 1) * W / n), y0 = Math.round(cy * H / n), y1 = Math.round((cy + 1) * H / n);
+      return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, i };
+    }
+    cellAt(x, y) {
+      const n = this.tile.n, W = this.width, H = this.height;
+      const ax = v => Math.min(n - 1, Math.max(0, Math.floor(v * n / W))), ay = v => Math.min(n - 1, Math.max(0, Math.floor(v * n / H)));
+      let cx = ax(x), cy = ay(y);
+      const r = this.cellRect(cy * n + cx);
+      if (x < r.x && cx > 0) cx--; else if (x >= r.x + r.w && cx < n - 1) cx++;
+      if (y < r.y && cy > 0) cy--; else if (y >= r.y + r.h && cy < n - 1) cy++;
+      return cy * n + cx;
+    }
+    // The rectangle edits are limited to: the selected cell in tile mode, else null (= the whole layer).
+    region() {
+      const t = this.tile;
+      return t.on && t.sel >= 0 && t.sel < t.n * t.n ? this.cellRect(t.sel) : null;
+    }
+    // Cell helpers (tile mode). Each works on the selected cell of the target layers; one undo step.
+    clearCell(allFrames) {
+      const r = this.region(); if (!r) return 0;
+      const layers = this.targetLayers(allFrames).filter(l => !l.locked || l === this.layer);
+      const before = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
+      const hit = layers.filter((l, k) => before[k].data.some((v, j) => (j & 3) === 3 && v));
+      if (!hit.length) return 0;
+      const bf = hit.map(l => before[layers.indexOf(l)]);
+      hit.forEach(l => l.ctx.clearRect(r.x, r.y, r.w, r.h));
+      return this._cellEntry('Clear cell', hit, r, bf);
+    }
+    copyCell() { const r = this.region(); return r ? this.layer.ctx.getImageData(r.x, r.y, r.w, r.h) : null; }
+    pasteCell(img, allFrames) {
+      const r = this.region(); if (!r || !img) return 0;
+      const layers = this.targetLayers(allFrames);
+      const before = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
+      const t = makeCanvas(img.width, img.height); t.getContext('2d').putImageData(img, 0, 0);
+      layers.forEach(l => {                            // replace the cell; a cell of another size is scaled to fit
+        l.ctx.clearRect(r.x, r.y, r.w, r.h);
+        l.ctx.save(); l.ctx.imageSmoothingEnabled = true; l.ctx.imageSmoothingQuality = 'high';
+        l.ctx.drawImage(t, r.x, r.y, r.w, r.h); l.ctx.restore();
+      });
+      return this._cellEntry('Paste cell', layers, r, before);
+    }
+    _cellEntry(label, layers, r, before) {
+      const after = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
+      this.dirty = true; layers.forEach(l => l.ver++);
+      this.history.push({
+        label, frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * r.w * r.h * 8,
+        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], r.x, r.y)),
+        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], r.x, r.y))
+      });
+      return layers.length;
     }
     get frame() { return this.frames[this.currentFrame]; }
     // Every frame has its own layers and its own selected layer.
@@ -1373,16 +1454,17 @@ const Engine = (() => {
     // allFrames also applies it to the same-named layer in every other frame. One undo step either way.
     transformLayer(op, v, allFrames) {
       const w = this.width, h = this.height;
+      const r = this.region() || { x: 0, y: 0, w, h };    // tile mode: only the selected cell, turning round its own center
       const layers = this.targetLayers(allFrames);
-      const before = layers.map(l => l.ctx.getImageData(0, 0, w, h));
-      layers.forEach(l => applyTransform(l, w, h, op, v));
-      const after = layers.map(l => l.ctx.getImageData(0, 0, w, h));
+      const before = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
+      layers.forEach(l => applyTransform(l, w, h, op, v, r));
+      const after = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
       this.dirty = true; layers.forEach(l => l.ver++);
-      const label = { flipH: 'Flip horizontal', flipV: 'Flip vertical', rot: 'Rotate layer', scale: 'Scale layer' }[op];
+      const label = { flipH: 'Flip horizontal', flipV: 'Flip vertical', rot: 'Rotate layer', scale: 'Scale layer' }[op] + (r.w < w || r.h < h ? ' (cell)' : '');
       this.history.push({
-        label, frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
-        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], 0, 0)),
-        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], 0, 0))
+        label, frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * r.w * r.h * 8,
+        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], r.x, r.y)),
+        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], r.x, r.y))
       });
       return layers.length;
     }
@@ -1396,11 +1478,13 @@ const Engine = (() => {
     centerLayer(axis, allFrames) { return this.alignLayer(axis, allFrames); }
     alignLayer(mode, allFrames) {
       const axis = mode;
-      const w = this.width, h = this.height;
+      const W = this.width, H = this.height;
+      const R = this.region() || { x: 0, y: 0, w: W, h: H };   // tile mode: measured and moved inside the selected cell
+      const w = R.w, h = R.h;
       const todo = [];
       let empty = 0;
       for (const l of this.targetLayers(allFrames)) {
-        const d = l.ctx.getImageData(0, 0, w, h), px = d.data;
+        const d = l.ctx.getImageData(R.x, R.y, w, h), px = d.data;
         let x0 = w, y0 = h, x1 = -1, y1 = -1;
         for (let y = 0; y < h; y++) for (let x = 0, i = (y * w) * 4 + 3; x < w; x++, i += 4) {
           if (px[i]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
@@ -1420,16 +1504,16 @@ const Engine = (() => {
       if (!todo.length) return { moved: 0, empty };
       const tmp = makeCanvas(w, h), tc = tmp.getContext('2d');
       for (const t of todo) {
-        tc.globalCompositeOperation = 'copy'; tc.drawImage(t.l.canvas, 0, 0);
-        t.l.ctx.clearRect(0, 0, w, h); t.l.ctx.drawImage(tmp, t.dx, t.dy);
-        t.after = t.l.ctx.getImageData(0, 0, w, h);
+        tc.putImageData(t.before, 0, 0);
+        t.l.ctx.clearRect(R.x, R.y, w, h); t.l.ctx.drawImage(tmp, R.x + t.dx, R.y + t.dy);
+        t.after = t.l.ctx.getImageData(R.x, R.y, w, h);
       }
       const layers = todo.map(t => t.l);
       this.dirty = true; layers.forEach(l => l.ver++);
       this.history.push({
-        label: ['left', 'right', 'top', 'bottom'].includes(axis) ? 'Align layer ' + axis : 'Center layer', frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
-        undo: () => todo.forEach(t => t.l.ctx.putImageData(t.before, 0, 0)),
-        redo: () => todo.forEach(t => t.l.ctx.putImageData(t.after, 0, 0))
+        label: (['left', 'right', 'top', 'bottom'].includes(axis) ? 'Align layer ' + axis : 'Center layer') + (w < W || h < H ? ' (cell)' : ''), frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
+        undo: () => todo.forEach(t => t.l.ctx.putImageData(t.before, R.x, R.y)),
+        redo: () => todo.forEach(t => t.l.ctx.putImageData(t.after, R.x, R.y))
       });
       return { moved: todo.length, empty };
     }
@@ -1446,6 +1530,23 @@ const Engine = (() => {
       const s = scratch.getContext('2d');
       s.globalCompositeOperation = 'copy'; s.drawImage(layer.canvas, 0, 0); s.globalCompositeOperation = 'source-over';
       this.box = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+      // Tile mode: clip the layer to the cell while the edit is open, so the stroke is cut at the cell edge live.
+      this.cell = project.region(); this._clipped = false;
+      if (this.cell) {
+        const c = layer.ctx, r = this.cell;
+        c.save(); c.beginPath(); c.rect(r.x, r.y, r.w, r.h); c.clip(); this._clipped = true;
+      }
+    }
+    _unclip() { if (this._clipped) { this._clipped = false; this.layer.ctx.restore(); } }
+    // putImageData ignores the clip (auto-tidy, wrinkle, texture write pixels that way), so on commit anything
+    // outside the cell is copied back from the "before" snapshot. Only needed when the edit reached past the cell.
+    _guard() {
+      const r = this.cell, b = this.box;
+      if (b.x0 >= r.x && b.y0 >= r.y && b.x1 <= r.x + r.w && b.y1 <= r.y + r.h) return;
+      const c = this.layer.ctx, W = this.project.width, H = this.project.height;
+      c.save(); c.beginPath(); c.rect(0, 0, W, H); c.rect(r.x, r.y, r.w, r.h); c.clip('evenodd');
+      c.globalCompositeOperation = 'copy'; c.drawImage(scratch, 0, 0); c.restore();
+      b.x0 = Math.max(b.x0, r.x); b.y0 = Math.max(b.y0, r.y); b.x1 = Math.min(b.x1, r.x + r.w); b.y1 = Math.min(b.y1, r.y + r.h);
     }
     touch(x, y, r) {
       const b = this.box;
@@ -1453,6 +1554,8 @@ const Engine = (() => {
       if (x + r > b.x1) b.x1 = x + r; if (y + r > b.y1) b.y1 = y + r;
     }
     commit(label = 'Draw') {
+      this._unclip();
+      if (this.cell) this._guard();
       const p = this.project, b = this.box;
       const x0 = Math.max(0, Math.floor(b.x0)), y0 = Math.max(0, Math.floor(b.y0));
       const x1 = Math.min(p.width, Math.ceil(b.x1)), y1 = Math.min(p.height, Math.ceil(b.y1));
@@ -1470,6 +1573,7 @@ const Engine = (() => {
       return true;
     }
     cancel() {
+      this._unclip();
       const c = this.layer.ctx;
       c.save(); c.globalCompositeOperation = 'copy'; c.drawImage(scratch, 0, 0); c.restore();
     }
@@ -1501,10 +1605,12 @@ const Engine = (() => {
   class LayerAdjust {
     constructor(project, allFrames) {
       this.p = project; const w = project.width, h = project.height;
+      this.r = project.region() || { x: 0, y: 0, w, h };   // tile mode: only the selected cell
+      const r = this.r;
       this.layers = project.targetLayers(allFrames);      // this layer, plus same-named layers in other frames
       this.cur = project.layer; this.frame = project.frame;
-      this.base = this.cur.ctx.getImageData(0, 0, w, h);
-      this.work = this.cur.ctx.createImageData(w, h);
+      this.base = this.cur.ctx.getImageData(r.x, r.y, r.w, r.h);
+      this.work = this.cur.ctx.createImageData(r.w, r.h);
       this.amount = 0;
     }
     set(amount) {
@@ -1512,27 +1618,28 @@ const Engine = (() => {
       if (amount === this.amount) return false;
       this.amount = amount;
       adjustBrightness(this.base.data, this.work.data, amount);
-      this.cur.ctx.putImageData(this.work, 0, 0);
+      this.cur.ctx.putImageData(this.work, this.r.x, this.r.y);
       return true;
     }
-    cancel() { if (this.amount) { this.cur.ctx.putImageData(this.base, 0, 0); this.amount = 0; } }
+    cancel() { if (this.amount) { this.cur.ctx.putImageData(this.base, this.r.x, this.r.y); this.amount = 0; } }
     commit() {
       if (!this.amount) return false;
-      const p = this.p, w = p.width, h = p.height, layers = this.layers, a = this.amount;
-      const before = layers.map(l => l === this.cur ? this.base : l.ctx.getImageData(0, 0, w, h));
+      const p = this.p, r = this.r, layers = this.layers, a = this.amount;
+      const before = layers.map(l => l === this.cur ? this.base : l.ctx.getImageData(r.x, r.y, r.w, r.h));
       const after = layers.map((l, k) => {
         if (l === this.cur) return this.work;
-        const o = l.ctx.createImageData(w, h); adjustBrightness(before[k].data, o.data, a); l.ctx.putImageData(o, 0, 0); return o;
+        const o = l.ctx.createImageData(r.w, r.h); adjustBrightness(before[k].data, o.data, a); l.ctx.putImageData(o, r.x, r.y); return o;
       });
       p.dirty = true; layers.forEach(l => l.ver++);
       p.history.push({
-        label: a < 0 ? 'Darken layer' : 'Brighten layer', frame: this.frame, layer: this.cur, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
-        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], 0, 0)),
-        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], 0, 0))
+        label: (a < 0 ? 'Darken ' : 'Brighten ') + (r.w < p.width || r.h < p.height ? 'cell' : 'layer'), frame: this.frame, layer: this.cur, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * r.w * r.h * 8,
+        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], r.x, r.y)),
+        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], r.x, r.y))
       });
       this.amount = 0; return true;
     }
   }
+
 
   // Whole-layer move by whole pixels. set(dx, dy) re-renders from the pixels as they were when the
   // shift began, so dragging off the edge and back loses nothing; commit() records one undo step.
@@ -1540,30 +1647,35 @@ const Engine = (() => {
   class LayerShift {
     constructor(project, allFrames) {
       this.p = project; const w = project.width, h = project.height;
+      this.r = project.region() || { x: 0, y: 0, w, h };   // tile mode: only the selected cell moves, cut at its edges
+      const r = this.r;
       this.layers = project.targetLayers(allFrames);      // this layer, plus same-named layers in other frames
       this.frame = project.frame; this.layer = project.layer;
-      this.src = this.layers.map(l => { const c = makeCanvas(w, h); c.getContext('2d').drawImage(l.canvas, 0, 0); return c; });
+      this.src = this.layers.map(l => { const c = makeCanvas(r.w, r.h); c.getContext('2d').drawImage(l.canvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); return c; });
       this.dx = 0; this.dy = 0;
     }
     set(dx, dy) {
       dx = Math.round(dx); dy = Math.round(dy);
       if (dx === this.dx && dy === this.dy) return false;
       this.dx = dx; this.dy = dy;
-      const w = this.p.width, h = this.p.height;
-      this.layers.forEach((l, k) => { l.ctx.clearRect(0, 0, w, h); l.ctx.drawImage(this.src[k], dx, dy); });
+      const r = this.r;
+      this.layers.forEach((l, k) => {
+        const c = l.ctx; c.save(); c.beginPath(); c.rect(r.x, r.y, r.w, r.h); c.clip();
+        c.clearRect(r.x, r.y, r.w, r.h); c.drawImage(this.src[k], r.x + dx, r.y + dy); c.restore();
+      });
       return true;
     }
     cancel() { this.set(0, 0); this.src = null; }
     commit() {
       if (!this.dx && !this.dy) { this.src = null; return false; }
-      const p = this.p, w = p.width, h = p.height, layers = this.layers;
-      const before = this.src.map(c => c.getContext('2d').getImageData(0, 0, w, h));
-      const after = layers.map(l => l.ctx.getImageData(0, 0, w, h));
+      const p = this.p, r = this.r, layers = this.layers;
+      const before = this.src.map(c => c.getContext('2d').getImageData(0, 0, r.w, r.h));
+      const after = layers.map(l => l.ctx.getImageData(r.x, r.y, r.w, r.h));
       this.src = null; p.dirty = true; layers.forEach(l => l.ver++);
       p.history.push({
-        label: 'Move layer', frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * w * h * 8,
-        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], 0, 0)),
-        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], 0, 0))
+        label: r.w < p.width || r.h < p.height ? 'Move cell' : 'Move layer', frame: this.frame, layer: this.layer, touched: layers, thumbsAll: layers.length > 1, bytes: layers.length * r.w * r.h * 8,
+        undo: () => layers.forEach((l, k) => l.ctx.putImageData(before[k], r.x, r.y)),
+        redo: () => layers.forEach((l, k) => l.ctx.putImageData(after[k], r.x, r.y))
       });
       return true;
     }
@@ -1946,8 +2058,9 @@ const Engine = (() => {
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const q of Q) { if (q.x < x0) x0 = q.x; if (q.y < y0) y0 = q.y; if (q.x > x1) x1 = q.x; if (q.y > y1) y1 = q.y; }
     const pad = Math.ceil(reach + 1.2 * w + 6), p = edit.project;
-    const rx = Math.max(0, Math.floor(x0 - pad)), ry = Math.max(0, Math.floor(y0 - pad));
-    const rw = Math.min(p.width, Math.ceil(x1 + pad)) - rx, rh = Math.min(p.height, Math.ceil(y1 + pad)) - ry;
+    const L = edit.cell || { x: 0, y: 0, w: p.width, h: p.height };   // tile mode: never fuse with ink in the next cell
+    const rx = Math.max(L.x, Math.floor(x0 - pad)), ry = Math.max(L.y, Math.floor(y0 - pad));
+    const rw = Math.min(L.x + L.w, Math.ceil(x1 + pad)) - rx, rh = Math.min(L.y + L.h, Math.ceil(y1 + pad)) - ry;
     if (rw <= 0 || rh <= 0) return false;
     const src = scratch.getContext('2d').getImageData(rx, ry, rw, rh), data = src.data;
     const alphaAt = (x, y) => (x < rx || y < ry || x >= rx + rw || y >= ry + rh) ? 0 : data[((y - ry) * rw + (x - rx)) * 4 + 3];
@@ -1989,14 +2102,17 @@ const Engine = (() => {
   // Whole-layer transform about the center of the frame. The canvas size never changes, so
   // rotating or scaling up can push content off the edge (undo brings it back).
   let xfTmp = null;
-  function applyTransform(layer, w, h, op, v) {
-    if (!xfTmp || xfTmp.width !== w || xfTmp.height !== h) xfTmp = makeCanvas(w, h);
+  // r (optional) = a cell {x, y, w, h}: only that cell turns, round its own center, and is cut at its edges.
+  function applyTransform(layer, w, h, op, v, r) {
+    r = r || { x: 0, y: 0, w, h };
+    if (!xfTmp || xfTmp.width !== r.w || xfTmp.height !== r.h) xfTmp = makeCanvas(r.w, r.h);
     const t = xfTmp.getContext('2d');
-    t.globalCompositeOperation = 'copy'; t.drawImage(layer.canvas, 0, 0); t.globalCompositeOperation = 'source-over';
+    t.globalCompositeOperation = 'copy'; t.drawImage(layer.canvas, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h); t.globalCompositeOperation = 'source-over';
     const c = layer.ctx;
-    c.save(); c.clearRect(0, 0, w, h);
+    c.save(); c.clearRect(r.x, r.y, r.w, r.h);
+    c.beginPath(); c.rect(r.x, r.y, r.w, r.h); c.clip();
     c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
-    c.translate(w / 2, h / 2);
+    c.translate(r.x + r.w / 2, r.y + r.h / 2);
     if (op === 'flipH') c.scale(-1, 1);
     else if (op === 'flipV') c.scale(1, -1);
     else if (op === 'scale') c.scale(v, v);
@@ -2006,7 +2122,7 @@ const Engine = (() => {
         c.transform(...[[1, 0, 0, 1], [0, 1, -1, 0], [-1, 0, 0, -1], [0, -1, 1, 0]][k], 0, 0);
       } else c.rotate(v * Math.PI / 180);
     }
-    c.translate(-w / 2, -h / 2); c.drawImage(xfTmp, 0, 0);
+    c.translate(-r.w / 2, -r.h / 2); c.drawImage(xfTmp, 0, 0);
     c.restore();
   }
 
@@ -2045,7 +2161,13 @@ const Engine = (() => {
           if (k === 'blurCv') blurCv = n; else if (k === 'blurWk') blurWk = n; else blurMk = n;
         }
       }
-      makeBlurred(scratch, 0.6 + (o.strength / 100) * 10);     // sigma 0.6 - 10.6 px
+      let src = scratch;
+      if (edit.cell) {                                         // tile mode: blur only this cell's pixels, so the next cell never smears in
+        const r = edit.cell, k = blurWk.getContext('2d');
+        k.globalCompositeOperation = 'source-over'; k.clearRect(0, 0, this.w, this.h);
+        k.drawImage(scratch, r.x, r.y, r.w, r.h, r.x, r.y, r.w, r.h); src = blurWk;
+      }
+      makeBlurred(src, 0.6 + (o.strength / 100) * 10);     // sigma 0.6 - 10.6 px
       this.sprite = makeDab(this.size);
       this.last = null;
     }
@@ -2510,25 +2632,30 @@ const Engine = (() => {
   // Fill bucket. Finds the region by reading `source` (a Layer, or 'all' for the visible composite)
   // and paints it onto `target`. tol is 0-255, expand is 0-2 px. One undo step.
   function bucketFill(project, o) {
-    const w = project.width, h = project.height, x = Math.floor(o.x), y = Math.floor(o.y);
-    if (x < 0 || y < 0 || x >= w || y >= h) return false;
+    const W = project.width, H = project.height, X = Math.floor(o.x), Y = Math.floor(o.y);
+    if (X < 0 || Y < 0 || X >= W || Y >= H) return false;
+    // Tile mode: the fill only sees the cell it was clicked in, so the cell edge acts as a wall.
+    const R = project.region() || { x: 0, y: 0, w: W, h: H };
+    if (X < R.x || Y < R.y || X >= R.x + R.w || Y >= R.y + R.h) return false;
+    const w = R.w, h = R.h, x = X - R.x, y = Y - R.y;
     let srcCanvas;
-    if (o.source === 'all') { srcCanvas = makeCanvas(w, h); composite(srcCanvas.getContext('2d'), project.frame); }
+    if (o.source === 'all') { srcCanvas = makeCanvas(W, H); composite(srcCanvas.getContext('2d'), project.frame); }
     else srcCanvas = o.source.canvas;
-    const d = srcCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+    const d = srcCanvas.getContext('2d').getImageData(R.x, R.y, w, h).data;
     const res = floodMask(d, w, h, x, y, o.tol);
     if (!res.count) return false;
     const grown = o.expand > 0 ? dilateMask(res.mask, w, h, o.expand, res.box) : res;
     const { x0, y0, x1, y1 } = grown.box, bw = x1 - x0 + 1, bh = y1 - y0 + 1, m = grown.mask;
-    const hex = parseInt(o.color.slice(1), 16), R = (hex >> 16) & 255, G = (hex >> 8) & 255, B = hex & 255;
+    const hex = parseInt(o.color.slice(1), 16), Rc = (hex >> 16) & 255, G = (hex >> 8) & 255, B = hex & 255;
     const tc = makeCanvas(bw, bh), tctx = tc.getContext('2d'), img = tctx.createImageData(bw, bh), out = img.data;
     for (let yy = 0; yy < bh; yy++) for (let xx = 0; xx < bw; xx++) {
-      if (m[(y0 + yy) * w + x0 + xx]) { const p = (yy * bw + xx) * 4; out[p] = R; out[p + 1] = G; out[p + 2] = B; out[p + 3] = 255; }
+      if (m[(y0 + yy) * w + x0 + xx]) { const p = (yy * bw + xx) * 4; out[p] = Rc; out[p + 1] = G; out[p + 2] = B; out[p + 3] = 255; }
     }
     tctx.putImageData(img, 0, 0);
+    const ax = R.x + x0, ay = R.y + y0;                 // where the box lands on the canvas
     if (o.clear) {
       // No-fill: wipe the region to transparent. Skip (no undo entry) if it is already empty there.
-      const cur = o.target.ctx.getImageData(x0, y0, bw, bh).data;
+      const cur = o.target.ctx.getImageData(ax, ay, bw, bh).data;
       let any = false;
       for (let yy = 0; yy < bh && !any; yy++) for (let xx = 0; xx < bw; xx++) {
         if (m[(y0 + yy) * w + x0 + xx] && cur[(yy * bw + xx) * 4 + 3]) { any = true; break; }
@@ -2537,9 +2664,9 @@ const Engine = (() => {
     }
     const edit = new PixelEdit(project, o.target);
     const tx = o.target.ctx;
-    if (o.clear) { tx.save(); tx.globalCompositeOperation = 'destination-out'; tx.drawImage(tc, x0, y0); tx.restore(); }
-    else tx.drawImage(tc, x0, y0);
-    edit.touch(x0, y0, 0); edit.touch(x1 + 1, y1 + 1, 0);
+    if (o.clear) { tx.save(); tx.globalCompositeOperation = 'destination-out'; tx.drawImage(tc, ax, ay); tx.restore(); }
+    else tx.drawImage(tc, ax, ay);
+    edit.touch(ax, ay, 0); edit.touch(ax + bw, ay + bh, 0);
     return edit.commit(o.clear ? 'Clear fill' : 'Fill');
   }
 
@@ -3424,6 +3551,85 @@ const Pose = (() => {
     if (!quiet) flash(on ? 'Ruler on' : 'Ruler off');
   }
   $('#rulerBtn').addEventListener('click', () => setRuler(!state.ruler));
+
+  /* ---------- tile mode ----------
+     The canvas is split into an n x n grid. Pressing on the canvas with a drawing tool (or the Move tool) selects
+     the cell under the pen, and that edit stays inside it: strokes are clipped at the cell edge, fill treats the
+     edge as a wall, blur and auto-tidy never pull in the next cell. MOVE, FLIP / ROTATE / SCALE, CENTER / ALIGN
+     and BRIGHT in the layer menu work on the selected cell only. Nothing extra is stored per cell: it's the same
+     layers, so memory is unchanged. The grid is a DOM overlay and is never exported. */
+  const tileGridEl = $('#tileGrid'), tileSelEl = $('#tileSel');
+  let tileClip = null;                 // a copied cell (ImageData), kept while you switch frames
+  const TILE_TOOLS = ['brush', 'eraser', 'blur', 'wrinkle', 'texture', 'move', 'line', 'rect', 'circle', 'fill'];
+  function syncTileUI() {
+    const t = project.tile, r = project.region();
+    $('#tileBtn').classList.toggle('active', t.on);
+    tileGridEl.hidden = !t.on; $('#tileSec').hidden = !t.on;
+    tileGridEl.style.setProperty('--cs', (project.width / t.n) + 'px ' + (project.height / t.n) + 'px');
+    tileGridEl.style.backgroundSize = (project.width / t.n) + 'px ' + (project.height / t.n) + 'px';
+    tileGridEl.classList.toggle('dim', !!state.tileDim);
+    $('#tileDim').classList.toggle('on', !!state.tileDim);
+    $$('#tileN [data-n]').forEach(b => b.classList.toggle('on', +b.dataset.n === t.n));
+    tileSelEl.hidden = !r;
+    if (r) Object.assign(tileSelEl.style, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' });
+    $('#tileCellOut').textContent = r ? 'R' + (((r.i / t.n) | 0) + 1) + ' C' + (r.i % t.n + 1) + ' \u00b7 ' + r.w + '\u00d7' + r.h : 'TAP A CELL';
+    $('#tileClear').disabled = $('#tileCopy').disabled = !r;
+    $('#tilePaste').disabled = !r || !tileClip;
+  }
+  function setTile(on, quiet) {
+    if (on === project.tile.on) return;
+    cancelActiveDrawing(); finishChain(); flushNudge();
+    project.tile.on = on; syncTileUI();
+    try { localStorage.setItem('dtTile', JSON.stringify({ on, n: project.tile.n })); } catch (err) { /* optional */ }
+    if (!quiet) flash(on ? 'Tile mode: ' + project.tile.n + '\u00d7' + project.tile.n + ' (tap a cell)' : 'Tile mode off');
+  }
+  function setTileN(n) {
+    if (n === project.tile.n) return;
+    flushNudge();
+    project.tile.n = n; project.tile.sel = -1; syncTileUI();
+    try { localStorage.setItem('dtTile', JSON.stringify({ on: project.tile.on, n })); } catch (err) { /* optional */ }
+    flash('Grid ' + n + '\u00d7' + n + ' (' + Math.round(project.width / n) + ' px cells)');
+  }
+  function selectCellAt(p) {
+    const t = project.tile; if (!t.on) return;
+    const i = project.cellAt(p.x, p.y);
+    if (i !== t.sel) { flushNudge(); t.sel = i; syncTileUI(); }
+  }
+  function loadTile(m) {
+    const t = project.tile;
+    let src = m;
+    if (!src || typeof src !== 'object') { try { src = JSON.parse(localStorage.getItem('dtTile') || 'null'); } catch (err) { src = null; } }
+    src = src || {};
+    t.n = [2, 4, 5, 8].includes(+src.n) ? +src.n : 4;
+    t.on = !!src.on;
+    t.sel = Number.isInteger(src.sel) && src.sel >= 0 && src.sel < t.n * t.n ? src.sel : -1;
+    syncTileUI();
+  }
+  const tileManifest = () => ({ on: project.tile.on, n: project.tile.n, sel: project.tile.sel });
+  function tileCellAction(kind) {
+    if (!frameGuard()) return;
+    if (!project.region()) { flash('Tap a cell first'); return; }
+    if (kind === 'copy') { tileClip = project.copyCell(); syncTileUI(); flash('Copied cell'); return; }
+    const why = editBlock(kind === 'clear' ? 'clear it' : 'paste'); if (why) { flash(why); return; }
+    cancelActiveDrawing(); finishChain(); flushNudge();
+    const hit = kind === 'clear' ? project.clearCell(xfAll) : project.pasteCell(tileClip, xfAll);
+    if (!hit) { flash(kind === 'clear' ? 'Cell is already empty' : 'Nothing copied yet'); return; }
+    if (hit > 1) project.frames.forEach((_, i) => drawThumb(i));
+    flash((kind === 'clear' ? 'Cleared cell' : 'Pasted cell') + (hit > 1 ? ' in ' + hit + ' frames' : ''));
+    requestRender(); updateStatus();
+  }
+  $('#tileBtn').addEventListener('click', e => { setTile(!project.tile.on); e.currentTarget.blur(); });
+  $$('#tileN [data-n]').forEach(b => b.addEventListener('click', () => setTileN(+b.dataset.n)));
+  $('#tileClear').addEventListener('click', () => tileCellAction('clear'));
+  $('#tileCopy').addEventListener('click', () => tileCellAction('copy'));
+  $('#tilePaste').addEventListener('click', () => tileCellAction('paste'));
+  $('#tileDim').addEventListener('click', () => {
+    state.tileDim = !state.tileDim; syncTileUI();
+    try { localStorage.setItem('dtTileDim', state.tileDim ? '1' : '0'); } catch (err) { /* optional */ }
+  });
+  try { state.tileDim = localStorage.getItem('dtTileDim') !== '0'; } catch (err) { state.tileDim = true; }
+  loadTile(null);
+  window.__tile = { project: () => project, manifest: () => tileManifest(), sync: () => syncTileUI() };   // test hook
   try { if (localStorage.getItem('dtRuler') === '1') setRuler(true, true); } catch (err) { /* optional */ }
 
   /* ---------- wave guide (its own canvas above the art; never exported unless you BAKE it) ----------
@@ -4965,6 +5171,7 @@ const Pose = (() => {
       const why = editBlock(state.tool === 'move' ? 'move' : 'draw');
       if (why) { flash(why); return; }
     }
+    if (project.tile.on && TILE_TOOLS.includes(state.tool) && !(state.tool === 'line' && chain)) selectCellAt(p);
     if (state.tool === 'brush' || state.tool === 'eraser' || state.tool === 'blur' || state.tool === 'wrinkle' || state.tool === 'texture') {
       if (chain) finishChain();
       startStroke(e, p);
@@ -6139,6 +6346,7 @@ const Pose = (() => {
       bend: bendManifest(),
       pose: poseManifest(),
       squash: sqManifest(),
+      tile: tileManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
         hold: s.frame.hold, activeLayer: Math.min(s.frame.activeLayer, s.layers.length - 1),
@@ -6234,6 +6442,7 @@ const Pose = (() => {
     loadBend(m.bend);
     loadPose(m.pose, frames);
     loadSq(m.squash, frames);
+    loadTile(m.tile);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
   }
