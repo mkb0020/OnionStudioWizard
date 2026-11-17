@@ -152,13 +152,14 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
 // CONFIG — EDIT THESE
 // =====================================================================
 const MAP_DIR = 'assets/images/map/';
-// EACH TILESET = ONE PNG (A 5×5 GRID) + THE LAYOUT (WHAT EACH SLOT MEANS) IT FOLLOWS.
+// EACH TILESET = ONE PNG (A SQUARE GRID: 5×5, OR 4×4 FOR THE QUAD LAYOUT) + THE LAYOUT (WHAT EACH SLOT MEANS) IT FOLLOWS.
 // srcs ARE TRIED IN ORDER. THE FIRST TILESET IN THE LIST IS THE DEFAULT.
 const TILESETS = [
+  {id:'test', name:'TILE TEST (4×4)', layout:'quad', srcs:[MAP_DIR + 'tileTest.png']},
   {id:'basic', name:'BASIC TILESET', layout:'template', srcs:[MAP_DIR + 'basic_tileset.png']},
   {id:'first', name:'FIRST TEST SHEET (OLD LAYOUT)', layout:'legacy', srcs:[MAP_DIR + 'tileset_test.png', MAP_DIR + 'sprite_01 (17).png']},
 ];
-const SHEET_COLS = 5;
+let   SHEET_COLS = 5;             // CELLS PER ROW (SET FROM THE LAYOUT ON LOAD)
 let   TILE = 100;                 // SOURCE CELL SIZE IN PX (RE-READ FROM IMAGE ON LOAD)
 
 // MAP SHAPE: '#' SOLID, '.' AIR, '=' THIN LEDGE (ONE-WAY PLATFORM)
@@ -192,6 +193,22 @@ const LEDGES0 = [[18,5],[19,5],[20,5],[21,5]];
 //   carve    CELLS TURNED INTO AIR AT LOAD (A PIT THAT USES EVERY CORNER TYPE)
 //   overrides  CELLS THAT BYPASS THE AUTOTILER: [x,y,tile,flip]
 const LAYOUTS = {
+  quad: {
+    // tileTest.png: 400×400, 4×4 CELLS. CORNERS = OUTER CORNERS, MIDDLE 2×2 = INNER CORNERS, THE REST = FLOOR / WALL / CEILING.
+    // NO FILL (DARK) TILES YET: DEEP ROCK DRAWS BLACK. NO PLATFORM / LEDGE TILES YET: THEY BORROW FLOOR + OUTER CORNERS.
+    cols:4,
+    roles:[
+      'OUTER TL','FLOOR A','FLOOR B','OUTER TR',
+      'WALL L A','INNER ↘','INNER ↙','WALL R A',
+      'WALL L B','INNER ↗','INNER ↖','WALL R B',
+      'OUTER BL','CEIL A','CEIL B','OUTER BR',
+    ],
+    air:[], back:[], inset:0, backDim:0,
+    view:{decor:false, light:false}, selTile:1,
+    carve:[[12,11],[13,11],[14,11],[15,11]], overrides:[],
+    auto: (x,y) => OSWTiles.autoTileQuad(G,x,y),
+    info:'4×4 QUAD LAYOUT · FILL = BLACK FOR NOW',
+  },
   template: {
     // MATCHES tileset_template.png
     roles:[
@@ -294,6 +311,8 @@ function tileAt(x,y){
 // DRAWING
 // =====================================================================
 function drawTile(c,i,fx,dx,dy,ts,inset){
+  if(i == null) return;                                                 // EMPTY SLOT LIST (E.G. NO AIR TILE)
+  if(i < 0){ c.fillStyle = '#000'; c.fillRect(dx,dy,ts,ts); return; }   // PLACEHOLDER: SOLID BLACK
   const sx = (i % SHEET_COLS) * TILE + inset, sy = Math.floor(i / SHEET_COLS) * TILE + inset, sw = TILE - inset*2;
   if(fx){ c.save(); c.translate(dx+ts,dy); c.scale(-1,1); c.drawImage(tileImg,sx,sy,sw,sw,0,0,ts,ts); c.restore(); }
   else c.drawImage(tileImg,sx,sy,sw,sw,dx,dy,ts,ts);
@@ -508,7 +527,7 @@ cv.addEventListener('pointermove', e => {
   const c = cellFrom(e); hover = c; dirty = true;
   if(c){
     const t = tileAt(c.x,c.y), k = kind(c.x,c.y);
-    const desc = t ? `TILE ${t.i} (r${Math.floor(t.i/SHEET_COLS)}c${t.i%SHEET_COLS}) ${LAYOUT.roles[t.i]}${t.fx?' · FLIPPED':''}${t.ov?' · STAMPED':' · AUTO'}` : 'AIR';
+    const desc = t ? (t.i < 0 ? 'FILL · NO TILE YET (BLACK)' : `TILE ${t.i} (r${Math.floor(t.i/SHEET_COLS)}c${t.i%SHEET_COLS}) ${LAYOUT.roles[t.i]}${t.fx?' · FLIPPED':''}${t.ov?' · STAMPED':' · AUTO'}`) : 'AIR';
     $('status').textContent = `CELL ${c.x},${c.y} · ${k === '#' ? 'SOLID' : k === '=' ? 'LEDGE' : 'EMPTY'} · ${desc}`;
   }
   if(drawing) paint(c, e.buttons & 2 ? 2 : 0);
@@ -554,7 +573,7 @@ function applyMapObject(m){   // -> true IF IT LOOKED LIKE A MAP
   const w = m.mask[0].length; if(w < 2 || w > 200 || m.mask.some(r => typeof r !== 'string' || r.length !== w || /[^#.=]/.test(r))) return false;
   mask = m.mask.map(r => r.split('')); ROWS = mask.length; COLS = w;
   spawn = (Array.isArray(m.spawn) && Number.isInteger(m.spawn[0]) && Number.isInteger(m.spawn[1]) && m.spawn[0]>=0 && m.spawn[1]>=0 && m.spawn[0]<COLS && m.spawn[1]<ROWS && mask[m.spawn[1]][m.spawn[0]] !== '#') ? [m.spawn[0], m.spawn[1]] : null;
-  over = new Map(); for(const e of (Array.isArray(m.overrides) ? m.overrides : [])){ const [x,y,i,fx] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && i>=0 && i<25) over.set(x+','+y, {i, fx:!!fx}); }
+  over = new Map(); for(const e of (Array.isArray(m.overrides) ? m.overrides : [])){ const [x,y,i,fx] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && i>=0 && i<LAYOUT.roles.length) over.set(x+','+y, {i, fx:!!fx}); }
   dirty = true; return true;
 }
 function readSaves(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; }catch(e){ return {}; } }
@@ -605,13 +624,15 @@ $('fLoad').onchange = async e => {
 function buildPalette(){
   const pal = $('pal'); pal.innerHTML = '';
   const px = 52;
-  for(let i=0;i<25;i++){
+  const n = LAYOUT.roles.length, cols = SHEET_COLS;
+  pal.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  for(let i=0;i<n;i++){
     const d = document.createElement('div'); d.className = 't' + (i === selTile ? ' sel' : '');
     d.style.backgroundImage = `url("${encodeURI(tileURL)}")`;
-    d.style.backgroundSize = '500% 500%';
-    d.style.backgroundPosition = `${(i%5)*25}% ${Math.floor(i/5)*25}%`;
+    d.style.backgroundSize = `${cols*100}% ${cols*100}%`;
+    d.style.backgroundPosition = `${(i%cols)*100/(cols-1)}% ${Math.floor(i/cols)*100/(cols-1)}%`;
     d.innerHTML = `<i>${i}</i><em>${LAYOUT.roles[i]}</em>`;
-    d.title = `TILE ${i} · r${Math.floor(i/5)}c${i%5} · ${LAYOUT.roles[i]}`;
+    d.title = `TILE ${i} · r${Math.floor(i/cols)}c${i%cols} · ${LAYOUT.roles[i]}`;
     d.onclick = () => {
       selTile = i; document.querySelectorAll('#pal .t').forEach(n => n.classList.remove('sel')); d.classList.add('sel');
       document.querySelector('input[name=tool][value=stamp]').checked = true; tool = 'stamp';
@@ -631,13 +652,14 @@ async function useTileset(ts){
     return false;
   }
   tileImg = img; CUR = ts; LAYOUT = LAYOUTS[ts.layout];
+  SHEET_COLS = LAYOUT.cols || 5;
   TILE = Math.round(img.naturalWidth / SHEET_COLS);
   opts.inset = LAYOUT.inset; $('inset').value = opts.inset; $('vInset').textContent = opts.inset + 'px';
   for(const [k,id] of [['decor','oDecor'],['light','oLight']]){ opts[k] = LAYOUT.view[k]; $(id).checked = opts[k]; }
   selTile = LAYOUT.selTile;
   $('setInfo').textContent = `${img.naturalWidth}×${img.naturalHeight}px · ${TILE}px CELLS · ${LAYOUT.info}`;
-  $('hw1').innerHTML = `THE PNG IS A 5×5 GRID OF <b>${TILE}px</b> CELLS. TILE NUMBER <code>i</code> = <code>row*5 + col</code>.`;
-  $('hw2').innerHTML = `TO DRAW IT: <code>sx=(i%5)*${TILE}, sy=floor(i/5)*${TILE}</code>, THEN COPY THAT ${TILE}×${TILE} SQUARE TO <code>(x*size, y*size)</code>.`;
+  $('hw1').innerHTML = `THE PNG IS A ${SHEET_COLS}×${SHEET_COLS} GRID OF <b>${TILE}px</b> CELLS. TILE NUMBER <code>i</code> = <code>row*${SHEET_COLS} + col</code>.`;
+  $('hw2').innerHTML = `TO DRAW IT: <code>sx=(i%${SHEET_COLS})*${TILE}, sy=floor(i/${SHEET_COLS})*${TILE}</code>, THEN COPY THAT ${TILE}×${TILE} SQUARE TO <code>(x*size, y*size)</code>.`;
   resetMap(); restoreSaved(); buildPalette(); fit();
   return true;
 }

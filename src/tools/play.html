@@ -252,7 +252,7 @@ async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
     if (x - lastX < 8) continue;
     for (let y = 2; y < g.rows - 1; y++) if (g.kind(x, y) === '.' && g.kind(x, y - 1) === '.' && g.kind(x, y - 2) === '.' && g.kind(x, y + 1) === '#') { lamps.push({ x: (x + 0.5) * C, y: (y + 1) * C, color: LAMP.colors[n % LAMP.colors.length], phase: n * 1.7 }); n++; lastX = x; break; }
   }
-  MAP.on = true; MAP.grid = g; MAP.set = def; MAP.img = img; MAP.tile = Math.round(img.naturalWidth / 5); MAP.name = name || '';
+  MAP.on = true; MAP.grid = g; MAP.set = def; MAP.img = img; MAP.tile = Math.round(img.naturalWidth / (def.cols || 5)); MAP.name = name || '';
   LEVEL_MIN_X = 0; LEVEL_MAX_X = g.cols * C; FALL_Y = g.rows * C + 400; FLOOR_MAX = Infinity;
   const sp = (Array.isArray(m.spawn) && g.kind(m.spawn[0], m.spawn[1]) !== '#') ? m.spawn : defaultSpawn(g);
   SPAWN = { x: (sp[0] + 0.5) * C, y: (sp[1] + 1) * C };
@@ -260,16 +260,16 @@ async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
   return true;
 }
 function drawMapLevel(vl, vr) {
-  const g = MAP.grid, C = MAP.cell, set = MAP.set, img = MAP.img, T = MAP.tile, ins = set.inset;
+  const g = MAP.grid, C = MAP.cell, set = MAP.set, img = MAP.img, T = MAP.tile, ins = set.inset, SC = set.cols || 5;
   const x0 = Math.max(0, Math.floor(vl / C)), x1 = Math.min(g.cols - 1, Math.floor(vr / C)), y0 = Math.max(0, Math.floor((cam.y - H / 2 - 60) / C)), y1 = Math.min(g.rows - 1, Math.floor((cam.y + H / 2 + 60) / C));
   const { pick, drawTile } = OSWTiles;
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {   // AIR + BACK WALL
     if (g.kind(x, y) === '#' || g.over.has(x + ',' + y)) continue;
-    drawTile(ctx, img, T, pick(set.air, x, y), false, x * C, y * C, C, ins);
-    drawTile(ctx, img, T, pick(set.back, x, y), false, x * C, y * C, C, ins);
+    drawTile(ctx, img, T, pick(set.air, x, y), false, x * C, y * C, C, ins, SC);
+    drawTile(ctx, img, T, pick(set.back, x, y), false, x * C, y * C, C, ins, SC);
   }
   if (set.backDim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + set.backDim + ')'; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (g.kind(x, y) !== '#') ctx.fillRect(x * C, y * C, C, C); }
-  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const t = g.tileAt(x, y); if (t) drawTile(ctx, img, T, t.i, t.fx, x * C, y * C, C, ins); }
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const t = g.tileAt(x, y); if (t) drawTile(ctx, img, T, t.i, t.fx, x * C, y * C, C, ins, SC); }
 }
 
 /* ---------- ASSETS ---------- */
