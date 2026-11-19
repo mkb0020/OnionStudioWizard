@@ -137,9 +137,10 @@
   "view": {
     "mirror": true,
     "skipEmpty": true,
-    "speed": 1.2
+    "speed": 3,
+    "blend": 1
   },
-  "updated": "2026-10-26T02:42:15.669Z",
+  "updated": "2026-11-18T01:01:39.490Z",
   "cape": {
     "version": 2,
     "view": "right",
