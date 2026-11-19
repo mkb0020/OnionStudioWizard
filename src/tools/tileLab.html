@@ -65,6 +65,15 @@ button:hover{background:#830cde;color:#fff}
   position:absolute;left:0;top:0;font-style:normal;font-size:10px;padding:0 3px;
   background:rgba(12,0,31,.8);color:var(--cyan);
 }
+#pal.dense .t em{display:none}
+#props{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+#props .p{
+  border:1px solid #37025a;border-radius:3px;cursor:pointer;background:#0c001f;padding:3px;
+  display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;color:var(--soft);text-align:center;
+}
+#props .p:hover{border-color:var(--cyan)}
+#props .p.sel{border-color:var(--gold);box-shadow:0 0 8px var(--gold)}
+#props canvas{width:100%;height:56px;object-fit:contain}
 #pal .t em{
   position:absolute;left:0;right:0;bottom:0;font-style:normal;font-size:8px;line-height:1.1;padding:1px 2px;
   background:rgba(12,0,31,.82);color:var(--soft);text-align:center;overflow:hidden;white-space:nowrap;
@@ -105,21 +114,28 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
       <label class="row"><input type="radio" name="tool" value="air"> PAINT AIR (autotiles)</label>
       <label class="row"><input type="radio" name="tool" value="ledge"> PAINT THIN LEDGE</label>
       <label class="row"><input type="radio" name="tool" value="stamp"> STAMP SELECTED TILE</label>
+      <label class="row" id="propTool"><input type="radio" name="tool" value="prop"> PLACE SELECTED PROP</label>
       <label class="row"><input type="radio" name="tool" value="spawn"> SET PLAYER SPAWN (PLAY STARTS HERE)</label>
       <label class="row"><input type="radio" name="tool" value="auto"> RESET CELL TO AUTO (PEN ERASER)</label>
       <label class="row" style="margin-left:22px"><input type="checkbox" id="flip"> FLIP HORIZONTALLY</label>
-      <div style="color:var(--mute);font-size:11px;margin-top:4px">DRAG PAINTS · RIGHT-CLICK (OR THE RESET TOOL) RESETS A CELL TO AUTO · EDITS AUTOSAVE</div>
+      <div style="color:var(--mute);font-size:11px;margin-top:4px">DRAG PAINTS · RIGHT-CLICK (OR THE RESET TOOL) RESETS A CELL TO AUTO AND REMOVES A PROP ON IT · EDITS AUTOSAVE</div>
     </div>
     <div class="box">
       <h2>TILESET (CLICK TO SELECT)</h2>
       <div id="pal"></div>
-      <div style="color:var(--mute);font-size:11px;margin-top:6px">NUMBER = TILE INDEX. LABEL = WHAT I GUESSED IT IS — TELL ME WHERE I'M WRONG.</div>
+      <div id="palNote" style="color:var(--mute);font-size:11px;margin-top:6px">NUMBER = TILE INDEX. LABEL = WHAT I GUESSED IT IS — TELL ME WHERE I'M WRONG.</div>
+    </div>
+    <div class="box" id="propBox" hidden>
+      <h2>PROPS (CLICK, THEN CLICK THE MAP)</h2>
+      <div id="props"></div>
+      <div style="color:var(--mute);font-size:11px;margin-top:6px">PRESS ON THE FLOOR CELL FOR THE PROP'S BOTTOM-LEFT, DRAG UP TO MAKE COLUMNS / ARCHES TALLER, RELEASE TO DROP. PROPS ARE DECOR ONLY — NO COLLISION. RIGHT-CLICK ONE TO REMOVE IT.</div>
     </div>
     <div class="box">
       <h2>VIEW</h2>
       <label class="row"><input type="checkbox" id="oGrid"> GRID <kbd>G</kbd></label>
       <label class="row"><input type="checkbox" id="oIds"> TILE INDICES <kbd>I</kbd></label>
       <label class="row"><input type="checkbox" id="oBack" checked> BACK WALL <kbd>B</kbd></label>
+      <label class="row"><input type="checkbox" id="oProps" checked> PROPS <kbd>P</kbd></label>
       <label class="row"><input type="checkbox" id="oDecor" checked> DECOR <kbd>D</kbd></label>
       <label class="row"><input type="checkbox" id="oLight" checked> LIGHTING <kbd>L</kbd></label>
       <label class="row"><input type="checkbox" id="oAnim" checked> ANIMATE <kbd>SPACE</kbd></label>
@@ -152,10 +168,10 @@ kbd{border:1px solid var(--hi);border-radius:3px;padding:0 4px;color:var(--gold)
 // CONFIG — EDIT THESE
 // =====================================================================
 const MAP_DIR = 'assets/images/map/';
-// EACH TILESET = ONE PNG (A SQUARE GRID: 5×5, OR 4×4 FOR THE QUAD LAYOUT) + THE LAYOUT (WHAT EACH SLOT MEANS) IT FOLLOWS.
+// EACH TILESET = ONE PNG (A SQUARE GRID: 5×5, OR 8×8 FOR THE BRICK LAYOUT) + THE LAYOUT (WHAT EACH SLOT MEANS) IT FOLLOWS.
 // srcs ARE TRIED IN ORDER. THE FIRST TILESET IN THE LIST IS THE DEFAULT.
 const TILESETS = [
-  {id:'test', name:'TILE TEST (4×4)', layout:'quad', srcs:[MAP_DIR + 'tileTest.png']},
+  {id:'test', name:'TILE TEST (8×8 BRICKS + PROPS)', layout:'brick8', srcs:[MAP_DIR + 'tileTest.png']},
   {id:'basic', name:'BASIC TILESET', layout:'template', srcs:[MAP_DIR + 'basic_tileset.png']},
   {id:'first', name:'FIRST TEST SHEET (OLD LAYOUT)', layout:'legacy', srcs:[MAP_DIR + 'tileset_test.png', MAP_DIR + 'sprite_01 (17).png']},
 ];
@@ -193,21 +209,33 @@ const LEDGES0 = [[18,5],[19,5],[20,5],[21,5]];
 //   carve    CELLS TURNED INTO AIR AT LOAD (A PIT THAT USES EVERY CORNER TYPE)
 //   overrides  CELLS THAT BYPASS THE AUTOTILER: [x,y,tile,flip]
 const LAYOUTS = {
-  quad: {
-    // tileTest.png: 400×400, 4×4 CELLS. CORNERS = OUTER CORNERS, MIDDLE 2×2 = INNER CORNERS, THE REST = FLOOR / WALL / CEILING.
-    // NO FILL (DARK) TILES YET: DEEP ROCK DRAWS BLACK. NO PLATFORM / LEDGE TILES YET: THEY BORROW FLOOR + OUTER CORNERS.
-    cols:4,
+  brick8: {
+    // tileTest.png: 800×800, 8×8 CELLS OF 100px.
+    //   TOP-LEFT 4×4  LIGHT BRICKS: CORNERS = OUTER CORNERS, MIDDLE 2×2 = INNER CORNERS, THE REST = FLOOR / WALL / CEILING
+    //   TOP-RIGHT 4×4 DARK BRICKS: FILL BEHIND THE EDGES (THE AUTOTILER REPEATS THE BLOCK SO THE COURSES LINE UP)
+    //   BOTTOM HALF   PROPS: ARCH, 2 COLUMNS, DOORWAY, 2 CRYSTALS (SEE OSWTiles.TILESETS.test.props)
+    //                 COLUMNS + ARCH STRETCH: THEIR MIDDLE ROWS REPEAT. EACH PIECE CAN ALSO BE STAMPED ALONE (decoFrom)
+    // NO PLATFORM / LEDGE TILES YET: THEY BORROW THE FLOOR + OUTER CORNERS.
+    cols:8, decoFrom:32,
     roles:[
-      'OUTER TL','FLOOR A','FLOOR B','OUTER TR',
-      'WALL L A','INNER ↘','INNER ↙','WALL R A',
-      'WALL L B','INNER ↗','INNER ↖','WALL R B',
-      'OUTER BL','CEIL A','CEIL B','OUTER BR',
+      'OUTER TL','FLOOR A','FLOOR B','OUTER TR',   'DARK 1','DARK 2','DARK 3','DARK 4',
+      'WALL L A','INNER ↘','INNER ↙','WALL R A',   'DARK 5','DARK 6','DARK 7','DARK 8',
+      'WALL L B','INNER ↗','INNER ↖','WALL R B',   'DARK 9','DARK 10','DARK 11','DARK 12',
+      'OUTER BL','CEIL A','CEIL B','OUTER BR',     'DARK 13','DARK 14','DARK 15','DARK 16',
+      'ARCH','ARCH','ARCH','COLUMN (SLIM)',        'CRYSTAL SHARD','CRYSTAL CLUSTER','(EMPTY)','COLUMN (WIDE)',
+      'ARCH','ARCH','ARCH','COLUMN (SLIM)',        'DOORWAY','DOORWAY','DOORWAY','COLUMN (WIDE)',
+      'ARCH','ARCH','ARCH','COLUMN (SLIM)',        'DOORWAY','DOORWAY','DOORWAY','COLUMN (WIDE)',
+      'ARCH','ARCH','ARCH','COLUMN (SLIM)',        'DOORWAY','DOORWAY','DOORWAY','COLUMN (WIDE)',
     ],
     air:[], back:[], inset:0, backDim:0,
     view:{decor:false, light:false}, selTile:1,
     carve:[[12,11],[13,11],[14,11],[15,11]], overrides:[],
-    auto: (x,y) => OSWTiles.autoTileQuad(G,x,y),
-    info:'4×4 QUAD LAYOUT · FILL = BLACK FOR NOW',
+    props: OSWTiles.TILESETS.test.props,
+    // STARTER PROPS ON THE TEST MAP: [id, TOP-LEFT x, TOP-LEFT y]
+    props0:[['doorway',7,8,3],['cluster',10,10],['column',21,4,7],['pillar',2,2,7],['arch',3,4,5],['shard',16,10]],
+    palNote:'ROWS 0–3: LEFT = LIGHT BRICKS (EDGES), RIGHT = DARK BRICKS (FILL) — THESE ARE SOLID. ROWS 4–7 (32+) = PROP PIECES: STAMPED ON THE DECOR LAYER, NO COLLISION, SO YOU CAN STACK THEM BY HAND. HOVER A TILE FOR ITS NAME.',
+    auto: (x,y) => OSWTiles.autoTileBrick8(G,x,y),
+    info:'8×8 BRICK LAYOUT · LIGHT EDGES, DARK FILL, PROPS BELOW',
   },
   template: {
     // MATCHES tileset_template.png
@@ -265,11 +293,13 @@ const $ = id => document.getElementById(id);
 const cv = $('view'), ctx = cv.getContext('2d');
 const baked = document.createElement('canvas');
 const lightC = document.createElement('canvas');
-let mask = [], over = new Map();
+let mask = [], over = new Map(), props = [], deco = new Map();   // props: [{id, x, y, h}] TOP-LEFT CELL + HEIGHT · deco: 'x,y' -> PROP-PIECE TILE (NON-SOLID)
+let placing = null;   // PROP BEING PLACED: {id, x, baseY, h, moved} (DRAG UP TO MAKE IT TALLER)
 let tileImg = null, tileURL = '', LAYOUT = null, CUR = null;
 const IMG = {};
-const opts = {grid:false, ids:false, back:true, decor:true, light:true, anim:true, zoom:.55, inset:4, amb:.45};
+const opts = {grid:false, ids:false, back:true, props:true, decor:true, light:true, anim:true, zoom:.55, inset:4, amb:.45};
 let spawn = null;   // [col,row] OR null (PLAY PICKS THE FIRST FLOOR)
+let selProp = null;
 let tool = 'solid', selTile = 16, TS = 55, U = .55, DPR = 1, dirty = true, hover = null;
 
 function loadImg(src){
@@ -294,6 +324,8 @@ function resetMap(){
   for(const [x,y] of LAYOUT.carve) mask[y][x] = '.';
   spawn = null; over = new Map();
   for(const [x,y,i,fx] of LAYOUT.overrides) over.set(x+','+y, {i, fx});
+  props = (LAYOUT.props0 || []).map(([id,x,y,h]) => ({id, x, y, h:OSWTiles.propClampH(propDef(id), h == null ? OSWTiles.propDefH(propDef(id)) : h)}));
+  deco = new Map(); placing = null;
   dirty = true;
 }
 function kind(x,y){ if(x<0||y<0||x>=COLS||y>=ROWS) return '#'; return mask[y][x]; }
@@ -305,6 +337,16 @@ function tileAt(x,y){
   const o = over.get(x+','+y); if(o) return {...o, ov:true};
   if(kind(x,y) === '.') return null;
   return autoTile(x,y);
+}
+function propDef(id){ return (LAYOUT.props || []).find(p => p.id === id); }
+const isDecoTile = i => LAYOUT.decoFrom != null && i >= LAYOUT.decoFrom;
+// TOPMOST PROP COVERING CELL (x,y), OR -1
+function propAt(x,y){
+  for(let k=props.length-1;k>=0;k--){
+    const o = props[k], p = propDef(o.id);
+    if(p && x >= o.x && x < o.x + p.w && y >= o.y && y < o.y + o.h) return k;
+  }
+  return -1;
 }
 
 // =====================================================================
@@ -368,6 +410,11 @@ function bake(){
   for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
     const t = tileAt(x,y); if(!t) continue;
     drawTile(c, t.i, t.fx, x*TS, y*TS, TS, ins);
+  }
+  // PROPS (FROM THE BOTTOM HALF OF THE SHEET)
+  if(opts.props){
+    for(const [k,i] of deco){ const [x,y] = k.split(',').map(Number); drawTile(c, i, false, x*TS, y*TS, TS, 0); }
+    for(const o of props){ const p = propDef(o.id); if(p) OSWTiles.drawProp(c, tileImg, TILE, p, o.x*TS, o.y*TS, TS, o.h); }
   }
   // STATIC DECOR
   if(opts.decor){
@@ -467,6 +514,13 @@ function frame(t){
     ctx.beginPath(); ctx.ellipse(sx, sy-TS*.5, TS*.22, TS*.45, 0, 0, 7); ctx.fill(); ctx.stroke();
     ctx.fillStyle = '#67FEBD'; ctx.font = (TS*.22|0)+'px monospace'; ctx.textAlign = 'center'; ctx.fillText('SPAWN', sx, sy-TS*1.05); ctx.restore();
   }
+  const gp = placing || (hover && tool === 'prop' && propDef(selProp) ? {id:selProp, x:hover.x, baseY:hover.y, h:OSWTiles.propDefH(propDef(selProp))} : null);
+  if(gp){   // GHOST OF THE PROP ABOUT TO BE PLACED (BASE CELL = BOTTOM-LEFT)
+    const p = propDef(gp.id), gx = gp.x*TS, gy = (gp.baseY - gp.h + 1)*TS;
+    ctx.globalAlpha = .55; OSWTiles.drawProp(ctx, tileImg, TILE, p, gx, gy, TS, gp.h); ctx.globalAlpha = 1;
+    ctx.setLineDash([6,4]); ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2; ctx.strokeRect(gx+1, gy+1, p.w*TS-2, gp.h*TS-2); ctx.setLineDash([]);
+    if(p.mid.length){ ctx.fillStyle = '#00ffff'; ctx.font = (TS*.24|0)+'px monospace'; ctx.fillText(gp.h + ' TALL' + (placing ? '' : ' · DRAG UP/DOWN'), gx+4, gy - 6); }
+  }
   if(hover){
     ctx.strokeStyle = '#fecd39'; ctx.lineWidth = 2; ctx.strokeRect(hover.x*TS+1, hover.y*TS+1, TS-2, TS-2);
   }
@@ -508,27 +562,51 @@ function cellFrom(e){
   const x = Math.floor((e.clientX - r.left) / (r.width / COLS)), y = Math.floor((e.clientY - r.top) / (r.height / ROWS));
   if(x<0||y<0||x>=COLS||y>=ROWS) return null; return {x,y};
 }
-function paint(c,btn){
+function paint(c,btn,down){
   if(!c) return;
   const key = c.x+','+c.y;
-  if(btn === 2 || tool === 'auto'){ over.delete(key); }
+  if(btn === 2 || tool === 'auto'){   // REMOVE: PROP, THEN DECOR PIECE, THEN STAMPED TILE
+    const k = propAt(c.x,c.y);
+    if(k >= 0){ if(!down) return; props.splice(k,1); }
+    else if(deco.has(key)) deco.delete(key);
+    else over.delete(key);
+  }
+  else if(tool === 'prop'){   // START PLACING: THE CLICKED CELL IS THE BASE, DRAG UP/DOWN FOR HEIGHT, RELEASE TO DROP
+    const p = propDef(selProp); if(!p || !down) return;
+    placing = {id:p.id, x:c.x, baseY:c.y, h:OSWTiles.propDefH(p), moved:false};
+    dirty = true; return;
+  }
   else if(tool === 'solid'){ mask[c.y][c.x] = '#'; over.delete(key); }
   else if(tool === 'air'){ mask[c.y][c.x] = '.'; over.delete(key); }
   else if(tool === 'ledge'){ mask[c.y][c.x] = '='; over.delete(key); }
   else if(tool === 'spawn'){ if(kind(c.x,c.y) !== '#') spawn = [c.x,c.y]; else { toast('SPAWN NEEDS AN EMPTY CELL'); return; } }
+  else if(tool === 'stamp' && isDecoTile(selTile)) deco.set(key, selTile);   // PROP PIECE: DECOR LAYER, STAYS WALK-THROUGH
   else if(tool === 'stamp'){ over.set(key, {i:selTile, fx:$('flip').checked}); if(mask[c.y][c.x] === '.') mask[c.y][c.x] = '#'; }
   dirty = true; saveSoon();
 }
 let drawing = false;
 cv.addEventListener('contextmenu', e => e.preventDefault());
-cv.addEventListener('pointerdown', e => { drawing = true; cv.setPointerCapture(e.pointerId); paint(cellFrom(e), e.button); });
-cv.addEventListener('pointerup', () => drawing = false);
+cv.addEventListener('pointerdown', e => { drawing = true; cv.setPointerCapture(e.pointerId); paint(cellFrom(e), e.button, true); });
+function finishPlacing(){
+  const pl = placing; placing = null; dirty = true; if(!pl) return;
+  const p = propDef(pl.id), y = pl.baseY - pl.h + 1;
+  if(y < 0){ toast('NOT ENOUGH ROOM ABOVE FOR THE ' + p.name); return; }
+  if(props.some(o => o.id === p.id && o.x === pl.x && o.y === y && o.h === pl.h)) return;
+  props.push({id:p.id, x:pl.x, y, h:pl.h}); saveSoon();
+}
+cv.addEventListener('pointerup', () => { drawing = false; finishPlacing(); });
 cv.addEventListener('pointermove', e => {
   const c = cellFrom(e); hover = c; dirty = true;
   if(c){
     const t = tileAt(c.x,c.y), k = kind(c.x,c.y);
     const desc = t ? (t.i < 0 ? 'FILL · NO TILE YET (BLACK)' : `TILE ${t.i} (r${Math.floor(t.i/SHEET_COLS)}c${t.i%SHEET_COLS}) ${LAYOUT.roles[t.i]}${t.fx?' · FLIPPED':''}${t.ov?' · STAMPED':' · AUTO'}`) : 'AIR';
-    $('status').textContent = `CELL ${c.x},${c.y} · ${k === '#' ? 'SOLID' : k === '=' ? 'LEDGE' : 'EMPTY'} · ${desc}`;
+    const pk = propAt(c.x,c.y), dk = deco.get(c.x+','+c.y);
+    const pd = (pk >= 0 ? ` · PROP: ${propDef(props[pk].id).name} (${props[pk].h} TALL)` : '') + (dk != null ? ` · PIECE ${dk} ${LAYOUT.roles[dk]}` : '');
+    $('status').textContent = `CELL ${c.x},${c.y} · ${k === '#' ? 'SOLID' : k === '=' ? 'LEDGE' : 'EMPTY'} · ${desc}${pd}`;
+  }
+  if(placing){
+    if(c && (c.y !== placing.baseY || placing.moved)){ placing.moved = true; placing.h = OSWTiles.propClampH(propDef(placing.id), placing.baseY - c.y + 1); }
+    return;
   }
   if(drawing) paint(c, e.buttons & 2 ? 2 : 0);
 });
@@ -536,7 +614,7 @@ cv.addEventListener('pointerleave', () => { hover = null; dirty = true; });
 
 document.querySelectorAll('input[name=tool]').forEach(r => r.addEventListener('change', () => tool = r.value));
 const bind = (id,key) => $(id).addEventListener('change', e => { opts[key] = e.target.checked; dirty = true; });
-bind('oGrid','grid'); bind('oIds','ids'); bind('oBack','back'); bind('oDecor','decor'); bind('oLight','light'); bind('oAnim','anim');
+bind('oGrid','grid'); bind('oIds','ids'); bind('oBack','back'); bind('oProps','props'); bind('oDecor','decor'); bind('oLight','light'); bind('oAnim','anim');
 $('zoom').addEventListener('input', e => { opts.zoom = e.target.value/100; applyZoom(); });
 $('inset').addEventListener('input', e => { opts.inset = +e.target.value; $('vInset').textContent = opts.inset + 'px'; dirty = true; });
 $('amb').addEventListener('input', e => { opts.amb = e.target.value/100; $('vAmb').textContent = e.target.value + '%'; dirty = true; });
@@ -555,6 +633,7 @@ addEventListener('keydown', e => {
   if(e.target.tagName === 'INPUT' && e.target.type !== 'checkbox' && e.target.type !== 'radio') return;
   const k = e.key.toLowerCase();
   if(k === 'g') chk('oGrid','grid'); else if(k === 'i') chk('oIds','ids'); else if(k === 'b') chk('oBack','back');
+  else if(k === 'p') chk('oProps','props');
   else if(k === 'd') chk('oDecor','decor'); else if(k === 'l') chk('oLight','light');
   else if(e.key === ' '){ e.preventDefault(); chk('oAnim','anim'); }
 });
@@ -566,14 +645,20 @@ addEventListener('resize', () => { applyZoom(); });
 const SAVE_KEY = 'tileLabMaps_v1';
 function mapObject(){
   const o = [...over].map(([k,v]) => { const [x,y] = k.split(',').map(Number); return [x,y,v.i,v.fx]; });
-  return {format:'osw-tilemap', version:1, tileset:CUR.id, cols:COLS, rows:ROWS, mask:mask.map(r => r.join('')), overrides:o, ...(spawn ? {spawn} : {})};
+  return {format:'osw-tilemap', version:2, tileset:CUR.id, cols:COLS, rows:ROWS, mask:mask.map(r => r.join('')), overrides:o,
+    ...(props.length ? {props:props.map(p => [p.id, p.x, p.y, p.h])} : {}),
+    ...(deco.size ? {deco:[...deco].map(([k,i]) => [...k.split(',').map(Number), i])} : {}), ...(spawn ? {spawn} : {})};
 }
 function applyMapObject(m){   // -> true IF IT LOOKED LIKE A MAP
+  m = OSWTiles.migrateMap(m);
   if(!m || !Array.isArray(m.mask) || m.mask.length < 2 || m.mask.length > 200) return false;
   const w = m.mask[0].length; if(w < 2 || w > 200 || m.mask.some(r => typeof r !== 'string' || r.length !== w || /[^#.=]/.test(r))) return false;
   mask = m.mask.map(r => r.split('')); ROWS = mask.length; COLS = w;
   spawn = (Array.isArray(m.spawn) && Number.isInteger(m.spawn[0]) && Number.isInteger(m.spawn[1]) && m.spawn[0]>=0 && m.spawn[1]>=0 && m.spawn[0]<COLS && m.spawn[1]<ROWS && mask[m.spawn[1]][m.spawn[0]] !== '#') ? [m.spawn[0], m.spawn[1]] : null;
   over = new Map(); for(const e of (Array.isArray(m.overrides) ? m.overrides : [])){ const [x,y,i,fx] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && i>=0 && i<LAYOUT.roles.length) over.set(x+','+y, {i, fx:!!fx}); }
+  props = []; for(const e of (Array.isArray(m.props) ? m.props : [])){ if(!Array.isArray(e)) continue; const [id,x,y,h] = e; const p = propDef(id); if(p && Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS) props.push({id, x, y, h:OSWTiles.propClampH(p, Number.isInteger(h) ? h : OSWTiles.propDefH(p))}); }
+  deco = new Map(); for(const e of (Array.isArray(m.deco) ? m.deco : [])){ if(!Array.isArray(e)) continue; const [x,y,i] = e; if(Number.isInteger(x) && Number.isInteger(y) && x>=0 && y>=0 && x<COLS && y<ROWS && isDecoTile(i) && i<LAYOUT.roles.length) deco.set(x+','+y, i); }
+  placing = null;
   dirty = true; return true;
 }
 function readSaves(){ try{ return JSON.parse(localStorage.getItem(SAVE_KEY) || '{}') || {}; }catch(e){ return {}; } }
@@ -626,6 +711,8 @@ function buildPalette(){
   const px = 52;
   const n = LAYOUT.roles.length, cols = SHEET_COLS;
   pal.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  pal.classList.toggle('dense', cols > 5);
+  $('palNote').textContent = LAYOUT.palNote || 'NUMBER = TILE INDEX. LABEL = WHAT I GUESSED IT IS — TELL ME WHERE I\'M WRONG.';
   for(let i=0;i<n;i++){
     const d = document.createElement('div'); d.className = 't' + (i === selTile ? ' sel' : '');
     d.style.backgroundImage = `url("${encodeURI(tileURL)}")`;
@@ -638,6 +725,26 @@ function buildPalette(){
       document.querySelector('input[name=tool][value=stamp]').checked = true; tool = 'stamp';
     };
     pal.appendChild(d);
+  }
+}
+// PROP PICKER: ONE THUMBNAIL PER PROP, CUT FROM THE SHEET
+function buildProps(){
+  const list = LAYOUT.props || [], box = $('props');
+  $('propBox').hidden = $('propTool').hidden = !list.length; box.innerHTML = '';
+  if(!list.length){ if(tool === 'prop'){ tool = 'solid'; document.querySelector('input[name=tool][value=solid]').checked = true; } return; }
+  if(!propDef(selProp)) selProp = list[0].id;
+  for(const p of list){
+    const ph = OSWTiles.propDefH(p), size = p.mid.length ? `${p.w}×${OSWTiles.propMinH(p)}+ STRETCHY` : `${p.w}×${ph}`;
+    const d = document.createElement('div'); d.className = 'p' + (p.id === selProp ? ' sel' : ''); d.title = `${p.name} · ${size}`;
+    const cv2 = document.createElement('canvas'), k = 112 / Math.max(p.w, ph);
+    cv2.width = Math.round(p.w*k); cv2.height = Math.round(ph*k);
+    OSWTiles.drawProp(cv2.getContext('2d'), tileImg, TILE, p, 0, 0, k);
+    d.appendChild(cv2); d.appendChild(Object.assign(document.createElement('span'), {textContent:`${p.name} ${size}`}));
+    d.onclick = () => {
+      selProp = p.id; box.querySelectorAll('.p').forEach(n => n.classList.remove('sel')); d.classList.add('sel');
+      document.querySelector('input[name=tool][value=prop]').checked = true; tool = 'prop';
+    };
+    box.appendChild(d);
   }
 }
 
@@ -660,7 +767,7 @@ async function useTileset(ts){
   $('setInfo').textContent = `${img.naturalWidth}×${img.naturalHeight}px · ${TILE}px CELLS · ${LAYOUT.info}`;
   $('hw1').innerHTML = `THE PNG IS A ${SHEET_COLS}×${SHEET_COLS} GRID OF <b>${TILE}px</b> CELLS. TILE NUMBER <code>i</code> = <code>row*${SHEET_COLS} + col</code>.`;
   $('hw2').innerHTML = `TO DRAW IT: <code>sx=(i%${SHEET_COLS})*${TILE}, sy=floor(i/${SHEET_COLS})*${TILE}</code>, THEN COPY THAT ${TILE}×${TILE} SQUARE TO <code>(x*size, y*size)</code>.`;
-  resetMap(); restoreSaved(); buildPalette(); fit();
+  resetMap(); restoreSaved(); buildPalette(); buildProps(); fit();
   return true;
 }
 

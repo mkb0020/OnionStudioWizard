@@ -1,6 +1,7 @@
 'use strict';
 // SHARED TILE CODE: THE AUTOTILER + MAP HELPERS USED BY TILE LAB AND PLAY.
-// A MAP IS {format:'osw-tilemap', version:1, tileset, cols, rows, mask:[strings], overrides:[[x,y,tile,flip]], spawn?:[col,row]}
+// A MAP IS {format:'osw-tilemap', version:2, tileset, cols, rows, mask:[strings], overrides:[[x,y,tile,flip]], props?:[[id,x,y,h]], deco?:[[x,y,tile]], spawn?:[col,row]}
+//   VERSION 2: tileset 'test' IS THE 8x8 BRICK SHEET (VERSION-1 'test' MAPS ARE REMAPPED BY migrateMap)
 //   MASK CHARS: '#' SOLID, '.' AIR, '=' THIN LEDGE (ONE-WAY PLATFORM)
 (function (root) {
 function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 1274126177 | 0; return (h ^ (h>>>16))>>>0; }
@@ -79,6 +80,28 @@ function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 
     return {i:-1, fx:false};   // DEEP INSIDE THE ROCK: NO DARK TILES YET -> BLACK
   }
 
+  // AUTOTILER FOR THE 8x8 "BRICK" SHEET (tileTest.png, 800x800):
+  //   TOP-LEFT 4x4  = LIGHT BRICKS, SAME SLOT MEANINGS AS THE QUAD LAYOUT ABOVE (FLOORS / WALLS / CEILINGS / CORNERS)
+  //   TOP-RIGHT 4x4 = DARK BRICKS (FILL: UNDER FLOORS, OVER CEILINGS, OUTSIDE WALLS)
+  //   BOTTOM HALF   = PROPS (MULTI-CELL DECOR, SEE TILESETS.test.props)
+  // SHEET INDEX = row*8 + col. A QUAD SLOT q LIVES AT ROW q>>2, COL q&3.
+  const quadToBrick8 = q => (q >> 2) * 8 + (q & 3);
+  function autoTileBrick8(g,x,y){
+    const t = autoTileQuad(g,x,y);
+    if(t.i >= 0) return {i:quadToBrick8(t.i), fx:false};
+    // DEEP FILL: REPEAT THE DARK 4x4 BLOCK IN PLACE SO THE BRICK COURSES LINE UP ACROSS CELLS
+    return {i:(((y % 4) + 4) % 4) * 8 + 4 + (((x % 4) + 4) % 4), fx:false};
+  }
+
+  // OLD SAVES: tileset 'test' WAS A 4x4 SHEET BEFORE MAP VERSION 2, SO ITS STAMPED TILE NUMBERS NEED REMAPPING
+  function migrateMap(m){
+    if(!m || (m.version || 1) >= 2) return m;
+    const out = {...m, version:2};
+    if(m.tileset === 'test' && Array.isArray(m.overrides))
+      out.overrides = m.overrides.map(o => Array.isArray(o) && Number.isInteger(o[2]) && o[2] >= 0 && o[2] < 16 ? [o[0], o[1], quadToBrick8(o[2]), o[3]] : o);
+    return out;
+  }
+
   // AUTOTILER FOR THE FIRST TEST SHEET (OLD LAYOUT, KEPT FOR COMPARISON)
   function autoTileLegacy(g,x,y){
     const kind = g.kind, isAir = g.isAir, ROWS = g.rows;
@@ -108,14 +131,17 @@ function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 
 
   // WRAP A MAP OBJECT SO THE AUTOTILER CAN READ IT. g = {cols, rows, kind, isAir, tileAt, mask}
   function makeGrid(m, layout) {
+    m = migrateMap(m);
     const mask = (m.mask || []).map(r => r.split(''));
     const rows = mask.length, cols = rows ? mask[0].length : 0;
     const over = new Map();
     for (const [x, y, i, fx] of (m.overrides || [])) over.set(x + ',' + y, { i, fx: !!fx });
-    const g = { cols, rows, mask, over };
+    const props = (Array.isArray(m.props) ? m.props : []).filter(p => Array.isArray(p) && typeof p[0] === 'string' && Number.isInteger(p[1]) && Number.isInteger(p[2]));
+    const deco = (Array.isArray(m.deco) ? m.deco : []).filter(d => Array.isArray(d) && d.every(Number.isInteger));   // [[x,y,tile]] NON-SOLID PIECES
+    const g = { cols, rows, mask, over, props, deco };
     g.kind = (x, y) => (x < 0 || y < 0 || x >= cols || y >= rows) ? '#' : mask[y][x];
     g.isAir = (x, y) => g.kind(x, y) !== '#';
-    const auto = layout === 'legacy' ? autoTileLegacy : layout === 'quad' ? autoTileQuad : autoTileTemplate;
+    const auto = layout === 'legacy' ? autoTileLegacy : layout === 'quad' ? autoTileQuad : layout === 'brick8' ? autoTileBrick8 : autoTileTemplate;
     g.tileAt = (x, y) => {
       const o = over.get(x + ',' + y); if (o) return { ...o, ov: true };
       if (g.kind(x, y) === '.') return null;
@@ -132,13 +158,39 @@ function hash(x,y){ let h = (x*374761393 + y*668265263)|0; h = (h ^ (h>>>13)) * 
     if (fx) { c.save(); c.translate(dx + ts, dy); c.scale(-1, 1); c.drawImage(img, sx, sy, sw, sw, 0, 0, ts, ts); c.restore(); }
     else c.drawImage(img, sx, sy, sw, sw, dx, dy, ts, ts);
   }
+  // PROPS ARE BUILT FROM WHOLE SHEET ROWS, w CELLS WIDE STARTING AT COLUMN c:
+  //   top ROWS, THEN mid ROWS REPEATED TO FILL THE HEIGHT, THEN bot ROWS. NO mid = FIXED HEIGHT.
+  //   mid IS LAID FROM THE BOTTOM UP, SO THE PIECE ABOVE THE BASE ALWAYS MATCHES THE ART AS DRAWN.
+  const propMinH = p => p.top.length + p.bot.length + (p.mid.length ? 1 : 0);
+  const propDefH = p => p.top.length + p.mid.length + p.bot.length;
+  const propClampH = (p, h) => p.mid.length ? Math.max(propMinH(p), Math.min(64, h | 0)) : propDefH(p);
+  function propRows(p, h) {   // -> SHEET ROW FOR EACH OF THE h ROWS, TOP TO BOTTOM
+    h = propClampH(p, h == null ? propDefH(p) : h);
+    const m = h - p.top.length - p.bot.length, mid = [];
+    for (let k = 0; k < m; k++) mid.unshift(p.mid[p.mid.length - 1 - (k % p.mid.length)]);
+    return [...p.top, ...mid, ...p.bot];
+  }
+  // DRAW PROP p, h CELLS TALL, WITH ITS TOP-LEFT AT (dx,dy), ts PX PER CELL
+  function drawProp(c, img, tile, p, dx, dy, ts, h) {
+    propRows(p, h).forEach((r, k) => c.drawImage(img, p.c * tile, r * tile, p.w * tile, tile, dx, dy + k * ts, p.w * ts, ts));
+  }
   // TILESETS A MAP CAN NAME. layout PICKS THE AUTOTILER; air/back ARE SLOT LISTS; inset CROPS EDGES (SEAM FIX); backDim DARKENS THE BACK WALL
   const DIR = 'assets/images/map/';
   // cols = CELLS PER ROW IN THE PNG (DEFAULT 5)
   const TILESETS = {
-    test: { layout: 'quad', cols: 4, srcs: [DIR + 'tileTest.png'], air: [], back: [], inset: 0, backDim: 0 },
+    test: { layout: 'brick8', cols: 8, srcs: [DIR + 'tileTest.png'], air: [], back: [], inset: 0, backDim: 0,
+      // PROPS IN THE BOTTOM HALF (SEE propRows). A MAP PLACES THEM AS props:[[id, x, y, h]] (TOP-LEFT MAP CELL, HEIGHT IN CELLS)
+      props: [
+        { id: 'arch',    name: 'ARCH',            c: 0, w: 3, top: [4, 5], mid: [6],    bot: [7] },
+        { id: 'column',  name: 'COLUMN (SLIM)',   c: 3, w: 1, top: [4],    mid: [5, 6], bot: [7] },
+        { id: 'pillar',  name: 'COLUMN (WIDE)',   c: 7, w: 1, top: [4],    mid: [5, 6], bot: [7] },
+        { id: 'doorway', name: 'DOORWAY',         c: 4, w: 3, top: [5, 6], mid: [],     bot: [7] },
+        { id: 'shard',   name: 'CRYSTAL SHARD',   c: 4, w: 1, top: [4],    mid: [],     bot: [] },
+        { id: 'cluster', name: 'CRYSTAL CLUSTER', c: 5, w: 1, top: [4],    mid: [],     bot: [] },
+      ],
+      decoFrom: 32 },   // SHEET SLOTS >= 32 ARE PROP PIECES: STAMPED ONTO THE DECOR LAYER, NOT AS SOLID TILES
     basic: { layout: 'template', srcs: [DIR + 'basic_tileset.png'], air: [9], back: [3, 4], inset: 0, backDim: 0 },
     first: { layout: 'legacy', srcs: [DIR + 'tileset_test.png', DIR + 'sprite_01 (17).png'], air: [4, 4, 4, 4, 9], back: [19, 24, 24], inset: 4, backDim: 0.66 },
   };
-  root.OSWTiles = { TILESETS, hash, pick, autoTileTemplate, autoTileLegacy, autoTileQuad, makeGrid, drawTile };
+  root.OSWTiles = { TILESETS, hash, pick, autoTileTemplate, autoTileLegacy, autoTileQuad, autoTileBrick8, quadToBrick8, migrateMap, makeGrid, drawTile, drawProp, propRows, propMinH, propDefH, propClampH };
 })(window);

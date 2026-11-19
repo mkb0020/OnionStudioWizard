@@ -270,6 +270,12 @@ function drawMapLevel(vl, vr) {
   }
   if (set.backDim > 0) { ctx.fillStyle = 'rgba(14,0,34,' + set.backDim + ')'; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (g.kind(x, y) !== '#') ctx.fillRect(x * C, y * C, C, C); }
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const t = g.tileAt(x, y); if (t) drawTile(ctx, img, T, t.i, t.fx, x * C, y * C, C, ins, SC); }
+  for (const [dx, dy, i] of g.deco) if (dx >= x0 && dx <= x1 && dy >= y0 && dy <= y1) drawTile(ctx, img, T, i, false, dx * C, dy * C, C, 0, SC);   // TILE LAB PROP PIECES (NO COLLISION)
+  if (set.props) for (const [id, px, py, ph] of g.props) {   // TILE LAB PROPS (DECOR ONLY, NO COLLISION)
+    const p = set.props.find(q => q.id === id); if (!p) continue;
+    const h = OSWTiles.propClampH(p, Number.isInteger(ph) ? ph : OSWTiles.propDefH(p));
+    if (px + p.w >= x0 && px <= x1 + 1 && py + h >= y0 && py <= y1 + 1) OSWTiles.drawProp(ctx, img, T, p, px * C, py * C, C, h);
+  }
 }
 
 /* ---------- ASSETS ---------- */
