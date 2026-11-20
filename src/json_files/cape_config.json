@@ -16,18 +16,18 @@
       "disGlow": 0.2, "disColA": "#1C90D6", "disColB": "#8D2EC2"
     }
   },
-  "pins": { "a": { "x": 169, "y": 182 }, "b": { "x": 167, "y": 173 } },
+  "pins": { "a": { "x": 169, "y": 190 }, "b": { "x": 167, "y": 173 } },
   "pinPoses": {},
   "rootOffset": { "x": -65, "y": -205 },
   "spring": { "stiffness": 150, "damping": 80, "runAngle": 0, "fallAngle": 12, "kick": 260, "strips": 50, "ampMin": 6, "ampMax": 24, "freqMin": 1, "freqMax": 3, "phase": 5 },
   "idle": {
-    "enabled": true, "root": { "x": 85, "y": -240 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 1550, "gust": 1050,
+    "enabled": true, "root": { "x": 68, "y": -245 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 1550, "gust": 1050,
     "gustHz": 0.35, "flutter": 150, "layered": false, "topWidth": 0, "liningShift": 0.12,
     "liningColors": ["#0000FF", "#0000FF", "#0000FF"], "liningEdge": "#0000FF", "liningGlow": "#0000ff"
   },
   "attack": { "enabled": true, "root": { "x": 0, "y": -185 }, "blendRate": 20, "backBias": 600, "flutter": 250, "gust": 7000, "gustLift": 0.7, "gustTime": 0.6 },
   "jump": {
-    "roots": { "jumpStart": { "x": 30, "y": -175 }, "jump": { "x": 30, "y": -175 }, "fall": { "x": 10, "y": -200 }, "land": { "x": 26, "y": -238 } },
+    "roots": { "jumpStart": { "x": 60, "y": -230 }, "jump": { "x": 60, "y": -230 }, "fall": { "x": 60, "y": -230 }, "land": { "x": 50, "y": -240 } },
     "blendRate": 16, "rootEase": 30
   }
 }

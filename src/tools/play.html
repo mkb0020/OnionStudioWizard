@@ -230,7 +230,7 @@ function mapSolids(g, C) {   // MERGE RUNS OF '#' INTO RECTS (ROW RUNS, THEN STA
 function loadDefaultLevel() {
   solids.length = walls.length = oneWays.length = lamps.length = 0; MAP.on = false; MAP.grid = null; buildLevel(); lamps.push(...defaultLamps());
   LEVEL_MIN_X = 0; LEVEL_MAX_X = 13500; FALL_Y = GROUND_Y + 300; FLOOR_MAX = GROUND_Y; SPAWN = { x: 100, y: GROUND_Y };
-  spawnCritters();
+  spawnCritters(); resetWorm();
 }
 async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
   const def = OSWTiles.TILESETS[m && m.tileset] || OSWTiles.TILESETS.basic;
@@ -256,7 +256,7 @@ async function loadMapLevel(m, name) {   // -> true WHEN THE MAP LOADED
   LEVEL_MIN_X = 0; LEVEL_MAX_X = g.cols * C; FALL_Y = g.rows * C + 400; FLOOR_MAX = Infinity;
   const sp = (Array.isArray(m.spawn) && g.kind(m.spawn[0], m.spawn[1]) !== '#') ? m.spawn : defaultSpawn(g);
   SPAWN = { x: (sp[0] + 0.5) * C, y: (sp[1] + 1) * C };
-  spawnCritters();
+  spawnCritters(); resetWorm();
   return true;
 }
 function drawMapLevel(vl, vr) {
@@ -305,6 +305,7 @@ async function loadAssets() {
     for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
     if (K.pat) try { const im = await loadImg(CRITTER_DIR + K.pat.src); IMG['critter_' + kind + '_pat'] = im; K.pat.tops = measureHeadTops(im, K.pat); } catch (e) { console.warn('[play] ' + kind + ': no head pat sheet (' + e.message + ')'); }
   }
+  try { IMG.worm = await loadImg(CRITTER_DIR + WORM.src); IMG.wormRocks = await loadImg(WORM_FX.rockSrc); IMG.wormSmoke = await loadImg(WORM_FX.smokeSrc); } catch (e) { console.warn('[play] worm off: ' + e.message); worm.on = false; }   // OPTIONAL
   try {   // HEAD PAT ARM: OPTIONAL, PLAY RUNS WITHOUT IT
     IMG.petArm = await loadImg(SHEET_DIR + PET_ARM.src);
     if (PET_ARM.upperSrc && PET_ARM.lowerSrc) { IMG.petUpper = await loadImg(SHEET_DIR + PET_ARM.upperSrc); IMG.petLower = await loadImg(SHEET_DIR + PET_ARM.lowerSrc); }
@@ -321,7 +322,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [], releaseQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { const k = keyName(e); keys.delete(k); if (k === 'up' || k === 'w' || k === 'space') releaseQ.push(k); });
@@ -530,6 +531,235 @@ function drawCritters(alpha) {
   }
 }
 
+/* ---------- BURROWING WORM (VISUAL ONLY: NO COLLISIONS, NO PLAYER INTERACTION) ----------
+   SHEET: critters/worm.png, ONE ROW OF 3 frame x frame CELLS, FACING RIGHT: 0 = HEAD MOUTH SHUT, 1 = HEAD MOUTH OPEN, 2 = BODY SEGMENT (A CRESCENT).
+   EVERY CELL IS DRAWN AROUND pivot (ART PX INSIDE THE CELL). EACH PIECE IS ROTATED TO POINT AT THE PIECE IN FRONT OF IT (THE HEAD POINTS ALONG ITS HEADING)
+   AND MIRRORED TOP-TO-BOTTOM WHEN HE TRAVELS LEFT, SO THE EYES STAY ON TOP.
+   CHAIN: THE SAME ROPE AS THE SPACE WORM (WORMHOLES): THE HEAD STEERS, EVERY NODE BEHIND IS PULLED BACK TO ITS LINK LENGTH FROM THE NODE IN FRONT.
+   STACKING: ROLLIE POLLIE. DRAWN TAIL FIRST, HEAD LAST, SO EACH SEGMENT SITS ON TOP OF THE ONE BEHIND IT. THE LAST taperFrac OF THE BODY SHRINKS TO tailScale.
+   STEERING: THE HEAD'S HEADING = A BREACH ARC (STRAIGHT UP FOR riseH PX, THEN TURNING AT speed / radius RAD/S TOWARD dir UNTIL IT POINTS DOWN, PLUS dipExtra
+   SO IT HOOKS BACK UNDER) + 1D PERLIN NOISE (noiseAmp RAD AT noiseFreq HZ) SO NO TWO BREACHES ARE THE SAME SHAPE.
+   CYCLE: hidden (wait SECONDS) -> tunnel (A RIDGE OF HOPPING PEBBLES, WISPS AND CRACKS SLIDES ALONG THE FLOOR TOWARD THE EXIT: THE PLAYER'S WARNING OF WHERE HE WILL COME UP)
+   -> rumble (THE RIDGE STOPS, THE HOLE OPENS, LAST CALL) -> breach (ROCK + SMOKE BURST, UP, OVER, DOWN, BURST AGAIN) -> hidden. HE ALWAYS BREACHES IN THE DIRECTION HE TUNNELLED.
+   EVERYTHING BELOW THE FLOOR LINE IS CLIPPED AWAY, SO HE LOOKS LIKE HE IS COMING OUT OF THE GROUND.
+   PARTICLES: vfx/rockParticles.png (5 x 5 GRID OF ROCKS) THROWN UP WITH GRAVITY, SPIN AND A BOUNCE; vfx/smokeParticles.png (4 x 4 GRID OF BLOBS) THAT DRIFT UP,
+   SWELL AND FADE. SOME OF EACH ARE DRAWN BEHIND THE WORM, SOME IN FRONT. K TOGGLES THE WORM; J SENDS HIM TUNNELLING UNDER NOVA FROM BEHIND HER TO COME UP IN FRONT OF HER; F1 SHOWS THE CHAIN NODES. */
+const WORM = {
+  src: 'worm.png', frames: 3, frame: 400, headShut: 0, headOpen: 1, body: 2, pivot: [200, 200],
+  scale: 0.32, segments: 24, spacing: 60, headGap: 115,              // spacing / headGap IN ART PX (TIMES scale AND THE TAPER = WORLD PX)
+  taperFrac: 0.4, tailScale: 0.5, pulse: 0.035, pulseHz: 1.1,         // pulse = A SLOW SQUEEZE TRAVELLING DOWN THE BODY (0 = OFF)
+  speed: [380, 470], riseH: [130, 250], radius: [110, 180], tilt: [0.08, 0.35], dipExtra: 0.3,
+  noiseAmp: 0.35, noiseFreq: 1.4, wait: [1.2, 3.2], rumble: 0.8, leash: 450, clipSink: 3, maxTime: 9,
+  home: 1600, mapCells: 8,                                            // TEST LEVEL: WORLD X OF HIS HOME. MAP LEVELS: THIS MANY CELLS RIGHT OF THE PLAYER SPAWN
+  shake: { range: 800, rumble: 3, burst: 9, tunnel: 1.5 },
+  tunnel: { on: true, dist: [350, 750], speed: [220, 300], wobble: 0.35, emit: 0.045, crackEvery: 34, crackFade: 1.4, jBehind: 500 },   // speed WOBBLES +-wobble (PERLIN); crackEvery = WORLD PX BETWEEN TRAIL CRACKS                         // CAMERA SHAKE WHEN NOVA IS WITHIN range PX (F2 FX OFF = NONE)
+};
+const WORM_FX = {
+  rockSrc: 'assets/images/vfx/rockParticles.png', rockGrid: 5, smokeSrc: 'assets/images/vfx/smokeParticles.png', smokeGrid: 4,
+  rocks: 18, smoke: 16, rockScale: [0.35, 0.85], smokeScale: [1.0, 2.0], smokeGrow: 1.4, gravity: 1900, bounce: 0.35,
+  rockLife: [1.4, 2.4], smokeLife: [1.0, 1.9], smokeAlpha: 1, frontChance: 0.45, max: 450,
+  hole: { w: 120, h: 18, color: '#0a0018', fade: 1.6 },
+};
+const worm = { on: true, state: 'hidden', t: 1, nodes: [], dir: 1, groundY: GROUND_Y, refY: GROUND_Y, mouthOpen: false, home: WORM.home, x0: 0, turned: 0, risen: 0, mouthT: 0, chompT: 0,
+  speed: 400, riseH: 200, radius: 150, tilt: 0.2, seed: 0, age: 0, crossedUp: false, crossedDown: false, rumbleAcc: 0, tx: 0, tdir: 1, tAge: 0, tSpeed: 260, lastCrack: 0 };
+const wormParts = [], wormHoles = [];
+const wRand = ([a, b]) => a + Math.random() * (b - a);
+
+/* 1D PERLIN (GRADIENT) NOISE, -1..1 */
+const PERM = (() => { const p = Array.from({ length: 256 }, (_, i) => i), r = makeRng(9001); for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; } return p.concat(p); })();
+function perlin1(x) {
+  const i = Math.floor(x), f = x - i, g0 = (PERM[i & 255] / 127.5) - 1, g1 = (PERM[(i + 1) & 255] / 127.5) - 1, u = f * f * f * (f * (f * 6 - 15) + 10);
+  return 2 * (g0 * f + (g1 * (f - 1) - g0 * f) * u);
+}
+
+function wormTaper(i) {   // SIZE OF NODE i (0 = HEAD)
+  const n = WORM.segments, start = n * (1 - WORM.taperFrac); if (i < start) return 1;
+  const t = (i - start) / Math.max(1, n - start); return 1 - (1 - WORM.tailScale) * t * t * (3 - 2 * t);
+}
+function wormLink(i) { return i === 1 ? WORM.headGap * WORM.scale : WORM.spacing * WORM.scale * (wormTaper(i - 1) + wormTaper(i)) / 2; }   // LENGTH FROM NODE i-1 TO NODE i
+function wormFloor(x, nearY) {   // TOP OF THE SOLID UNDER x THAT IS WITHIN 8 PX OF nearY, WITH NOTHING SOLID SITTING ON IT (NaN = NO GOOD)
+  let f = NaN;
+  for (const s of solids) if (x >= s.x && x <= s.x + s.w && Math.abs(s.y - nearY) <= 8) f = s.y;
+  if (isNaN(f)) return NaN;
+  for (const s of solids) if (x >= s.x && x <= s.x + s.w && s.y < f - 1 && s.y + s.h > f - 300) return NaN;   // A WALL OR CEILING RIGHT ABOVE THE SPOT
+  return f;
+}
+function wormFloorNear(x, refY) { return MAP.on ? critGround(x, refY, MAP.cell) : GROUND_Y; }   // THE FLOOR AT x, ROUGHLY AT THE HEIGHT refY (Infinity = A PIT)
+function resetWorm() {
+  worm.home = MAP.on ? SPAWN.x + WORM.mapCells * MAP.cell : WORM.home; worm.refY = MAP.on ? SPAWN.y : GROUND_Y; worm.groundY = worm.refY;
+  worm.state = 'hidden'; worm.t = 1; worm.nodes.length = 0; wormParts.length = wormHoles.length = 0;
+}
+function wormPlan(x, dir) {   // -> TRUE WHEN THE FLOOR AT THE EXIT, THE MIDDLE AND THE DIVE IS FLAT AND OPEN
+  const reach = 2 * worm.radius + worm.riseH * Math.tan(worm.tilt) + 40, g = worm.groundY;
+  for (const k of [0, 0.5, 1]) { const px = x + dir * reach * k; if (px < LEVEL_MIN_X + 60 || px > LEVEL_MAX_X - 60 || isNaN(wormFloor(px, g))) return false; }
+  return true;
+}
+function planBreach(x, dir) {   // PICK THE BREACH SHAPE AND CHECK THE FLOOR (MAY FLIP dir). FALSE = NO ROOM HERE
+  worm.speed = wRand(WORM.speed); worm.riseH = wRand(WORM.riseH); worm.radius = wRand(WORM.radius); worm.tilt = wRand(WORM.tilt); worm.seed = Math.random() * 1000;
+  if (!wormPlan(x, dir)) { if (wormPlan(x, -dir)) dir = -dir; else { worm.radius = WORM.radius[0]; worm.riseH = WORM.riseH[0]; if (!wormPlan(x, dir)) return false; } }
+  worm.x0 = x; worm.dir = dir; return true;
+}
+function startApproach(x, dir, from) {   // PLAN A BREACH AT x, THEN TUNNEL TO IT FROM from (DEFAULT: dist PX BEHIND IT, SO HE COMES UP STILL HEADING THE SAME WAY)
+  if (!planBreach(x, dir)) return false;
+  const T = WORM.tunnel, g = worm.groundY; if (!T.on) { startRumble(); return true; }
+  const want = from !== undefined ? from : x - worm.dir * wRand(T.dist), sd = Math.sign(want - x) || -worm.dir;
+  let sx = x;   // WALK BACK FROM THE EXIT WHILE THE FLOOR STAYS FLAT AND OPEN (HE CAN'T TUNNEL THROUGH A PIT OR UNDER A WALL)
+  while (Math.abs(sx - x) < Math.abs(want - x)) { const nx = sx + sd * 30; if (nx < LEVEL_MIN_X + 20 || nx > LEVEL_MAX_X - 20 || isNaN(wormFloor(nx, g))) break; sx = nx; }
+  if (Math.abs(sx - x) < 60) { startRumble(); return true; }
+  worm.state = 'tunnel'; worm.tx = sx; worm.tdir = -sd; worm.tAge = 0; worm.tSpeed = wRand(T.speed); worm.lastCrack = sx; worm.rumbleAcc = 0; worm.seed = Math.random() * 1000;
+  return true;
+}
+function startRumble() {   // THE RIDGE HAS STOPPED: SHAKE THE GROUND AT THE EXIT
+  const x = worm.x0; worm.state = 'rumble'; worm.t = WORM.rumble; worm.rumbleAcc = 0;
+  wormHoles.push({ x, y: worm.groundY, age: 0, closeT: -1, grow: WORM.rumble });
+  if (FX.on && Math.abs(P.x - x) < WORM.shake.range) shakeCamera(WORM.rumble, WORM.shake.rumble);
+}
+function stepTunnel(dt) {   // THE RIDGE: PEBBLES HOP, WISPS LEAK, A LINE OF SMALL CRACKS FADES BEHIND IT
+  const W = worm, T = WORM.tunnel, g = W.groundY; W.tAge += dt;
+  const v = W.tSpeed * (1 + T.wobble * perlin1(W.seed + W.tAge * 1.7)), left = (W.x0 - W.tx) * W.tdir;
+  W.tx += W.tdir * Math.min(left, v * dt);
+  W.rumbleAcc += dt;
+  while (W.rumbleAcc > T.emit) {
+    W.rumbleAcc -= T.emit; const x = W.tx + (Math.random() - 0.5) * 50;
+    if (wormParts.length < WORM_FX.max) wormParts.push({ k: 'rock', f: Math.floor(Math.random() * 25), x, y: g - 2, vx: (Math.random() - 0.5) * 90 - W.tdir * 40, vy: -wRand([90, 280]), rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 10, s: wRand([0.18, 0.38]), age: 0, life: wRand([0.6, 1.1]), floor: g, front: Math.random() < 0.5 });
+    if (Math.random() < 0.3) wormSmoke(x, g - 4, -W.tdir * wRand([10, 50]), -wRand([15, 50]), 0.5);
+  }
+  if (Math.abs(W.tx - W.lastCrack) >= T.crackEvery) { W.lastCrack = W.tx; wormHoles.push({ x: W.tx, y: g, age: 0, closeT: T.crackFade, fade: T.crackFade, grow: 0.15, size: wRand([0.3, 0.45]) }); }
+  if (FX.on && Math.abs(P.x - W.tx) < WORM.shake.range * 0.6 && shake.t <= 0) shakeCamera(0.12, WORM.shake.tunnel);
+  if (left <= v * dt) startRumble();   // ARRIVED: THE LAST WARNING, THEN UP HE COMES
+}
+function startBreach() {   // THE WHOLE CHAIN STARTS AS A STRAIGHT LINE UNDER THE HOLE
+  const g = worm.groundY, h0 = -Math.PI / 2 + worm.dir * worm.tilt; let d = 0;
+  worm.nodes.length = 0;
+  for (let i = 0; i < WORM.segments + 1; i++) { if (i) d += wormLink(i); const x = worm.x0 - Math.cos(h0) * d, y = g + 10 - Math.sin(h0) * d; worm.nodes.push({ x, y, px: x, py: y }); }
+  worm.nodes[0].h = h0;
+  worm.state = 'breach'; worm.turned = 0; worm.risen = 0; worm.age = 0; worm.crossedUp = worm.crossedDown = false; worm.mouthT = 0; worm.chompT = 0;
+}
+function wormBurst(x, y, power, dir) {
+  const F = WORM_FX;
+  for (let i = 0; i < Math.round(F.rocks * power) && wormParts.length < F.max; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6 + dir * 0.25, v = wRand([350, 950]) * Math.sqrt(power);
+    wormParts.push({ k: 'rock', f: Math.floor(Math.random() * F.rockGrid * F.rockGrid), x: x + (Math.random() - 0.5) * 60, y: y - 4, vx: Math.cos(a) * v * 0.55, vy: Math.sin(a) * v,
+      rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 14, s: wRand(F.rockScale), age: 0, life: wRand(F.rockLife), floor: y, front: Math.random() < F.frontChance });
+  }
+  for (let i = 0; i < Math.round(F.smoke * power) && wormParts.length < F.max; i++) wormSmoke(x + (Math.random() - 0.5) * 80, y - 6, (Math.random() - 0.5) * 160 + dir * 30, -wRand([30, 160]) * power, 1);
+}
+function wormSmoke(x, y, vx, vy, size) {
+  const F = WORM_FX;
+  wormParts.push({ k: 'smoke', f: Math.floor(Math.random() * F.smokeGrid * F.smokeGrid), x, y, vx, vy, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 1.5,
+    s: wRand(F.smokeScale) * size, age: 0, life: wRand(F.smokeLife), front: Math.random() < F.frontChance });
+}
+function wormGo(x, dir) {   // J: BREACH HERE, NOW (IGNORED WHILE HE IS ALREADY OUT)
+  if (!worm.on || worm.state !== 'hidden') return;
+  const g = wormFloorNear(x, P.y); if (!isFinite(g)) return;
+  worm.groundY = g; if (!startApproach(x, dir, x - dir * WORM.tunnel.jBehind)) worm.t = 0.5;
+}
+function stepWorm(dt) {
+  if (!worm.on) return;
+  for (const n of worm.nodes) { n.px = n.x; n.py = n.y; }
+  worm.t -= dt;
+  if (worm.state === 'hidden') {
+    if (worm.t <= 0) {
+      const x = worm.home + (Math.random() * 2 - 1) * WORM.leash, dir = Math.abs(x - worm.home) > WORM.leash * 0.5 ? Math.sign(worm.home - x) : (Math.random() < 0.5 ? -1 : 1);
+      worm.groundY = wormFloorNear(x, worm.refY);
+      if (!isFinite(worm.groundY) || !startApproach(x, dir)) worm.t = 0.5;   // NO ROOM THERE: TRY AGAIN SOON
+    }
+  } else if (worm.state === 'tunnel') stepTunnel(dt);
+  else if (worm.state === 'rumble') {
+    worm.rumbleAcc += dt;
+    while (worm.rumbleAcc > 0.06) {   // PEBBLES HOP, WISPS LEAK OUT OF THE CRACK
+      worm.rumbleAcc -= 0.06; const x = worm.x0 + (Math.random() - 0.5) * 90;
+      if (wormParts.length < WORM_FX.max) wormParts.push({ k: 'rock', f: Math.floor(Math.random() * 25), x, y: worm.groundY - 2, vx: (Math.random() - 0.5) * 120, vy: -wRand([120, 360]), rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 10, s: wRand([0.2, 0.4]), age: 0, life: wRand([0.7, 1.2]), floor: worm.groundY, front: Math.random() < 0.5 });
+      if (Math.random() < 0.35) wormSmoke(x, worm.groundY - 4, (Math.random() - 0.5) * 40, -wRand([20, 60]), 0.55);
+    }
+    if (worm.t <= 0) startBreach();
+  } else if (worm.state === 'breach') stepBreach(dt);
+  stepWormParts(dt);
+}
+function stepBreach(dt) {
+  const W = worm, g = W.groundY, head = W.nodes[0], tot = Math.PI - W.tilt + WORM.dipExtra;
+  W.age += dt;
+  if (W.risen < W.riseH) W.risen += W.speed * dt;                                     // RISE STRAIGHT (ISH) OUT OF THE HOLE
+  else W.turned = Math.min(tot, W.turned + (W.speed / W.radius) * dt);               // THEN ROLL OVER AND DOWN
+  const wob = WORM.noiseAmp * perlin1(W.seed + W.age * WORM.noiseFreq) * (1 - 0.6 * W.turned / tot);   // CALMER ON THE WAY DOWN SO HE HITS HIS HOLE
+  const h = -Math.PI / 2 + W.dir * (W.tilt + W.turned) + wob;
+  head.x += Math.cos(h) * W.speed * dt; head.y += Math.sin(h) * W.speed * dt; head.h = h;
+  for (let i = 1; i < W.nodes.length; i++) {   // ROPE: PULL EACH NODE BACK TO ITS LINK LENGTH FROM THE ONE IN FRONT
+    const a = W.nodes[i - 1], b = W.nodes[i], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy), L = wormLink(i);
+    if (d > L) { b.x = a.x + dx * L / d; b.y = a.y + dy * L / d; }
+  }
+  const near = FX.on && Math.abs(P.x - head.x) < WORM.shake.range;
+  if (!W.crossedUp && head.y < g) { W.crossedUp = true; W.mouthT = 0.55; wormBurst(head.x, g, 1, W.dir); if (near) shakeCamera(0.25, WORM.shake.burst); }
+  if (W.crossedUp && !W.crossedDown && W.turned > tot * 0.55 && head.y > g) {
+    W.crossedDown = true; wormBurst(head.x, g, 0.8, W.dir); wormHoles.push({ x: head.x, y: g, age: 0, closeT: -1, grow: 0.12 }); if (near) shakeCamera(0.2, WORM.shake.burst * 0.7);
+  }
+  if (W.mouthT > 0) W.mouthT -= dt;
+  if (W.risen >= W.riseH && W.turned > 0.25 * tot && W.turned < 0.6 * tot) W.chompT += dt; else W.chompT = 0;   // TWO QUICK CHOMPS OVER THE TOP
+  const apexChomp = W.chompT > 0 && Math.floor(W.chompT * 7) % 2 === 0 && W.chompT < 0.6;
+  const diving = W.turned > 0.7 * tot && head.y > g - 90 && head.y < g + 20;
+  W.mouthOpen = W.mouthT > 0 || apexChomp || diving;
+  if (W.nodes.every((n, i) => n.y - 170 * WORM.scale * wormTaper(i) > g) && W.crossedDown || W.age > WORM.maxTime) {   // ALL OF HIM IS UNDER: GO QUIET
+    W.state = 'hidden'; W.t = wRand(WORM.wait); W.nodes.length = 0;
+    for (const o of wormHoles) if (o.closeT < 0) o.closeT = WORM_FX.hole.fade;
+  }
+}
+function stepWormParts(dt) {
+  const F = WORM_FX;
+  for (let i = wormParts.length - 1; i >= 0; i--) {
+    const p = wormParts[i]; p.age += dt; if (p.age >= p.life) { wormParts.splice(i, 1); continue; }
+    p.rot += p.spin * dt;
+    if (p.k === 'rock') {
+      if (p.rest) continue;
+      p.vy += F.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      if (p.y >= p.floor && p.vy > 0) { p.y = p.floor; p.vy *= -F.bounce; p.vx *= 0.55; p.spin *= 0.5; if (Math.abs(p.vy) < 70) { p.rest = true; p.spin = 0; } }
+    } else { p.vx *= Math.pow(0.4, dt); p.vy *= Math.pow(0.55, dt); p.vy -= 18 * dt; p.x += p.vx * dt; p.y += p.vy * dt; }
+  }
+  for (let i = wormHoles.length - 1; i >= 0; i--) { const o = wormHoles[i]; o.age += dt; if (o.closeT >= 0 && (o.closeT -= dt) <= 0) wormHoles.splice(i, 1); }
+}
+function drawWormParts(front) {
+  const F = WORM_FX;
+  for (const p of wormParts) {
+    if (p.front !== front) continue;
+    const t = p.age / p.life;
+    if (p.k === 'rock') {
+      const im = IMG.wormRocks; if (!im) continue; const c = im.naturalWidth / F.rockGrid, a = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(p.x, p.y - c * p.s * 0.35); ctx.rotate(p.rot); ctx.scale(p.s, p.s);
+      ctx.drawImage(im, (p.f % F.rockGrid) * c, Math.floor(p.f / F.rockGrid) * c, c, c, -c / 2, -c / 2, c, c); ctx.restore();
+    } else {
+      const im = IMG.wormSmoke; if (!im) continue; const c = im.naturalWidth / F.smokeGrid, s = p.s * (1 + F.smokeGrow * t), a = F.smokeAlpha * Math.min(1, t * 6) * (1 - t * t);
+      ctx.save(); ctx.globalAlpha = a; ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.scale(s, s);
+      ctx.drawImage(im, (p.f % F.smokeGrid) * c, Math.floor(p.f / F.smokeGrid) * c, c, c, -c / 2, -c / 2, c, c); ctx.restore();
+    }
+  }
+}
+function drawWormHoles() {
+  const Hh = WORM_FX.hole;
+  for (const o of wormHoles) {
+    const open = Math.min(1, o.age / Math.max(o.grow, 0.01)) * (o.size || 1), a = o.closeT >= 0 ? o.closeT / (o.fade || Hh.fade) : 1;
+    ctx.save(); ctx.globalAlpha = 0.85 * a; ctx.fillStyle = Hh.color; ctx.beginPath(); ctx.ellipse(o.x, o.y + 2, Hh.w / 2 * open, Hh.h / 2 * open, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+}
+function drawWorm(alpha) {
+  if (!worm.on) return;
+  drawWormHoles(); drawWormParts(false);                                   // BEHIND HIM
+  const im = IMG.worm, N = worm.nodes;
+  if (im && worm.state === 'breach' && N.length) {
+    const cw = im.naturalWidth / WORM.frames, ch = im.naturalHeight, k = ch / WORM.frame, [pvx, pvy] = WORM.pivot;
+    const pts = N.map(n => ({ x: n.px + (n.x - n.px) * alpha, y: n.py + (n.y - n.py) * alpha }));
+    ctx.save(); ctx.beginPath(); ctx.rect(worm.x0 - 4000, worm.groundY - 4000, 8000, 4000 + WORM.clipSink); ctx.clip();   // NOTHING BELOW THE FLOOR LINE
+    for (let i = pts.length - 1; i >= 0; i--) {                             // TAIL FIRST, HEAD LAST: EACH SEGMENT ON TOP OF THE ONE BEHIND IT
+      const p = pts[i], ang = i === 0 ? (N[0].h !== undefined ? N[0].h : 0) : Math.atan2(pts[i - 1].y - p.y, pts[i - 1].x - p.x);
+      const pulse = i ? 1 + WORM.pulse * Math.sin(clockT * WORM.pulseHz * 6.283 - i * 0.55) : 1, s = WORM.scale * wormTaper(i) * pulse / k;
+      const f = i ? WORM.body : (worm.mouthOpen ? WORM.headOpen : WORM.headShut);
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(ang); ctx.scale(s, s * worm.dir);
+      ctx.drawImage(im, f * cw, 0, cw, ch, -pvx * k, -pvy * k, cw, ch); ctx.restore();
+    }
+    ctx.restore();
+    if (showHitboxes) { ctx.fillStyle = '#67FEBD'; for (const p of pts) ctx.fillRect(p.x - 2, p.y - 2, 4, 4); ctx.strokeStyle = '#fecd39'; ctx.beginPath(); ctx.moveTo(worm.x0 - 200, worm.groundY + .5); ctx.lineTo(worm.x0 + 600 * worm.dir, worm.groundY + .5); ctx.stroke(); }
+  }
+}
+function drawWormFront() { if (worm.on) drawWormParts(true); }   // IN FRONT OF HIM (STILL BEHIND NOVA)
+
 /* ---------- HEAD PATS (C) ----------
    PRESS C NEAR A CRITTER THAT HAS A `pat` SHEET: NOVA TURNS TO HIM AND STAYS IN HER IDLE POSE, HE WALKS OVER TO THE PAT SPOT (gap ART PX IN FRONT OF HER,
    MEASURED OFF nova_and_aetherling.png), TURNS TO FACE HER AND PLAYS HIS HEAD PAT LOOP. HOLD C TO KEEP PATTING; LET GO AND THE CURRENT LOOP FINISHES
@@ -685,6 +915,8 @@ function tick(dt) {
     else if (k === 'g') CAPE_DISSOLVE.enabled = !CAPE_DISSOLVE.enabled;
     else if (k === 'l') lighting.on = !lighting.on;
     else if (k === 'n') crittersOn = !crittersOn;
+    else if (k === 'k') { worm.on = !worm.on; if (!worm.on) resetWorm(); }
+    else if (k === 'j') wormGo(P.x + (P.flip ? -1 : 1) * 220, P.flip ? -1 : 1);
     else if (k === 'b') ARCADE.on = !ARCADE.on;
   }
   while (releaseQ.length) { releaseQ.shift(); if (!down('up', 'w', 'space')) releaseJump(); }
@@ -699,7 +931,7 @@ function tick(dt) {
     if (attackT > 0) { attackT -= dt; if (attackT <= 0) isAttacking = false; }   // THE GROUND ATTACKS END ON A TIMER (k.wait IN THE KAPLAY BUILD)
   } else if (pet.phase !== 'none') stepPet(dt);
   else mainUpdate(dt);
-  stepCritters(dt);
+  stepCritters(dt); stepWorm(dt);
   if (pet.msgT > 0) pet.msgT -= dt;
   updateAirKick(dt); updateDoubleJump(dt);
   if (isAttacking || pet.phase !== 'none') P.vx = P.mx;   // ATTACKS / HEAD PAT DRIVE SIDEWAYS SPEED DIRECTLY (NO ACCEL SMOOTHING)
@@ -1517,8 +1749,9 @@ function drawHud() {
     'sheet cape (F3): ' + (capeProf.data ? (capeProf.on ? 'ON' : 'OFF') + '   ' : '') + capeProf.note,
     'cape config: ' + capeCfgSrc,
     'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
+    'worm (K): ' + (worm.on ? worm.state + (worm.state === 'hidden' ? ' ' + Math.max(0, worm.t).toFixed(1) + 's' : (worm.state === 'tunnel' ? '   ridge x ' + worm.tx.toFixed(0) : '') + '   exit x ' + worm.x0.toFixed(0) + (worm.dir > 0 ? ' >' : ' <')) + '   particles ' + wormParts.length : 'off') + '   J = tunnel under Nova, come up in front of her',
     'pet (C): ' + (pet.phase === 'none' ? (pet.msgT > 0 ? pet.msg : 'ready') : pet.phase + (pet.dbg ? '   reach ' + (pet.dbg.reach * 100).toFixed(0) + '%   shoulder ' + pet.dbg.r1.toFixed(1) + 'deg   elbow ' + pet.dbg.r2.toFixed(1) + 'deg' : '')),
-    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   R respawn   F1 hitboxes',
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
 }
@@ -1530,7 +1763,9 @@ function render(alpha) {
   ctx.save(); ctx.translate(Math.round(W / 2 - cam.x - shake.x), Math.round(H / 2 - cam.y - shake.y));
   drawLevel(cam.x - W / 2 - 60, cam.x + W / 2 + 60);
   drawTorches(cam.x - W / 2, cam.x + W / 2);                              // z 3
+  drawWorm(alpha);                                                        // z 4: THE WORM, ITS HOLES AND THE DEBRIS BEHIND HIM (CLIPPED AT THE FLOOR)
   drawCritters(alpha);                                                    // z 5: WANDERING CRITTERS, BEHIND THE PLAYER AND HER FX
+  drawWormFront();                                                        // z 5.5: ROCKS / SMOKE IN FRONT OF THE WORM
   drawParticles();                                                        // z 8
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
@@ -1635,7 +1870,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
