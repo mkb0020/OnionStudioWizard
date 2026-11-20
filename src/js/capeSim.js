@@ -16,6 +16,7 @@
 'use strict';
 const TAU = Math.PI * 2;
 const SPANS = [3, 5, 8, 12];
+const BEND_MID = 1;                                       // HOW HARD THE BEND LIMIT STRAIGHTENS A FOLDED JOINT FROM ITS MIDDLE POINT (0 = THE OLD ENDS-ONLY BEHAVIOUR)
 const wrapA = (a) => { while (a > Math.PI) a -= TAU; while (a < -Math.PI) a += TAU; return a; };
 
 // THE CAPE IS ONE CHAIN PER PIN. 1 PIN = A SINGLE SPINE (DRAWN AS A RIBBON). 2 PINS = TWO EDGE CHAINS LINKED BY RUNGS + DIAGONALS = A CLOTH STRIP WHOSE ROOT EDGE IS PINNED AT BOTH ENDS.
@@ -104,7 +105,13 @@ function capeStep(cape, P, env, dt) {
         const Pt = cape.chains[k].p;
         for (let i = 0; i < n - 1; i++) link(Pt[i], Pt[i + 1], P.segLen, i === 0 ? 0 : 1, 1, 1);
         if (P.bend > 0) for (let i = 0; i < n - 2; i++) link(Pt[i], Pt[i + 2], P.segLen * 2 * 0.97, i === 0 ? 0 : 1, 1, P.bend);
-        if (useBend) for (let i = 0; i < n - 2; i++) { const d = Math.hypot(Pt[i + 2].x - Pt[i].x, Pt[i + 2].y - Pt[i].y); if (d < chordMin) link(Pt[i], Pt[i + 2], chordMin, i === 0 ? 0 : 1, 1, 1); } // NO SHARP FOLDS: ONE-SIDED DISTANCE LIMIT BETWEEN POINTS TWO APART (CHORD = 2L*cos(bend/2))
+        if (useBend) for (let i = 0; i < n - 2; i++) {      // NO SHARP FOLDS: ONE-SIDED DISTANCE LIMIT BETWEEN POINTS TWO APART (CHORD = 2L*cos(bend/2))
+          const a = Pt[i], m = Pt[i + 1], b = Pt[i + 2], d = Math.hypot(b.x - a.x, b.y - a.y);
+          if (d >= chordMin) continue;
+          const s = BEND_MID * (1 - d / chordMin);          // ALSO PULL THE MIDDLE POINT TOWARD ITS NEIGHBOURS' MIDPOINT. PUSHING ONLY THE ENDS APART FIGHTS THE SEGMENT LINKS (THEY PULL THE ENDS
+          m.x += ((a.x + b.x) / 2 - m.x) * s; m.y += ((a.y + b.y) / 2 - m.y) * s;   // STRAIGHT BACK) AND A FOLD PAST THE LIMIT LOCKS IN PLACE (PLAY: THE CAPE CRUMPLED AFTER A JUMP)
+          link(a, b, chordMin, i === 0 ? 0 : 1, 1, 1);
+        }
         if (P.spanMin > 0) for (const s of SPANS) {         // NO LOOPS / HAIRPINS: POINTS s APART MAY NOT GET CLOSER THAN spanMin * (STRAIGHT LENGTH)
           if (s >= n) break;
           const dmin = P.spanMin * s * P.segLen;
