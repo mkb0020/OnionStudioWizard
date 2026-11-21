@@ -774,8 +774,9 @@ const PET_ARM = {
   shoulder: [251, 180], elbow: [265, 201], palm: [316, 192],   // ART PX: THE TWO PIVOTS AND THE SPOT ON THE PALM THAT RESTS ON THE HEAD
   cut: [[266, 192], [263, 211]], overlap: 3,                   // ELBOW SPLIT LINE (INNER CORNER -> OUTER CORNER); THE UPPER ARM KEEPS overlap PX PAST IT, UNDER THE FOREARM
   shoulderBob: [3, 2, 1, 0, 1, 2],                             // ART PX DOWN PER IDLE FRAME, COMPARED WITH FRAME 3 (MEASURED OFF idle.png). REDRAW THE IDLE = RE-MEASURE THIS
+  shift: [-34, 0],                                             // ART PX [x, y]: MOVES THE WHOLE ARM ONTO idle.png'S SHOULDER WITHOUT REDRAWING pet.png (- = LEFT / UP). SCOOT THE IDLE AGAIN = CHANGE THIS
 };
-const PET = { gap: 205, reach: 320, comeSpeed: 1.3, comeTimeout: 3, minLoops: 2, reachTime: 0.16, tuck: [20, 45] };
+const PET = { gap: 171, reach: 320, comeSpeed: 1.3, comeTimeout: 3, minLoops: 2, reachTime: 0.16, tuck: [20, 45] };
 // gap = ART PX FROM NOVA'S FEET TO THE CRITTER'S anchorX. reach = WORLD PX A CRITTER CAN BE FROM THE PAT SPOT AND STILL COME OVER. comeSpeed = x HIS WALK SPEED.
 // reachTime = SECONDS FOR THE ARM TO GO OUT / COME BACK. tuck = WHERE THE PALM STARTS AND ENDS (ART PX FROM THE SHOULDER: TUCKED BEHIND HER BODY)
 const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r']);
@@ -878,7 +879,7 @@ function drawPetArm(x, y, alpha) {   // z 9.7: OVER THE CRITTER AND THE CAPE, UN
   const pl = sheetPlace('idle', P.frame, P.flip), cw = Math.floor(im.naturalWidth / PLAYER_SHEETS.idle.frames), ih = im.naturalHeight, sz = PLAYER_FRAME * pl.s, u = sz / cw, fx = P.flip ? -1 : 1;
   const lx = (wx - x) / (SCALE * squash.x) - wallSlideHOffset - pl.ox, ly = (wy - y) / (SCALE * squash.y) + visualLift - pl.oy;
   const head = [(fx * lx + sz / 2) / u, (ly + sz) / u];
-  const S0 = PET_ARM.shoulder, E0 = PET_ARM.elbow, H0 = PET_ARM.palm, bob = PET_ARM.shoulderBob[P.frame] || 0, S = [S0[0], S0[1] + bob];
+  const S0 = PET_ARM.shoulder, E0 = PET_ARM.elbow, H0 = PET_ARM.palm, bob = PET_ARM.shoulderBob[P.frame] || 0, sh = PET_ARM.shift || [0, 0], S = [S0[0] + sh[0], S0[1] + sh[1] + bob];
   const e = pet.k * pet.k * (3 - 2 * pet.k), tuck = [S[0] + PET.tuck[0], S[1] + PET.tuck[1]];   // SMOOTHSTEP FROM TUCKED TO ON HIS HEAD
   const T = [tuck[0] + (head[0] - tuck[0]) * e, tuck[1] + (head[1] - tuck[1]) * e], { E, H, reach } = solveArm(S, T);
   const r1 = Math.atan2(E[1] - S[1], E[0] - S[0]) - Math.atan2(E0[1] - S0[1], E0[0] - S0[0]);
