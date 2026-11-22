@@ -302,7 +302,7 @@ async function loadAssets() {
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
   try { IMG.bgBottom = await loadImg(BG_BOTTOM.src); } catch (e) { console.warn('[play] no floor strip (' + e.message + ')'); }
   for (const [kind, K] of Object.entries(CRITTER_KINDS)) {
-    for (const st of ['idle', 'walk']) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);
+    for (const st of ['idle', 'walk']) if (K[st]) IMG['critter_' + kind + '_' + st] = await loadImg(CRITTER_DIR + K[st].src);   // NO walk SHEET = IDLE-ONLY CRITTER
     if (K.pat) try { const im = await loadImg(CRITTER_DIR + K.pat.src); IMG['critter_' + kind + '_pat'] = im; K.pat.tops = measureHeadTops(im, K.pat); } catch (e) { console.warn('[play] ' + kind + ': no head pat sheet (' + e.message + ')'); }
   }
   try { IMG.worm = await loadImg(CRITTER_DIR + WORM.src); IMG.wormRocks = await loadImg(WORM_FX.rockSrc); IMG.wormSmoke = await loadImg(WORM_FX.smokeSrc); } catch (e) { console.warn('[play] worm off: ' + e.message); worm.on = false; }   // OPTIONAL
@@ -463,7 +463,9 @@ const approach = (v, target, step) => v < target ? Math.min(v + step, target) : 
    stepPx = ART PX A PLANTED FOOT SLIDES BACK PER WALK FRAME (MEASURED OFF THE SHEET). WALK SPEED IS DERIVED FROM IT AND walk.fps, SO THE FEET NEVER SKATE:
    CHANGE walk.fps TO MAKE HIM WALK FASTER OR SLOWER.
    BEHAVIOUR: IDLE FOR idleTime SECONDS, THEN WALK FOR walkTime SECONDS (SOMETIMES TURNING FIRST). AT A WALL, A LEDGE DROP BIGGER THAN stepUp,
-   OR THE LEVEL EDGE HE TURNS AROUND AND PAUSES; PAST leash FROM HOME HE HEADS BACK. N TOGGLES CRITTERS; F1 SHOWS THEIR BOXES. */
+   OR THE LEVEL EDGE HE TURNS AROUND AND PAUSES; PAST leash FROM HOME HE HEADS BACK. N TOGGLES CRITTERS; F1 SHOWS THEIR BOXES.
+   OPTIONAL: footY = THE ART Y INSIDE THE CELL WHERE THE FEET TOUCH THE GROUND (DEFAULT = THE CELL BOTTOM). NO walk SHEET = HE STAYS PUT AND IDLES
+   (STILL FACES A RANDOM WAY, STILL FALLS ONTO THE FLOOR). */
 const CRITTER_DIR = 'assets/images/critters/';
 const CRITTER_KINDS = {
   aetherling: {
@@ -473,8 +475,13 @@ const CRITTER_KINDS = {
     frame: 400, scale: 1, anchorX: 255, stepPx: 12, hitW: 110, hitH: 110, stepUp: 12,
     idleTime: [1.5, 4], walkTime: [2.5, 6], turnChance: 0.45, pauseAfterTurn: [0.6, 1.6], leash: 600,   // leash = HOW FAR (WORLD PX) HE STRAYS FROM WHERE HE SPAWNED BEFORE HEADING BACK
   },
+  goblin: {   // HALF-ROBOT GOBLIN, FIRST PASS: IDLE ONLY (NO WALK / PATROL / ATTACK YET). FUTURE ENEMY, PARKED HERE SO HE CAN JUST STAND AROUND LOOKING COOL
+    idle: { src: 'goblin.png', frames: 6, fps: 8 },
+    frame: 300, scale: 1, anchorX: 165, footY: 265, hitW: 120, hitH: 160, stepUp: 12,   // FEET SIT AT y 265 OF THE 300 CELL; anchorX ~ BETWEEN HIS FEET
+    idleTime: [3, 6], walkTime: [0, 0], turnChance: 0, pauseAfterTurn: [1, 2], leash: 0,
+  },
 };
-const CRITTER_SPAWNS = { test: [{ kind: 'aetherling', x: 650 }], mapCells: 4 };   // TEST LEVEL: WORLD X. MAP LEVELS: THIS MANY CELLS RIGHT OF THE PLAYER SPAWN
+const CRITTER_SPAWNS = { test: [{ kind: 'aetherling', x: 650 }, { kind: 'goblin', x: 1000 }], map: [{ kind: 'aetherling', cells: 4 }, { kind: 'goblin', cells: 7 }] };   // TEST LEVEL: WORLD X. MAP LEVELS: THIS MANY CELLS RIGHT OF THE PLAYER SPAWN
 const critters = [];
 let crittersOn = true;
 const critRand = ([a, b]) => a + Math.random() * (b - a);
@@ -491,7 +498,7 @@ function critBlocked(x, y, K) {   // A SOLID STANDS IN FRONT OF THE BODY (TALLER
 }
 function spawnCritters() {
   resetPet(); critters.length = 0;
-  const list = MAP.on ? [{ kind: 'aetherling', x: SPAWN.x + CRITTER_SPAWNS.mapCells * MAP.cell }] : CRITTER_SPAWNS.test;
+  const list = MAP.on ? CRITTER_SPAWNS.map.map(d => ({ kind: d.kind, x: SPAWN.x + d.cells * MAP.cell })) : CRITTER_SPAWNS.test;
   for (const d of list) {
     const K = CRITTER_KINDS[d.kind]; if (!K) continue;
     let x = Math.min(LEVEL_MAX_X - K.hitW, Math.max(LEVEL_MIN_X + K.hitW, d.x)), top = MAP.on ? SPAWN.y - MAP.cell : GROUND_Y - 10;
@@ -504,9 +511,10 @@ function stepCritter(c, dt) {
   if (c === pet.c && (c.state === 'come' || c.state === 'pat')) { c.px = c.x; c.py = c.y; stepPetCritter(c, dt); return; }   // BUSY WITH NOVA
   const K = CRITTER_KINDS[c.kind]; c.px = c.x; c.py = c.y; c.t -= dt; c.animT += dt;
   if (c.t <= 0) {
-    if (c.state === 'idle') { c.state = 'walk'; c.t = critRand(K.walkTime); if (Math.abs(c.x - c.home) > K.leash) c.dir = Math.sign(c.home - c.x); else if (Math.random() < K.turnChance) c.dir = -c.dir; }
+    if (!K.walk) { c.t = critRand(K.idleTime); }   // IDLE-ONLY: KEEP CHILLING (animT KEEPS RUNNING SO THE LOOP NEVER RESTARTS)
+    else if (c.state === 'idle') { c.state = 'walk'; c.t = critRand(K.walkTime); if (Math.abs(c.x - c.home) > K.leash) c.dir = Math.sign(c.home - c.x); else if (Math.random() < K.turnChance) c.dir = -c.dir; }
     else { c.state = 'idle'; c.t = critRand(K.idleTime); }
-    c.animT = 0;
+    if (K.walk) c.animT = 0;
   }
   if (c.state === 'walk' && c.vy === 0) {
     const nx = c.x + c.dir * critSpeed(K) * dt, front = nx + c.dir * K.hitW / 2, g = critGround(front, c.y, K.stepUp);
@@ -525,8 +533,8 @@ function drawCritters(alpha) {
   for (const c of critters) {
     const st = c.state === 'come' ? 'walk' : c.state, K = CRITTER_KINDS[c.kind], A = K[st], im = IMG['critter_' + c.kind + '_' + st]; if (!im) continue;
     const x = c.px + (c.x - c.px) * alpha, y = c.py + (c.y - c.py) * alpha, cw = im.naturalWidth / A.frames, ch = im.naturalHeight;
-    const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch);
-    ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -K.anchorX * ch / K.frame, -ch, cw, ch); ctx.restore();
+    const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch), footY = (K.footY ?? K.frame) * ch / K.frame;
+    ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -K.anchorX * ch / K.frame, -footY, cw, ch); ctx.restore();
     if (showHitboxes) { ctx.lineWidth = 1; ctx.strokeStyle = '#fecd39'; ctx.strokeRect(x - K.hitW / 2 + .5, y - K.hitH + .5, K.hitW, K.hitH); }
   }
 }
