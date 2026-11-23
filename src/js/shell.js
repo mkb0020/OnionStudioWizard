@@ -99,6 +99,48 @@ function buildRail() {
   lb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.library + '</svg>';
   libButton.appendChild(lb);
   rail.appendChild(libButton);
+
+  // FREE MEMORY: CLOSES EVERY TOOL THAT IS OPEN BUT HIDDEN (THEY STAY LOADED IN THE BACKGROUND OTHERWISE)
+  const fg = document.createElement('div');
+  fg.className = 'tb-group';
+  const fb = document.createElement('button');
+  fb.type = 'button'; fb.className = 'tb-btn'; fb.id = 'free-btn';
+  fb.title = 'Free memory: close the tools open in the background'; fb.setAttribute('aria-label', 'Free memory');
+  fb.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS.sweep + '</svg>';
+  fb.addEventListener('click', () => { closeMenu(); freeMemory(); });
+  fg.appendChild(fb);
+  rail.appendChild(fg);
+}
+
+// ---------- FREE MEMORY ----------
+// EVERY TOOL OPENED THIS SESSION STAYS LOADED (HIDDEN), HOLDING ITS IMAGES AND CANVASES. THIS CLOSES ALL OF THEM
+// EXCEPT THE ONE ON SCREEN. TWO CLICKS (NO BLOCKING confirm() DIALOG), SINCE A CLOSED TOOL LOSES ANYTHING UNSAVED
+// (THE DRAWING TOOL KEEPS ITS AUTOSAVE AND OFFERS TO RESTORE IT WHEN REOPENED).
+let freeArmed = 0;
+const hiddenTools = () => [...frames.keys()].filter((id) => id !== activeId);
+
+function freeMemory() {
+  const ids = hiddenTools();
+  const btn = document.getElementById('free-btn');
+  if (!ids.length) { setStatus('NOTHING ELSE OPEN - ONLY ' + (toolById(activeId)?.title || 'THIS TOOL').toUpperCase() + ' IS LOADED', 2500); return; }
+  if (!freeArmed) {
+    freeArmed = setTimeout(() => { freeArmed = 0; btn.classList.remove('is-armed'); }, 3500);
+    btn.classList.add('is-armed');
+    setStatus('CLOSE ' + ids.map((id) => toolById(id).title.toUpperCase()).join(', ') + '? UNSAVED WORK IN THEM IS LOST - CLICK AGAIN', 3500);
+    return;
+  }
+  clearTimeout(freeArmed); freeArmed = 0; btn.classList.remove('is-armed');
+  for (const id of ids) closeTool(id);
+  setStatus('CLOSED ' + ids.length + ' TOOL' + (ids.length > 1 ? 'S' : ''), 2500);
+}
+
+function closeTool(id) {
+  const f = frames.get(id);
+  if (!f) return;
+  try { f.src = 'about:blank'; } catch (e) { /* NOT FATAL */ }   // LETS THE PAGE TEAR DOWN BEFORE THE ELEMENT GOES
+  f.remove();
+  frames.delete(id);
+  groups.forEach(refreshGroup);
 }
 
 function refreshGroup(g) {
@@ -108,6 +150,7 @@ function refreshGroup(g) {
   g.main.setAttribute('aria-label', cur.title);
   g.el.classList.toggle('is-active', g.tools.some((t) => t.id === activeId));
   g.el.classList.toggle('is-soon', !g.tools.some((t) => t.src));
+  g.el.classList.toggle('is-loaded', g.tools.some((t) => t.id !== activeId && frames.has(t.id)));   // DOT = OPEN IN THE BACKGROUND
 }
 
 // ---------- GROUP DROPDOWN ----------
@@ -225,4 +268,4 @@ if (!TOOLS.some((t) => t.id === first && t.src)) first = (TOOLS.find((t) => t.sr
 if (first) activate(first);
 
 // HANDLE FOR LATER STEPS (LIBRARY / SEND-TO BRIDGE) AND FOR DEBUGGING IN THE DEVTOOLS CONSOLE
-window.OSW = { activate, tools: TOOLS, frames, library, storage, libraryPanel, get active() { return activeId; } };
+window.OSW = { activate, closeTool, freeMemory, tools: TOOLS, frames, library, storage, libraryPanel, get active() { return activeId; } };

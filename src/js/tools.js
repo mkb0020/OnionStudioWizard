@@ -26,5 +26,6 @@ export const ICONS = {
   grid:  '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/>',
   shaft: '<ellipse cx="12" cy="5.5" rx="6" ry="2.5"/><path d="M6 5.5v13c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-13"/><path d="M6 10.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5M6 15.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5"/>',
   play:  '<path d="M7 4l13 8-13 8z"/>',
+  sweep:   '<path d="M14.5 3.5l-5 9"/><path d="M6.5 11.5l6 3.5-1.6 5.5c-3-.3-6.2-2.2-7.4-4.6z"/><path d="M17 15.5h3M18 19h3M16 12h2.5"/>',
   library: '<path d="M12 3l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 17l8 4 8-4"/>',
 };

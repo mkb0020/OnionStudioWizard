@@ -1093,7 +1093,13 @@ const Engine = (() => {
       this.onion = true;     // when true (and visible), this layer is drawn in the onion skin of the NEXT frame
       this.clip = false;     // clipping mask: only shows where its base (the nearest unclipped layer below) has pixels
       this.ver = 0;         // bumped whenever the pixels change, so saving/autosave can skip layers that did not
-      this.canvas = makeCanvas(w, h); this.ctx = this.canvas.getContext('2d');
+      this.canvas = makeCanvas(w, h);
+      // willReadFrequently keeps layer pixels in regular RAM instead of graphics memory. The tool reads layer
+      // pixels all the time (undo, fill, tidy, tile mode...), and on the laptop's shared Intel graphics a GPU
+      // reset would otherwise wipe every GPU-backed layer at once (the "app blinks and layers go blank" bug).
+      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+      // Safety net if a canvas is ever reset anyway: the app repaints it from its last saved copy (Layer.onRestored).
+      this.canvas.addEventListener('contextrestored', () => { if (Layer.onRestored) Layer.onRestored(this); });
     }
     clone(w, h) {
       const l = new Layer(w, h, this.name);
@@ -1122,7 +1128,7 @@ const Engine = (() => {
   // Undo/redo: each entry is {label, bytes, undo(), redo()}. Works for any action type
   // (pixel patches now; frame and layer actions later use the same shape).
   class History {
-    constructor(maxBytes = 400e6) {
+    constructor(maxBytes = 150e6) {   // undo memory cap (was 400 MB; at 4 MB per 1000x1000 layer that still leaves plenty of steps)
       this.undoStack = []; this.redoStack = []; this.maxBytes = maxBytes; this.onChange = () => {};
       this.lastTouched = null;   // entry just undone/redone, so the UI can jump to its frame
       this.rev = 0;              // goes up on every change, undo and redo: "has anything changed since the last save?"
@@ -6334,6 +6340,29 @@ const Pose = (() => {
     encCache.set(l, e);
     return e;
   }
+  /* ---------- recovery if a layer canvas gets reset ----------
+     Layers live in RAM (willReadFrequently), so this should not happen any more. If the browser ever does reset a
+     canvas, repaint it from its last encoded copy (from the last save, autosave or open). If the layer changed
+     after that copy, the newest strokes on it are lost, but the rest of the art comes back. */
+  let restoreTimer = 0, restoredOld = 0;
+  Engine.Layer.onRestored = async (l) => {
+    const c = encCache.get(l);
+    if (c && c.blob) {
+      try {
+        const bmp = await createImageBitmap(c.blob);
+        try { l.ctx.clearRect(0, 0, l.canvas.width, l.canvas.height); l.ctx.drawImage(bmp, 0, 0); } finally { bmp.close(); }
+        if (c.ver !== l.ver) restoredOld++;
+      } catch (err) { restoredOld++; }
+    } else if (!c || c.ver !== l.ver) restoredOld++;
+    clearTimeout(restoreTimer);
+    restoreTimer = setTimeout(() => {
+      requestRender(); refreshStrip(); refreshLayers(); requestOnion();
+      project.frames.forEach((_, i) => drawThumb(i));
+      flash(restoredOld ? 'Graphics reset: layers restored from the last autosave (' + restoredOld + ' may miss recent strokes)' : 'Graphics reset: layers restored');
+      restoredOld = 0;
+    }, 150);
+  };
+  window.__recover = { cache: encCache, restore: l => Engine.Layer.onRestored(l) };   // test hook
   const snapshotStructure = () => project.frames.map(f => ({ frame: f, layers: f.layers.slice() }));
 
   function buildManifest(snap, fileOf) {
@@ -6396,10 +6425,13 @@ const Pose = (() => {
         const op = +ld.opacity; l.opacity = isFinite(op) ? clamp(op, 0, 1) : 1;
         l.visible = ld.visible !== false; l.locked = !!ld.locked; l.onion = ld.onion !== false; l.clip = !!ld.clip;
         if (ld.file) {
-          const bmp = await createImageBitmap(new Blob([await getData(String(ld.file))], { type: 'image/png' }));
+          const png = new Blob([await getData(String(ld.file))], { type: 'image/png' });
+          const bmp = await createImageBitmap(png);
           try {
             if (bmp.width > 8192 || bmp.height > 8192) throw new Error('A layer image is too large');
             Engine.drawFitted(l.ctx, bmp, bmp.width, bmp.height, W, H);
+            // The file's own PNG is this layer's backup copy (save skips re-encoding it, recovery can repaint from it)
+            if (bmp.width === W && bmp.height === H) encCache.set(l, { ver: l.ver, blob: png });
           } finally { bmp.close(); }
         }
         fr.layers.push(l);
