@@ -29,6 +29,9 @@
    OSWClient.exports.chooseDir()          -> info (+ cancelled: true IF THE PICKER WAS CLOSED)
    OSWClient.exports.resetDir()           -> info          BACK TO THE DEFAULT FOLDER
    OSWClient.exports.openDir()            OPENS THE FOLDER IN EXPLORER
+   OSWClient.canvasPop.open()             OPENS THE DRAWING TOOL'S FULL-CANVAS VIEW AS ITS OWN WINDOW (tools/canvasPop.html; PICTURE
+                                          GOES OVER BroadcastChannel 'osw-canvas-pop'). FAILS WITH "NOT_DESKTOP" IN A PLAIN BROWSER.
+   OSWClient.canvasPop.close()
    OSWClient.on('export.changed', fn)     fn(info) WHEN THE FOLDER CHANGES (FROM ANY TOOL)
    OSWClient.on('library.changed', fn)    fn({kind:'added'|'updated'|'removed'|'adopted'|'root'|'character'|'map'|'cape', id?})
    OSWClient.off(name, fn)
@@ -103,6 +106,10 @@
       chooseDir: function () { return request('export.chooseDir', {}, 600000); },   // WAITS FOR THE USER IN THE PICKER
       resetDir: function () { return request('export.resetDir'); },
       openDir: function () { return request('export.openDir'); },
+    },
+    canvasPop: {
+      open: function () { return request('window.canvasPop.open', {}, 15000); },
+      close: function () { return request('window.canvasPop.close', {}, 15000); },
     },
     on: function (name, fn) { (listeners[name] = listeners[name] || []).push(fn); },
     off: function (name, fn) { listeners[name] = (listeners[name] || []).filter(function (f) { return f !== fn; }); },

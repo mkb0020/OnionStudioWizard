@@ -250,6 +250,15 @@ pub fn run() {
             export_write,
             export_open_dir
         ])
+        // CLOSING THE MAIN WINDOW QUITS THE APP, EVEN IF THE DRAWING TOOL'S FULL-CANVAS POP-OUT WINDOW IS STILL OPEN
+        // (WITHOUT THIS, THE POP-OUT WOULD KEEP THE APP RUNNING ON ITS OWN)
+        .on_window_event(|window, event| {
+            if window.label() == "main" {
+                if let tauri::WindowEvent::Destroyed = event {
+                    window.app_handle().exit(0);
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Onion Studio Wizard");
 }

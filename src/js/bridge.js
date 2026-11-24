@@ -7,6 +7,7 @@
 // IMAGES TRAVEL AS Blob (STRUCTURED CLONE), SO A TOOL NEVER HANDLES BASE64 OR FILE PATHS.
 
 import { bytesToB64 } from './library/storage.js';
+import { openCanvasPop, closeCanvasPop } from './canvasPopWindow.js';
 
 // EXPORTS: TOOLS HAND FINISHED FILES (SHEETS, TIMING JSON, ZIPS) TO THE SHELL, WHICH WRITES THEM WITH THE RUST export_* COMMANDS.
 // THAT SKIPS BROWSER DOWNLOADS, SO WEBVIEW2'S "DOWNLOAD MULTIPLE FILES?" PROMPT CAN NEVER BLOCK AN EXPORT.
@@ -79,6 +80,8 @@ export function createBridge({ library, frames }) {
     'export.chooseDir': () => exportsApi.chooseDir(),
     'export.resetDir':  () => exportsApi.resetDir(),
     'export.openDir':   () => exportsApi.openDir(),
+    'window.canvasPop.open':  () => openCanvasPop(),    // DRAWING TOOL'S FULL-CANVAS VIEW AS ITS OWN OS WINDOW
+    'window.canvasPop.close': () => closeCanvasPop(),
   };
 
   const isToolWindow = (src) => { for (const f of frames.values()) if (f.contentWindow === src) return true; return false; };

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<base href="../">
+<title>Full Canvas - Onion Studio Wizard</title>
+<link rel="stylesheet" href="css/fonts.css">
+<!-- ONION STUDIO WIZARD - THE DRAWING TOOL'S FULL-CANVAS VIEW IN ITS OWN OS WINDOW (OPENED BY js/canvasPopWindow.js).
+     DRAG IT ANYWHERE, INCLUDING ANOTHER SCREEN. THE DRAWING TOOL SENDS THE PICTURE OVER BroadcastChannel('osw-canvas-pop'):
+       window -> tool   {t:'size', px}            "SEND ME FRAMES ABOUT THIS BIG" (ON OPEN AND ON EVERY RESIZE)
+       tool -> window   {t:'frame', w, h, data, bg, crisp, label}   data = RGBA ArrayBuffer (w*h*4)
+       tool -> window   {t:'close'}                THE POP BUTTON WAS PRESSED AGAIN
+       window -> tool   {t:'bye'}                  THIS WINDOW IS CLOSING
+     IT REMEMBERS ITS POSITION + SIZE (localStorage 'osw.canvasPop.geom') AND THE PIN (ALWAYS ON TOP) SETTING. -->
+<style>
+:root{--bg0:#170032;--bg1:#240140;--acc:#830cdeaf;--acc2:#a45affa7;--cy:#00ffffb9;--pk:#ff69b4;--soft:#C4C3D0;--mint:#67febd;
+  --ui:'Orbitron','Segoe UI',system-ui,sans-serif;--mono:'Share Tech Mono','Consolas','Courier New',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg0);color:var(--soft);user-select:none;-webkit-user-select:none}
+body{display:flex;flex-direction:column;border:1px solid var(--acc2);box-shadow:inset 0 0 26px #830cde55}
+#bar{flex:none;display:flex;align-items:center;gap:6px;height:32px;padding:0 4px 0 10px;cursor:move;touch-action:none;
+  background:linear-gradient(90deg,var(--bg1),var(--bg0));border-bottom:1px solid var(--acc)}
+#title{flex:1;min-width:0;font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--cy);text-shadow:0 0 10px #00ffff88;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+.btn{flex:none;width:28px;height:24px;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer;color:var(--soft);
+  background:#37025a55;border:1px solid #830cde88;border-radius:3px}
+.btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
+.btn:hover{border-color:var(--pk);color:var(--pk)}
+#pin.on{color:var(--mint);border-color:var(--mint);box-shadow:0 0 8px #67febd66}
+#body{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:10px;background-color:#10001f;
+  background-image:linear-gradient(#830cde1a 1px,transparent 1px),linear-gradient(90deg,#830cde1a 1px,transparent 1px);background-size:32px 32px,32px 32px}
+#cv{max-width:100%;max-height:100%;width:auto;height:auto;box-shadow:0 0 0 1px var(--acc2),0 0 30px #830cde55}
+#cv[hidden]{display:none}
+#wait{position:absolute;font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:#9090C0;text-align:center;line-height:1.7}
+#wait[hidden]{display:none}
+</style>
+</head>
+<body>
+<div id="bar">
+  <span id="title">FULL CANVAS</span>
+  <button class="btn" id="pin" title="Keep on top of other windows" aria-label="Keep on top"><svg viewBox="0 0 24 24"><path d="M9 4h6l-1 6 3 3H7l3-3z"/><path d="M12 13v7"/></svg></button>
+  <button class="btn" id="close" title="Close" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+</div>
+<div id="body">
+  <canvas id="cv" hidden></canvas>
+  <div id="wait">WAITING FOR THE DRAWING TOOL&hellip;<br>(OPEN DRAW IN THE WIZARD)</div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var GEOM_KEY = 'osw.canvasPop.geom', PIN_KEY = 'osw.canvasPop.pin';
+  var T = window.__TAURI__;
+  var me = T && T.window && T.window.getCurrentWindow ? T.window.getCurrentWindow() : null;
+  var cv = document.getElementById('cv'), ctx = cv.getContext('2d'), body = document.getElementById('body');
+  var titleEl = document.getElementById('title'), waitEl = document.getElementById('wait'), pinBtn = document.getElementById('pin');
+  var ch = new BroadcastChannel('osw-canvas-pop');
+  var closing = false;
+
+  // ---------- PICTURE FROM THE DRAWING TOOL ----------
+  function wantedPx() {                              // THE CANVAS AREA IN REAL SCREEN PIXELS (SHARP ON HIGH-DPI SCREENS)
+    var r = body.getBoundingClientRect();
+    return Math.max(64, Math.round(Math.min(r.width - 20, r.height - 20) * (window.devicePixelRatio || 1)));
+  }
+  var lastPx = 0;
+  function sendSize(force) {
+    var px = wantedPx();
+    if (force || Math.abs(px - lastPx) > 8) { lastPx = px; ch.postMessage({ t: 'size', px: px }); }
+  }
+  ch.onmessage = function (e) {
+    var m = e.data || {};
+    if (m.t === 'frame' && m.w > 0 && m.h > 0 && m.data) {
+      if (cv.width !== m.w || cv.height !== m.h) { cv.width = m.w; cv.height = m.h; }
+      ctx.putImageData(new ImageData(new Uint8ClampedArray(m.data), m.w, m.h), 0, 0);
+      cv.style.backgroundColor = m.bg || '';
+      cv.style.imageRendering = m.crisp ? 'pixelated' : 'auto';
+      if (m.label) { titleEl.textContent = m.label; document.title = m.label; }
+      cv.hidden = false; waitEl.hidden = true;
+    } else if (m.t === 'hello') {                    // THE DRAWING TOOL (RE)LOADED: TELL IT WE'RE HERE
+      sendSize(true);
+    } else if (m.t === 'close') {
+      closeMe();
+    }
+  };
+  new ResizeObserver(function () { sendSize(false); }).observe(body);
+  sendSize(true);
+
+  // ---------- WINDOW: DRAG, PIN, CLOSE, REMEMBER WHERE IT WAS ----------
+  document.getElementById('bar').addEventListener('mousedown', function (e) {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    if (me) me.startDragging().catch(function () {});
+  });
+
+  function setPin(on) {
+    pinBtn.classList.toggle('on', on);
+    try { localStorage.setItem(PIN_KEY, on ? '1' : '0'); } catch (err) { /* OPTIONAL */ }
+    if (me) me.setAlwaysOnTop(on).catch(function () {});
+  }
+  pinBtn.addEventListener('click', function () { setPin(!pinBtn.classList.contains('on')); pinBtn.blur(); });
+  try { if (localStorage.getItem(PIN_KEY) === '1') setPin(true); } catch (err) { /* OPTIONAL */ }
+
+  function closeMe() {
+    if (closing) return;
+    closing = true;
+    ch.postMessage({ t: 'bye' });
+    if (me) me.close().catch(function () { window.close(); }); else window.close();
+  }
+  document.getElementById('close').addEventListener('click', closeMe);
+  window.addEventListener('beforeunload', function () { if (!closing) ch.postMessage({ t: 'bye' }); });
+
+  var geomTimer = 0;
+  function saveGeom() {
+    clearTimeout(geomTimer);
+    geomTimer = setTimeout(function () {
+      if (!me) return;
+      Promise.all([me.outerPosition(), me.innerSize(), me.isMinimized()]).then(function (v) {
+        if (v[2]) return;                            // MINIMIZED WINDOWS REPORT A FAKE OFF-SCREEN SPOT
+        localStorage.setItem(GEOM_KEY, JSON.stringify({ x: v[0].x, y: v[0].y, w: v[1].width, h: v[1].height }));
+      }).catch(function () {});
+    }, 300);
+  }
+  if (me) { me.onMoved(saveGeom).catch(function () {}); me.onResized(saveGeom).catch(function () {}); }
+})();
+</script>
+</body>
+</html>

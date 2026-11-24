@@ -4744,6 +4744,7 @@ const Pose = (() => {
   let popBg = '', popPix = '', popLbl = '', popPlaced = false;
   const popOpen = () => !popEl.hidden;
   function mirrorPop() {
+    if (popWin) queuePopWin();
     if (!popOpen()) return;
     if (popCv.width !== view.width || popCv.height !== view.height) { popCv.width = view.width; popCv.height = view.height; }
     popCtx.clearRect(0, 0, popCv.width, popCv.height); popCtx.drawImage(view, 0, 0);
@@ -4753,7 +4754,7 @@ const Pose = (() => {
     if (popLbl !== lbl) { popLbl = lbl; popTitle.textContent = lbl; }
   }
   function setPop(on) {
-    popEl.hidden = !on; $('#popBtn').classList.toggle('active', on);
+    popEl.hidden = !on; $('#popBtn').classList.toggle('active', on || popWin);
     if (!on) return;
     if (!popPlaced) {                                    // first open: top-right of the screen, beside the right panel
       popPlaced = true;
@@ -4761,7 +4762,50 @@ const Pose = (() => {
     }
     popBg = popPix = popLbl = ''; mirrorPop();
   }
-  const togglePop = () => setPop(!popOpen());
+  /* In the desktop app the POP button opens the full-canvas view as its own OS window (tools/canvasPop.html), which can
+     go anywhere, including another screen. The picture goes over BroadcastChannel 'osw-canvas-pop', scaled down to the
+     window's size and sent at most ~25 times a second. In a plain browser the in-app panel above is used instead. */
+  const popCh = ('BroadcastChannel' in window) ? new BroadcastChannel('osw-canvas-pop') : null;
+  let popWin = false, popWinPx = 600, popWinTimer = 0, popWinLast = 0;
+  const popScratch = document.createElement('canvas'), popScratchCtx = popScratch.getContext('2d', { willReadFrequently: true });
+  function setPopWin(on) {
+    popWin = on; $('#popBtn').classList.toggle('active', on || popOpen());
+    if (on) { popWinLast = 0; queuePopWin(); }
+  }
+  function queuePopWin() {
+    if (popWinTimer) return;
+    popWinTimer = setTimeout(() => { popWinTimer = 0; sendPopWin(); }, Math.max(0, 40 - (performance.now() - popWinLast)));
+  }
+  function sendPopWin() {
+    if (!popWin || !popCh) return;
+    popWinLast = performance.now();
+    const k = Math.min(1, popWinPx / Math.max(view.width, view.height));
+    const w = Math.max(1, Math.round(view.width * k)), h = Math.max(1, Math.round(view.height * k));
+    if (popScratch.width !== w || popScratch.height !== h) { popScratch.width = w; popScratch.height = h; }
+    popScratchCtx.clearRect(0, 0, w, h);
+    popScratchCtx.imageSmoothingEnabled = !state.crisp; popScratchCtx.imageSmoothingQuality = 'high';
+    popScratchCtx.drawImage(view, 0, 0, w, h);
+    const data = popScratchCtx.getImageData(0, 0, w, h).data.buffer;
+    popCh.postMessage({ t: 'frame', w, h, data, bg: state.paperColor, crisp: !!state.crisp,
+      label: 'FULL CANVAS · FRAME ' + (project.currentFrame + 1) + ' / ' + project.frames.length });
+  }
+  if (popCh) {
+    popCh.onmessage = e => {
+      const m = e.data || {};
+      if (m.t === 'size') { popWinPx = clamp(Math.round(+m.px || 600), 64, 4096); setPopWin(true); }   // window opened or resized
+      else if (m.t === 'bye') setPopWin(false);
+    };
+    popCh.postMessage({ t: 'hello' });                 // a pop-out left open from before this tool loaded will answer
+  }
+  async function togglePop() {
+    if (popOpen()) { setPop(false); return; }
+    if (popWin) { setPopWin(false); popCh.postMessage({ t: 'close' }); return; }
+    if (OSWClient.hosted && popCh) {
+      try { await OSWClient.canvasPop.open(); $('#popBtn').classList.add('active'); return; }
+      catch (err) { if (!/NOT_DESKTOP/.test(err.message)) flash('Pop-out window failed, using the panel: ' + err.message); }
+    }
+    setPop(true);
+  }
   $('#popBtn').addEventListener('click', e => { togglePop(); e.currentTarget.blur(); });
   $('#popClose').addEventListener('click', () => setPop(false));
   $('#popBar').addEventListener('pointerdown', e => {   // drag by the title bar, kept on screen
