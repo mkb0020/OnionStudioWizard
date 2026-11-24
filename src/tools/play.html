@@ -464,7 +464,8 @@ const approach = (v, target, step) => v < target ? Math.min(v + step, target) : 
    CHANGE walk.fps TO MAKE HIM WALK FASTER OR SLOWER.
    BEHAVIOUR: IDLE FOR idleTime SECONDS, THEN WALK FOR walkTime SECONDS (SOMETIMES TURNING FIRST). AT A WALL, A LEDGE DROP BIGGER THAN stepUp,
    OR THE LEVEL EDGE HE TURNS AROUND AND PAUSES; PAST leash FROM HOME HE HEADS BACK. N TOGGLES CRITTERS; F1 SHOWS THEIR BOXES.
-   OPTIONAL: footY = THE ART Y INSIDE THE CELL WHERE THE FEET TOUCH THE GROUND (DEFAULT = THE CELL BOTTOM). NO walk SHEET = HE STAYS PUT AND IDLES
+   OPTIONAL: footY = THE ART Y INSIDE THE CELL WHERE THE FEET TOUCH THE GROUND (DEFAULT = THE CELL BOTTOM); A SHEET CAN OVERRIDE footY / anchorX
+   WHEN ITS ART SITS DIFFERENTLY IN THE CELL (E.G. walk: { ..., footY: 299 }). NO walk SHEET = HE STAYS PUT AND IDLES
    (STILL FACES A RANDOM WAY, STILL FALLS ONTO THE FLOOR). */
 const CRITTER_DIR = 'assets/images/critters/';
 const CRITTER_KINDS = {
@@ -475,10 +476,13 @@ const CRITTER_KINDS = {
     frame: 400, scale: 1, anchorX: 255, stepPx: 12, hitW: 110, hitH: 110, stepUp: 12,
     idleTime: [1.5, 4], walkTime: [2.5, 6], turnChance: 0.45, pauseAfterTurn: [0.6, 1.6], leash: 600,   // leash = HOW FAR (WORLD PX) HE STRAYS FROM WHERE HE SPAWNED BEFORE HEADING BACK
   },
-  goblin: {   // HALF-ROBOT GOBLIN, FIRST PASS: IDLE ONLY (NO WALK / PATROL / ATTACK YET). FUTURE ENEMY, PARKED HERE SO HE CAN JUST STAND AROUND LOOKING COOL
+  goblin: {   // HALF-ROBOT GOBLIN: IDLES AND SCUTTERS AROUND (NO PATROL / ATTACK YET). FUTURE ENEMY
     idle: { src: 'goblin.png', frames: 6, fps: 6 },
-    frame: 300, scale: 1.3, anchorX: 165, footY: 265, hitW: 120, hitH: 160, stepUp: 12,   // FEET SIT AT y 265 OF THE 300 CELL; anchorX ~ BETWEEN HIS FEET
-    idleTime: [3, 6], walkTime: [0, 0], turnChance: 0, pauseAfterTurn: [1, 2], leash: 0,
+    // THE WALK SHEET'S FEET ARE AT THE VERY BOTTOM OF THE CELL (y 299), THE IDLE SHEET'S AT y 265, SO IT GETS ITS OWN footY.
+    // stepPx 14: HIS PLANTED FOOT SLIDES ~41 ART PX OVER EACH 3-FRAME STEP (12 PX THEN 29 PX, SO A TINY SKATE ON THE SHORT FRAME)
+    walk: { src: 'goblin_walk_cycle.png', frames: 6, fps: 10, footY: 299 },
+    frame: 300, scale: 1.3, anchorX: 165, footY: 265, stepPx: 14, hitW: 120, hitH: 160, stepUp: 12,   // anchorX ~ HIS BODY'S CENTER (SAME IN BOTH SHEETS, SO NO HOP WHEN HE STARTS WALKING)
+    idleTime: [1, 2.8], walkTime: [0.8, 2.4], turnChance: 0.5, pauseAfterTurn: [0.4, 1.1], leash: 450,   // SHORT BURSTS = SCUTTERING
   },
 };
 const CRITTER_SPAWNS = { test: [{ kind: 'aetherling', x: 650 }, { kind: 'goblin', x: 1000 }], map: [{ kind: 'aetherling', cells: 4 }, { kind: 'goblin', cells: 7 }] };   // TEST LEVEL: WORLD X. MAP LEVELS: THIS MANY CELLS RIGHT OF THE PLAYER SPAWN
@@ -533,8 +537,8 @@ function drawCritters(alpha) {
   for (const c of critters) {
     const st = c.state === 'come' ? 'walk' : c.state, K = CRITTER_KINDS[c.kind], A = K[st], im = IMG['critter_' + c.kind + '_' + st]; if (!im) continue;
     const x = c.px + (c.x - c.px) * alpha, y = c.py + (c.y - c.py) * alpha, cw = im.naturalWidth / A.frames, ch = im.naturalHeight;
-    const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch), footY = (K.footY ?? K.frame) * ch / K.frame;
-    ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -K.anchorX * ch / K.frame, -footY, cw, ch); ctx.restore();
+    const f = Math.floor(c.animT * A.fps) % A.frames, s = SCALE * K.scale * (K.frame / ch), footY = (A.footY ?? K.footY ?? K.frame) * ch / K.frame, ax = A.anchorX ?? K.anchorX;
+    ctx.save(); ctx.translate(x, y); ctx.scale(c.dir * s, s); ctx.drawImage(im, f * cw, 0, cw, ch, -ax * ch / K.frame, -footY, cw, ch); ctx.restore();
     if (showHitboxes) { ctx.lineWidth = 1; ctx.strokeStyle = '#fecd39'; ctx.strokeRect(x - K.hitW / 2 + .5, y - K.hitH + .5, K.hitW, K.hitH); }
   }
 }
