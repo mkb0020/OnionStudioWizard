@@ -1079,7 +1079,8 @@ const CAT_SPELL = {
   src: 'assets/images/vfx/cat_spell.png', frames: 10, scale: 0.85, frameTime: 1 / 16,
   holds: [1, 1, 1.1, 1.1, 1, 1, 1.4, 1.1, 1, 1.4],          // RELATIVE LENGTH OF EACH FRAME (x frameTime)
   speed: 760, rampTime: 0.12, chompFrom: 5, chompSlow: 0.3, chompFrame: 6, emitUntil: 8,
-  forward: 130, handHeight: 0.5, castHold: 0.3, cooldown: 0.35,
+  forward: 70, castHold: 0.3, cooldown: 0.35,
+  arc: { startHeight: 1.15, endHeight: 0.5, dist: 290, rise: 18, tilt: 1 },   // HEIGHTS x NOVA'S FULL HEIGHT ABOVE HER FEET. IT SPAWNS ABOVE HER HEAD AND CURVES DOWN OVER dist PX OF TRAVEL (rise = SMALL LIFT AT THE START, tilt = HOW MUCH THE HEAD NOSES DOWN ALONG THE CURVE)
   headX: [66, 74, 70, 187, 200, 220, 224, 231, 240, 261], headY: [159, 149, 144, 131, 131, 132, 133, 132, 134, 143],
   headSize: [0.3, 0.45, 0.65, 1, 1, 1, 0.95, 0.9, 0.85, 0.6], backOff: 45,
   spiral: { radius: 42, turns: 1.3, frames: 3, tilt: 0.35 },
@@ -1106,6 +1107,11 @@ const catPick = a => a[(Math.random() * a.length) | 0];
 const CAT_HOLD_SUM = CAT_SPELL.holds.reduce((s, h) => s + h, 0);
 function catFrameAt(t) { let w = t / CAT_SPELL.frameTime, i = 0; while (i < CAT_SPELL.frames && w >= CAT_SPELL.holds[i]) { w -= CAT_SPELL.holds[i]; i++; } return i; }   // frames = FINISHED
 const catSpiralTime = () => CAT_SPELL.holds.slice(0, CAT_SPELL.spiral.frames).reduce((s, h) => s + h, 0) * CAT_SPELL.frameTime;
+function catArcY(c, s) {   // HEIGHT ALONG THE ARC BY DISTANCE TRAVELLED: DROP * u^2 (EASES INTO THE DIVE) MINUS A LITTLE HUMP AT THE START; PAST dist IT CARRIES ON AT ITS LAST SLOPE
+  const A = CAT_SPELL.arc, D = A.dist, f = u => c.drop * u * u - A.rise * 4 * u * (1 - u);
+  if (s <= D) return c.y0 + f(s / D);
+  return c.y0 + f(1) + (2 * c.drop + 4 * A.rise) / D * (s - D);
+}
 function castCat() {
   if (catCool > 0 || (isAttacking && currentAnim !== 'idle')) return;
   const C = CAT_SPELL, dir = P.flip ? -1 : 1, fullH = PLAYER_FRAME * SCALE;
@@ -1114,18 +1120,18 @@ function castCat() {
     if (currentAnim !== 'idle') { currentAnim = 'idle'; playSheetAnim('idle'); }
   }
   catCool = C.cooldown; shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape(); sfx('catSpell');
-  const x = P.x + dir * C.forward, y = P.y - fullH * C.handHeight;
-  catSpells.push({ x, y, dir, t: 0, f: 0, ox: 0, oy: 0, rot: 0, hx: null, hy: 0, pts: [], n: 0, chomped: false, done: false, spd: 0 });
-  catFx.push({ k: 'ring', x: P.x + dir * (C.forward * 0.55), y, t: 0, life: 0.18, r0: 4, r1: 34, color: '#8fa0ff', w: 3 });
-  for (let i = 0; i < 6; i++) { const a = rnd(-1, 1) * 1.1; catSpark(P.x + dir * C.forward * 0.55, y, dir * Math.cos(a) * rnd(120, 320), Math.sin(a) * rnd(120, 320)); }
+  const x = P.x + dir * C.forward, y = P.y - fullH * C.arc.startHeight, drop = fullH * (C.arc.startHeight - C.arc.endHeight);
+  catSpells.push({ x, y, y0: y, drop, dist: 0, slope: 0, dir, t: 0, f: 0, ox: 0, oy: 0, rot: 0, hx: null, hy: 0, pts: [], n: 0, chomped: false, done: false, spd: 0 });
+  catFx.push({ k: 'ring', x: x - dir * 60 * C.scale, y, t: 0, life: 0.18, r0: 4, r1: 34, color: '#8fa0ff', w: 3 });
+  for (let i = 0; i < 6; i++) { const a = rnd(-1, 1) * 1.1; catSpark(x - dir * 60 * C.scale, y, dir * Math.cos(a) * rnd(120, 320), Math.sin(a) * rnd(120, 320)); }
 }
 function catSpark(x, y, vx, vy) { catFx.push({ k: 'spark', x, y, vx, vy, t: 0, life: rnd(0.18, 0.4), size: rnd(1.2, 2.8), color: catPick(Math.random() < 0.5 ? CAT_SPELL.colors.hot : CAT_SPELL.colors.glow), drag: 3 }); }
 function catShard(k, c, x, y, sizeK) {
   const C = CAT_SPELL, d = c.dir, back = rnd(40, 200);
-  const o = { k, x, y, vx: -d * back + d * c.spd * rnd(0, 0.2), vy: rnd(-30, 30), t: 0, dir: d, ang: rnd(-0.12, 0.12), drag: 2 };
+  const o = { k, x, y, vx: -d * back + d * c.spd * rnd(0, 0.2), vy: rnd(-30, 30), t: 0, dir: d, ang: c.slope + rnd(-0.12, 0.12), drag: 2 };
   if (k === 'ink') Object.assign(o, { life: rnd(0.25, 0.5), len: rnd(50, 170) * sizeK, w: rnd(4, 11) * sizeK, color: catPick(C.colors.ink) });
   else if (k === 'glow') Object.assign(o, { life: rnd(0.2, 0.45), len: rnd(40, 150) * sizeK, w: rnd(2.5, 7) * sizeK, color: catPick(C.colors.glow) });
-  else Object.assign(o, { life: rnd(0.14, 0.3), len: rnd(120, 320) * sizeK, w: rnd(1, 2.4), color: catPick(C.colors.hot), ang: rnd(-0.05, 0.05), vx: -d * rnd(10, 80) });   // slash: LONG THIN WHITE-BLUE BEAM
+  else Object.assign(o, { life: rnd(0.14, 0.3), len: rnd(120, 320) * sizeK, w: rnd(1, 2.4), color: catPick(C.colors.hot), ang: c.slope + rnd(-0.05, 0.05), vx: -d * rnd(10, 80) });   // slash: LONG THIN WHITE-BLUE BEAM
   catFx.push(o);
 }
 function catChomp(c) {
@@ -1149,10 +1155,12 @@ function stepCatSpells(dt) {
       else {
         c.f = f;
         c.spd = C.speed * (0.55 + 0.45 * Math.min(1, c.t / C.rampTime)) * (f >= C.chompFrom ? C.chompSlow : 1);
-        c.x += c.dir * c.spd * dt;
+        c.x += c.dir * c.spd * dt; c.dist += c.spd * dt;
+        const yNow = catArcY(c, c.dist); c.slope = Math.atan2(catArcY(c, c.dist + 4) - yNow, 4) * C.arc.tilt; c.y = yNow;
         const u = Math.min(1, c.t / catSpiralTime()), r = sp.radius * Math.pow(1 - u, 1.5), a = u * sp.turns * Math.PI * 2;   // SPIRALS IN ONTO THE FLIGHT LINE WHILE IT GROWS
-        c.ox = c.dir * Math.cos(a) * r * 0.6; c.oy = Math.sin(a) * r; c.rot = (1 - u) * Math.sin(a) * sp.tilt;
-        const sizeK = C.headSize[f], tx = c.x + c.ox + c.dir * (C.headX[f] - 150 - C.backOff * sizeK) * C.scale, ty = c.y + c.oy + (C.headY[f] - 150) * C.scale;
+        c.ox = c.dir * Math.cos(a) * r * 0.6; c.oy = Math.sin(a) * r; c.rot = (1 - u) * Math.sin(a) * sp.tilt + c.slope;
+        const sizeK = C.headSize[f], lx = C.headX[f] - 150 - C.backOff * sizeK, ly = C.headY[f] - 150, cr = Math.cos(c.rot), sr = Math.sin(c.rot);   // BACK OF THE HEAD IN CELL PX, TURNED WITH THE HEAD
+        const tx = c.x + c.ox + c.dir * (lx * cr - ly * sr) * C.scale, ty = c.y + c.oy + (lx * sr + ly * cr) * C.scale;
         if (c.hx === null) { c.hx = tx; c.hy = ty; } else { const k = Math.min(1, dt * 26); c.hx += (tx - c.hx) * k; c.hy += (ty - c.hy) * k; }
         if (f < C.emitUntil) {
           c.pts.push({ x: c.hx, y: c.hy, a: 0, w: R.width * sizeK, j: rnd(-1, 1), j2: rnd(-1, 1), s: c.n++ });
