@@ -35,7 +35,7 @@
    THE GAME RUNS ON A FIXED 1/50 s STEP WITH VELOCITY UPDATED BEFORE POSITION (KAPLAY'S OWN STEP),
    SO A JUMP OF 1000 px/s UNDER GRAVITY 1800 PEAKS AT THE SAME ~268 px AS BEFORE.
    WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
-   DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / KICK / AIR KICK, CAMERA, LEVEL.
+   DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / CAT SPELL (E) / KICK / AIR KICK, CAMERA, LEVEL.
    CHEAP FX (F2 TOGGLES ALL): SQUASH + STRETCH, HIT-STOP, CAMERA SHAKE, RUN / AIR MOTES, LANDING PUFF, DASH + AIR KICK AFTERIMAGES.
    CAPE: 3 MODES (V), GHOST TAIL (G). DISSOLVE (SPAWN IN, R DISSOLVES OUT AND RESPAWNS), DOUBLE JUMP SPIRAL. LIGHTING (L) + TORCHES. EVERYTHING FROM THE KAPLAY PLAYGROUND IS NOW HERE.
    PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
@@ -300,7 +300,7 @@ async function loadAssets() {
     const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
-  IMG.spell = await loadImg(SPELL.src); IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
+  IMG.spell = await loadImg(SPELL.src); try { IMG.catSpell = await loadImg(CAT_SPELL.src); } catch (e) { console.warn('[play] no cat spell sheet (' + e.message + ')'); } IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
@@ -326,7 +326,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [], releaseQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j', 'm', 'p']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j', 'm', 'p', 'e']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { const k = keyName(e); keys.delete(k); if (k === 'up' || k === 'w' || k === 'space') releaseQ.push(k); });
@@ -351,7 +351,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 }); cancelPet();
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0; jumpBufT = 0; jumpCutReady = false; P.vx = 0;
-  airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
+  airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; catSpells.length = 0; catFx.length = 0; catCool = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
   wasWallSliding = false; sfx('respawn');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
@@ -796,7 +796,7 @@ const PET_ARM = {
 const PET = { gap: 171, reach: 320, comeSpeed: 1.3, comeTimeout: 3, minLoops: 2, reachTime: 0.16, tuck: [20, 45] };
 // gap = ART PX FROM NOVA'S FEET TO THE CRITTER'S anchorX. reach = WORLD PX A CRITTER CAN BE FROM THE PAT SPOT AND STILL COME OVER. comeSpeed = x HIS WALK SPEED.
 // reachTime = SECONDS FOR THE ARM TO GO OUT / COME BACK. tuck = WHERE THE PALM STARTS AND ENDS (ART PX FROM THE SHOULDER: TUCKED BEHIND HER BODY)
-const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r']);
+const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r', 'e']);
 const pet = { phase: 'none', c: null, spot: 0, dir: 1, k: 0, t: 0, endAt: 0, msg: '', msgT: 0, dbg: null };   // phase: none | wait (HE IS COMING) | pat | release (ARM GOING BACK)
 const petArm = { upper: null, lower: null, L1: 0, L2: 0, bend: 1 };
 function resetPet() { Object.assign(pet, { phase: 'none', c: null, k: 0, t: 0, endAt: 0, dbg: null }); }
@@ -924,6 +924,7 @@ function tick(dt) {
     else if (k === 'shift') tryDash();
     else if (k === 'c') pressPet();
     else if (k === 'z') playAttack();
+    else if (k === 'e') castCat();
     else if (k === 'x') pressKick();
     else if (k === 'r') dissolveOutAndRespawn();
     else if (k === 'f1') showHitboxes = !showHitboxes;
@@ -961,6 +962,7 @@ function tick(dt) {
   if (currentAnim === 'run') updateRun(dt);
   stepFx(dt); stepDissolve(dt); stepCape(dt);
   spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
+  stepCatSpells(dt);
   swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
   if (P.x < LEVEL_MIN_X) P.x = LEVEL_MIN_X; if (P.x > LEVEL_MAX_X) P.x = LEVEL_MAX_X;
   if (P.y > FALL_Y) spawnPlayer();
@@ -1053,6 +1055,8 @@ const SFX = {
   wallGrab:   { src: null, volume: 0.6 },                        // THE MOMENT A WALL SLIDE STARTS
   dash:       { src: null, volume: 0.8, pitch: [0.97, 1.03] },
   spell:      { src: null, volume: 0.9 },                        // Z
+  catSpell:   { src: null, volume: 0.9 },                        // E: THE CAT LEAVES THE HAND
+  catChomp:   { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // E: THE CHOMP
   kick:       { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X ON THE GROUND
   airKick:    { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X IN THE AIR
   respawn:    { src: null, volume: 0.7 },                        // THE SPAWN BEAM (R, FALLING OFF, A NEW MAP)
@@ -1061,6 +1065,167 @@ const SFX_LAND_MIN = 150, SFX_LAND_FULL = 1300;   // LANDING IMPACT (px/s) FOR T
 const AUDIO_PREFS_KEY = 'playAudio_v1';
 const audioOk = () => !!window.OSWAudio;
 function sfx(name, opts) { if (audioOk()) OSWAudio.sfx.play(name, opts); }
+
+/* ---------- CAT SPELL (E): SPECTRAL CAT HEAD + VECTOR TRAIL ----------
+   SHEET: vfx/cat_spell.png, 10 FRAMES OF 300 x 300 (0-2 SPIRAL IN SMALL, 3-4 FULL SIZE, 5-8 CHOMP, 9 FADE). THE HEAD FACES RIGHT.
+   THE HEAD MOVES ACROSS ITS OWN CELL FROM FRAME TO FRAME, SO headX / headY (MEASURED CENTRE OF THE INK, CELL PX) TELL THE TRAIL WHERE IT REALLY IS.
+   NOVA HAS NO CAST SHEET FOR THIS YET: ON THE GROUND SHE HOLDS STILL IN IDLE FOR castHold; IN THE AIR SHE JUST FIRES IT.
+   THE TRAIL IS ALL VECTORS, IN WORLD SPACE (IT STAYS WHERE IT WAS LAID AND THE HEAD PULLS AWAY FROM IT):
+     RIBBON = THE HEAD'S PATH AS A TAPERED SHAPE: A JAGGED DARK INK LAYER, THEN 3 GLOW LAYERS ADDED ON TOP ('lighter'), WIDE + DIM TO THIN + WHITE-HOT.
+     SHARDS = LOOSE NEEDLES SHED BEHIND THE HEAD (DARK INK, BLUE-VIOLET GLOW, A FEW WHITE 'SLASH' BEAMS), PLUS SPARKS. ALL FADE ON THEIR OWN.
+     CHOMP = A FLASH RING + SPARK FAN + SMALL SHAKE ON chompFrame.
+   COLOURS ARE COOL BLUE-VIOLET; SWAP THEM IN CAT_SPELL.colors. */
+const CAT_SPELL = {
+  src: 'assets/images/vfx/cat_spell.png', frames: 10, scale: 0.85, frameTime: 1 / 16,
+  holds: [1, 1, 1.1, 1.1, 1, 1, 1.4, 1.1, 1, 1.4],          // RELATIVE LENGTH OF EACH FRAME (x frameTime)
+  speed: 760, rampTime: 0.12, chompFrom: 5, chompSlow: 0.3, chompFrame: 6, emitUntil: 8,
+  forward: 130, handHeight: 0.5, castHold: 0.3, cooldown: 0.35,
+  headX: [66, 74, 70, 187, 200, 220, 224, 231, 240, 261], headY: [159, 149, 144, 131, 131, 132, 133, 132, 134, 143],
+  headSize: [0.3, 0.45, 0.65, 1, 1, 1, 0.95, 0.9, 0.85, 0.6], backOff: 45,
+  spiral: { radius: 42, turns: 1.3, frames: 3, tilt: 0.35 },
+  ribbon: { life: 0.36, width: 34, inkAlpha: 0.8, jag: 0.65 },
+  strands: [   // THE RIBBON IS SPLIT INTO STRANDS: off = SIDEWAYS (x WIDTH), w = THICKNESS, life = HOW LONG IT HANGS ON, wave = WIGGLE (x WIDTH), core = WHITE-HOT LINE
+    { off: 0,     w: 0.8,  life: 1,    wave: 0.12, core: true },
+    { off: -0.75, w: 0.42, life: 0.75, wave: 0.35 },
+    { off: 0.7,   w: 0.36, life: 0.85, wave: 0.3 },
+    { off: -0.25, w: 0.22, life: 1.25, wave: 0.5 },
+    { off: 0.35,  w: 0.18, life: 0.55, wave: 0.6 },
+  ],
+  shards: { ink: 0.9, glow: 0.85, slash: 0.22, slashFull: 0.6, sparks: 2 },
+  light: { radius: 300, color: '#667eea' },
+  colors: {
+    ink: ['#0a0526', '#170032', '#140a3a'],
+    glow: ['#4b3bff', '#5b5cf0', '#667eea', '#7a6cff', '#3a2bd8', '#830cde'],
+    ribbon: ['#3d2fd6', '#6a7bff', '#d6e2ff'],
+    hot: ['#e8f0ff', '#c4b5fd', '#00ffff'],
+  },
+};
+const catSpells = [], catFx = [];
+let catCool = 0;
+const catPick = a => a[(Math.random() * a.length) | 0];
+const CAT_HOLD_SUM = CAT_SPELL.holds.reduce((s, h) => s + h, 0);
+function catFrameAt(t) { let w = t / CAT_SPELL.frameTime, i = 0; while (i < CAT_SPELL.frames && w >= CAT_SPELL.holds[i]) { w -= CAT_SPELL.holds[i]; i++; } return i; }   // frames = FINISHED
+const catSpiralTime = () => CAT_SPELL.holds.slice(0, CAT_SPELL.spiral.frames).reduce((s, h) => s + h, 0) * CAT_SPELL.frameTime;
+function castCat() {
+  if (catCool > 0 || (isAttacking && currentAnim !== 'idle')) return;
+  const C = CAT_SPELL, dir = P.flip ? -1 : 1, fullH = PLAYER_FRAME * SCALE;
+  if (P.grounded && !isAttacking) {   // NO CAST POSE YET: STAND STILL IN IDLE WHILE IT LEAVES THE HAND
+    isAttacking = true; attackT = C.castHold; dashTimer = 0; visualLift = 0;
+    if (currentAnim !== 'idle') { currentAnim = 'idle'; playSheetAnim('idle'); }
+  }
+  catCool = C.cooldown; shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape(); sfx('catSpell');
+  const x = P.x + dir * C.forward, y = P.y - fullH * C.handHeight;
+  catSpells.push({ x, y, dir, t: 0, f: 0, ox: 0, oy: 0, rot: 0, hx: null, hy: 0, pts: [], n: 0, chomped: false, done: false, spd: 0 });
+  catFx.push({ k: 'ring', x: P.x + dir * (C.forward * 0.55), y, t: 0, life: 0.18, r0: 4, r1: 34, color: '#8fa0ff', w: 3 });
+  for (let i = 0; i < 6; i++) { const a = rnd(-1, 1) * 1.1; catSpark(P.x + dir * C.forward * 0.55, y, dir * Math.cos(a) * rnd(120, 320), Math.sin(a) * rnd(120, 320)); }
+}
+function catSpark(x, y, vx, vy) { catFx.push({ k: 'spark', x, y, vx, vy, t: 0, life: rnd(0.18, 0.4), size: rnd(1.2, 2.8), color: catPick(Math.random() < 0.5 ? CAT_SPELL.colors.hot : CAT_SPELL.colors.glow), drag: 3 }); }
+function catShard(k, c, x, y, sizeK) {
+  const C = CAT_SPELL, d = c.dir, back = rnd(40, 200);
+  const o = { k, x, y, vx: -d * back + d * c.spd * rnd(0, 0.2), vy: rnd(-30, 30), t: 0, dir: d, ang: rnd(-0.12, 0.12), drag: 2 };
+  if (k === 'ink') Object.assign(o, { life: rnd(0.25, 0.5), len: rnd(50, 170) * sizeK, w: rnd(4, 11) * sizeK, color: catPick(C.colors.ink) });
+  else if (k === 'glow') Object.assign(o, { life: rnd(0.2, 0.45), len: rnd(40, 150) * sizeK, w: rnd(2.5, 7) * sizeK, color: catPick(C.colors.glow) });
+  else Object.assign(o, { life: rnd(0.14, 0.3), len: rnd(120, 320) * sizeK, w: rnd(1, 2.4), color: catPick(C.colors.hot), ang: rnd(-0.05, 0.05), vx: -d * rnd(10, 80) });   // slash: LONG THIN WHITE-BLUE BEAM
+  catFx.push(o);
+}
+function catChomp(c) {
+  const C = CAT_SPELL, x = c.hx + c.dir * 60 * C.scale, y = c.hy;
+  shakeCamera(0.1, 5); sfx('catChomp');
+  catFx.push({ k: 'ring', x, y, t: 0, life: 0.24, r0: 10, r1: 80, color: '#7a8cff', w: 5 });
+  catFx.push({ k: 'ring', x, y, t: 0, life: 0.16, r0: 4, r1: 46, color: '#e8f0ff', w: 2 });
+  for (let i = 0; i < 16; i++) { const a = rnd(-1, 1) * 1.4; catSpark(x, y, c.dir * Math.cos(a) * rnd(150, 480), Math.sin(a) * rnd(150, 480)); }
+  for (let i = 0; i < 4; i++) catShard('slash', c, x - c.dir * rnd(0, 30), y + rnd(-30, 30), 0.7);
+}
+function stepCatSpells(dt) {
+  const C = CAT_SPELL, R = C.ribbon, sp = C.spiral;
+  if (catCool > 0) catCool -= dt;
+  for (let i = catSpells.length - 1; i >= 0; i--) {
+    const c = catSpells[i];
+    for (const p of c.pts) p.a += dt;
+    const maxLife = R.life * Math.max(...C.strands.map(t => t.life)); while (c.pts.length && c.pts[0].a >= maxLife) c.pts.shift();
+    if (!c.done) {
+      c.t += dt; const f = catFrameAt(c.t);
+      if (f >= C.frames) c.done = true;
+      else {
+        c.f = f;
+        c.spd = C.speed * (0.55 + 0.45 * Math.min(1, c.t / C.rampTime)) * (f >= C.chompFrom ? C.chompSlow : 1);
+        c.x += c.dir * c.spd * dt;
+        const u = Math.min(1, c.t / catSpiralTime()), r = sp.radius * Math.pow(1 - u, 1.5), a = u * sp.turns * Math.PI * 2;   // SPIRALS IN ONTO THE FLIGHT LINE WHILE IT GROWS
+        c.ox = c.dir * Math.cos(a) * r * 0.6; c.oy = Math.sin(a) * r; c.rot = (1 - u) * Math.sin(a) * sp.tilt;
+        const sizeK = C.headSize[f], tx = c.x + c.ox + c.dir * (C.headX[f] - 150 - C.backOff * sizeK) * C.scale, ty = c.y + c.oy + (C.headY[f] - 150) * C.scale;
+        if (c.hx === null) { c.hx = tx; c.hy = ty; } else { const k = Math.min(1, dt * 26); c.hx += (tx - c.hx) * k; c.hy += (ty - c.hy) * k; }
+        if (f < C.emitUntil) {
+          c.pts.push({ x: c.hx, y: c.hy, a: 0, w: R.width * sizeK, j: rnd(-1, 1), j2: rnd(-1, 1), s: c.n++ });
+          if (f >= 2) {
+            const S = C.shards, hh = 55 * C.scale * sizeK, at = () => [c.hx + rnd(-10, 20) * -c.dir, c.hy + rnd(-hh, hh)];
+            if (Math.random() < S.ink) catShard('ink', c, ...at(), sizeK);
+            if (Math.random() < S.glow) catShard('glow', c, ...at(), sizeK);
+            if (Math.random() < (f === 3 || f === 4 ? S.slashFull : S.slash)) catShard('slash', c, ...at(), sizeK);
+            for (let s = 0; s < S.sparks; s++) { const [sx, sy] = at(); catSpark(sx, sy, -c.dir * rnd(30, 200), rnd(-60, 60)); }
+          }
+        }
+        if (!c.chomped && f >= C.chompFrame) { c.chomped = true; catChomp(c); }
+      }
+    }
+    if (c.done && !c.pts.length) catSpells.splice(i, 1);
+  }
+  for (let i = catFx.length - 1; i >= 0; i--) {
+    const p = catFx[i]; p.t += dt; if (p.t >= p.life) { catFx.splice(i, 1); continue; }
+    if (p.vx !== undefined) { const k = Math.exp(-(p.drag || 0) * dt); p.vx *= k; p.vy *= k; p.x += p.vx * dt; p.y += p.vy * dt; }
+  }
+}
+function catRibbon(all, widthK, jag, life, st) {   // ONE STRAND: A TAPERED SHAPE ALONG THE PATH, FAT JUST BEHIND THE HEAD, A POINT AT THE TAIL
+  const L = st ? life * st.life : life, pts = all.filter(p => p.a < L), n = pts.length; if (n < 2) return false;
+  const off = st ? st.off : 0, wave = st ? st.wave : 0, ph = st ? st.off * 7 : 0, wk = widthK * (st ? st.w : 1);
+  const Lp = [], Rp = [];
+  for (let i = 0; i < n; i++) {
+    const p = pts[i], a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    let nx = -(b.y - a.y), ny = b.x - a.x; const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
+    const age = Math.min(1, p.a / L), tail = i / (n - 1), w = p.w * wk * Math.pow(1 - age, 0.8) * Math.min(1, tail * 4 + 0.15);
+    const sh = p.w * (off * (0.6 + 0.6 * age) + wave * Math.sin(p.s * 0.55 + ph) * age), cx = p.x + nx * sh, cy = p.y + ny * sh;   // STRANDS FAN OUT AND WAVE MORE AS THEY AGE
+    Lp.push([cx + nx * w * (1 + jag * p.j), cy + ny * w * (1 + jag * p.j)]); Rp.push([cx - nx * w * (1 + jag * p.j2), cy - ny * w * (1 + jag * p.j2)]);
+  }
+  ctx.beginPath(); ctx.moveTo(Lp[0][0], Lp[0][1]);
+  for (let i = 1; i < n; i++) ctx.lineTo(Lp[i][0], Lp[i][1]);
+  const h = pts[n - 1], hd = Math.sign(h.x - pts[0].x) || 1; ctx.lineTo(h.x + hd * h.w * wk * 0.6 * Math.pow(1 - Math.min(1, h.a / L), 2), h.y);   // POINTED-ISH NOSE UNDER THE HEAD (SHRINKS ONCE THE HEAD LETS GO)
+  for (let i = n - 1; i >= 0; i--) ctx.lineTo(Rp[i][0], Rp[i][1]);
+  ctx.closePath(); return true;
+}
+function catNeedle(p, lenK, wK) {   // A STREAK: BLUNT FRONT AT (x, y), LONG POINT TRAILING BEHIND
+  const len = p.len * lenK, w = p.w * wK;
+  ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.dir, 1); ctx.rotate(p.ang);
+  ctx.beginPath(); ctx.moveTo(w * 1.6, 0); ctx.quadraticCurveTo(w * 0.4, -w, -len * 0.25, -w * 0.55); ctx.lineTo(-len, 0); ctx.lineTo(-len * 0.25, w * 0.55); ctx.quadraticCurveTo(w * 0.4, w, w * 1.6, 0);
+  ctx.fill(); ctx.restore();
+}
+function drawCatSpells() {
+  const C = CAT_SPELL, R = C.ribbon, im = IMG.catSpell, flick = 0.85 + 0.15 * Math.sin(clockT * 47);
+  ctx.save();
+  // 1) DARK INK: RIBBONS + INK SHARDS (NORMAL BLENDING, SO THEY READ ON LIGHT GROUND TOO)
+  ctx.globalCompositeOperation = 'source-over';
+  for (const c of catSpells) C.strands.forEach((st, j) => { if (catRibbon(c.pts, 1.25, R.jag, R.life, st)) { ctx.globalAlpha = R.inkAlpha; ctx.fillStyle = C.colors.ink[j % C.colors.ink.length]; ctx.fill(); } });
+  for (const p of catFx) if (p.k === 'ink') { const u = p.t / p.life; ctx.globalAlpha = 0.85 * Math.pow(1 - u, 1.2); ctx.fillStyle = p.color; catNeedle(p, 0.7 + 0.5 * u, 1); }
+  // 2) GLOW: ADDED LIGHT, WIDE + DIM FIRST, THEN THINNER AND HOTTER
+  ctx.globalCompositeOperation = 'lighter';
+  const RB = C.colors.ribbon, passes = [[0.9, 0.35, 0.38], [0.45, 0.15, 0.42], [0.1, 0, 0.6]];   // [WIDTH, JAG, ALPHA]: WIDE + DIM, MID, WHITE-HOT CORE (CORE STRANDS ONLY)
+  for (const c of catSpells) C.strands.forEach(st => passes.forEach(([wk, jag, al], j) => { if (j === 2 && !st.core) return; if (catRibbon(c.pts, wk, jag, R.life, st)) { ctx.globalAlpha = al * flick; ctx.fillStyle = RB[j]; ctx.fill(); } }));
+  for (const p of catFx) {
+    const u = p.t / p.life, a = Math.pow(1 - u, 1.3);
+    if (p.k === 'glow') { ctx.fillStyle = p.color; ctx.globalAlpha = 0.35 * a; catNeedle(p, 0.8 + 0.5 * u, 2.2); ctx.globalAlpha = 0.9 * a * flick; catNeedle(p, 0.8 + 0.5 * u, 0.8); }
+    else if (p.k === 'slash') { ctx.fillStyle = '#5b5cf0'; ctx.globalAlpha = 0.4 * a; catNeedle(p, 1, 3); ctx.fillStyle = p.color; ctx.globalAlpha = a; catNeedle(p, 1, 1); }
+    else if (p.k === 'spark') { ctx.fillStyle = p.color; ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1 - u * 0.5), 0, Math.PI * 2); ctx.fill(); }
+    else if (p.k === 'ring') { const e = 1 - Math.pow(1 - u, 3); ctx.strokeStyle = p.color; ctx.lineWidth = p.w * (1 - u) + 0.5; ctx.globalAlpha = 1 - u; ctx.beginPath(); ctx.arc(p.x, p.y, p.r0 + (p.r1 - p.r0) * e, 0, Math.PI * 2); ctx.stroke(); }
+  }
+  // 3) THE HEAD ITSELF, ON TOP OF ITS OWN TRAIL
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  if (im) for (const c of catSpells) {
+    if (c.done) continue;
+    const cw = im.naturalWidth / C.frames, ch = im.naturalHeight;
+    ctx.save(); ctx.translate(c.x + c.ox, c.y + c.oy); ctx.scale(c.dir * C.scale, C.scale); ctx.rotate(c.rot);
+    ctx.drawImage(im, c.f * cw, 0, cw, ch, -cw / 2, -ch / 2, cw, ch); ctx.restore();
+  }
+  ctx.restore();
+}
+function catLights() { return catSpells.filter(c => !c.done && c.hx !== null).slice(0, 2).map(c => ({ x: c.hx + c.dir * 40 * CAT_SPELL.scale, y: c.hy, r: CAT_SPELL.light.radius * (0.4 + 0.6 * CAT_SPELL.headSize[c.f]) * (1 + 0.05 * Math.sin(clockT * 37)), color: CAT_SPELL.light.color })); }
 
 /* ---------- FX (VISUAL ONLY: NOTHING HERE TOUCHES P.x / P.y / P.vx / P.vy OR THE HITBOX) ----------
    PORTED FROM THE KAPLAY FILE WITH THE SAME NUMBERS. THE STEPPING RUNS INSIDE tick() (FIXED 1/50 s), SO HIT-STOP FREEZES IT TOO;
@@ -1657,6 +1822,7 @@ const lightBuf = document.createElement('canvas'), lb = lightBuf.getContext('2d'
 function collectLights(px, py, cx) {   // { x, y, r, color } IN WORLD PX
   const L = [{ x: px, y: py - LIGHT.player.height, r: LIGHT.player.radius * (1 + 0.015 * Math.sin(clockT * 3)), color: LIGHT.player.color }];
   for (let i = 0; i < Math.min(2, spells.length); i++) L.push({ x: spells[i].x, y: spells[i].y, r: LIGHT.spell.radius * (1 + 0.06 * Math.sin(clockT * 40)), color: LIGHT.spell.color });
+  L.push(...catLights());
   const near = lamps.filter(l => Math.abs(l.x - cx) < W / 2 + LAMP.radius).sort((a, b) => Math.abs(a.x - cx) - Math.abs(b.x - cx)).slice(0, LIGHT.max - L.length);
   for (const l of near) L.push({ x: l.x, y: l.y + flameLightOff, r: LAMP.radius * lampFlicker(l), color: l.color });
   return L;
@@ -1802,7 +1968,7 @@ function drawHud() {
     'worm (K): ' + (worm.on ? worm.state + (worm.state === 'hidden' ? ' ' + Math.max(0, worm.t).toFixed(1) + 's' : (worm.state === 'tunnel' ? '   ridge x ' + worm.tx.toFixed(0) : '') + '   exit x ' + worm.x0.toFixed(0) + (worm.dir > 0 ? ' >' : ' <')) + '   particles ' + wormParts.length : 'off') + '   J = tunnel under Nova, come up in front of her',
     'pet (C): ' + (pet.phase === 'none' ? (pet.msgT > 0 ? pet.msg : 'ready') : pet.phase + (pet.dbg ? '   reach ' + (pet.dbg.reach * 100).toFixed(0) + '%   shoulder ' + pet.dbg.r1.toFixed(1) + 'deg   elbow ' + pet.dbg.r2.toFixed(1) + 'deg' : '')),
     'audio: ' + audioHud(),
-    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes   M music   P blips',
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   E cat spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes   M music   P blips',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
 }
@@ -1820,6 +1986,7 @@ function render(alpha) {
   drawParticles();                                                        // z 8
   drawGhosts();                                                           // z 9
   drawSheetFx(spells, IMG.spell, SPELL.frames, SPELL.fps, SPELL.scale);   // z 9: BEHIND THE PLAYER
+  drawCatSpells();                                                        // z 9: CAT SPELL (E) + ITS SPECTRAL TRAIL
   drawCloth(x, y);                                                        // z 9.5: THE VERLET CAPE, BEHIND THE BODY
   drawPetArm(x, y, alpha);                                                // z 9.7: HEAD PAT ARM, OVER THE CRITTER, UNDER THE BODY
   drawPlayer(x, y);
@@ -1962,7 +2129,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
