@@ -7,6 +7,7 @@
 <script src="js/tileset.js"></script>
 <script src="js/oswClient.js"></script>  <!-- OSW: BRIDGE TO THE SHELL (CHARACTER PHYSICS FROM THE LIBRARY) -->
 <script src="js/capeSim.js"></script>  <!-- THE VERLET CLOTH SIM, THE SAME CODE CAPE LAB RUNS -->
+<script src="js/audio.js"></script>  <!-- MUSIC LOOP + SFX (WEB AUDIO). PLAIN FILE, NO DOM: REUSABLE IN THE GAME -->
 <title>PLAY - Sprite Playground</title>
 <style>
   html,body{margin:0;height:100%;overflow:hidden;background:#030013}
@@ -16,12 +17,15 @@
   #ui select:hover{border-color:#00ffff;color:#00ffff}
   #ui button{background:#170032;border:1px solid #830cde;color:#c4b5fd;padding:4px 8px;border-radius:3px;font:inherit;cursor:pointer}
   #ui button:hover{border-color:#00ffff;color:#00ffff}
+  #ui .aud{display:flex;gap:4px;align-items:center;padding-left:6px;border-left:1px solid #37025a}
+  #ui input[type=range]{width:64px;accent-color:#dc4ce8;cursor:pointer}
+  #ui button.on{border-color:#dc4ce8;color:#FFC7FF;box-shadow:0 0 6px rgba(220,76,232,.6)}
   #err{position:fixed;left:14px;top:12px;max-width:560px;padding:10px 14px;background:#170032;border:1px solid #ff6200;color:#ff9a9e;font:13px Consolas,monospace;z-index:20;box-shadow:0 0 14px rgba(255,98,0,.5)}
 </style>
 </head>
 <body>
 <canvas id="game" tabindex="0"></canvas>
-<div id="ui"><span id="uiLbl" hidden>CHARACTER</span><span id="mapLbl" hidden>MAP</span><select id="mapSel" hidden title="The level: the built-in test level, or a map saved from Tile Lab"></select><select id="charSel" hidden title="Where the physics numbers come from: a character sheet (character.json) or the built-in defaults"></select><button id="capeExp" title="Download the live cape tuning as cape_config.json (a template to edit, or a saved version)">&#11015; CAPE</button><button id="capeImp" title="Load a cape config .json (a saved version); missing keys fall back to the built-in numbers">&#11014; CAPE</button><input type="file" id="capeFile" accept=".json,application/json" hidden></div>
+<div id="ui"><span id="uiLbl" hidden>CHARACTER</span><span id="mapLbl" hidden>MAP</span><select id="mapSel" hidden title="The level: the built-in test level, or a map saved from Tile Lab"></select><select id="charSel" hidden title="Where the physics numbers come from: a character sheet (character.json) or the built-in defaults"></select><button id="capeExp" title="Download the live cape tuning as cape_config.json (a template to edit, or a saved version)">&#11015; CAPE</button><button id="capeImp" title="Load a cape config .json (a saved version); missing keys fall back to the built-in numbers">&#11014; CAPE</button><input type="file" id="capeFile" accept=".json,application/json" hidden><span class="aud"><button id="musBtn" title="Music on / off (M)">&#9835; MUSIC</button><input type="range" id="musVol" min="0" max="100" title="Music volume"></span><span class="aud"><span>SFX</span><input type="range" id="sfxVol" min="0" max="100" title="Sound effects volume"><button id="blipBtn" title="Placeholder blips (P): sounds with no file yet play a short beep, each at its own pitch, so you can hear where they fire">BLIPS</button></span></div>
 
 <script>
 'use strict';
@@ -322,7 +326,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [], releaseQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j', 'm', 'p']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { const k = keyName(e); keys.delete(k); if (k === 'up' || k === 'w' || k === 'space') releaseQ.push(k); });
@@ -333,7 +337,7 @@ const down = (...n) => n.some(k => keys.has(k));
 const P = { x: 100, y: GROUND_Y, px: 100, py: GROUND_Y, vx: 0, vy: 0, gs: 1, grounded: false, flip: false, sheet: 'idle', frame: 0, anim: PLAYER_ANIMS.idle, animT: 0, spin: 0, mx: 0 };
 let currentAnim = 'idle', isAttacking = false, attackT = 0;
 let runIdx = 0, runTimer = 0, visualLift = 0;
-let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0;
+let touching = null, wallJumpLock = 0, wallJumpPushDir = 1, wallSlideHOffset = 0, wasWallSliding = false;
 let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpReady = true, airKickReady = true;
 let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
 let jumpBufT = 0, jumpCutReady = false;   // JUMP BUFFER TIMER; TRUE WHILE THE CURRENT JUMP CAN STILL BE CUT SHORT BY LETTING GO
@@ -349,6 +353,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0; jumpBufT = 0; jumpCutReady = false; P.vx = 0;
   airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
+  wasWallSliding = false; sfx('respawn');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
 }
 
@@ -356,7 +361,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
 function startRun() { runIdx = 0; runTimer = 0; playSheetAnim('run'); P.frame = RUN_CYCLE[0].frame; visualLift = RUN_CYCLE[0].lift; }
 function updateRun(dt) {
   runTimer += dt;
-  while (runTimer >= RUN_CYCLE[runIdx].hold) { runTimer -= RUN_CYCLE[runIdx].hold; runIdx = (runIdx + 1) % RUN_CYCLE.length; }
+  while (runTimer >= RUN_CYCLE[runIdx].hold) { runTimer -= RUN_CYCLE[runIdx].hold; runIdx = (runIdx + 1) % RUN_CYCLE.length; if (RUN_POSE_ORDER[runIdx] === 'contact' && P.grounded) sfx('footstep'); }
   P.frame = RUN_CYCLE[runIdx].frame; visualLift = RUN_CYCLE[runIdx].lift;
 }
 function playSheetAnim(name) { const d = PLAYER_ANIMS[name]; if (!d) return; P.anim = d; P.sheet = d.sheet; P.frame = d.from; P.animT = 0; }
@@ -377,7 +382,7 @@ function stepAnim(dt) {   // KAPLAY'S sprite update(): EITHER A FPS LOOP, OR A D
 function startAttack(anim, hold) { isAttacking = true; attackT = hold; dashTimer = 0; currentAnim = anim; visualLift = 0; playSheetAnim(anim); }
 function playAttack() {
   if (isAttacking) return;
-  startAttack('attack', ATTACK_HOLD_TIME); shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape();
+  startAttack('attack', ATTACK_HOLD_TIME); shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape(); sfx('spell');
   const dir = P.flip ? -1 : 1, halfW = (PLAYER_FRAME * SCALE) / 2, fullH = PLAYER_FRAME * SCALE;
   spells.push({ x: P.x + dir * (halfW + SPELL.forwardOffset), y: P.y - fullH * (1 - SPELL.handHeightRatio), dir, t: 0 });
 }
@@ -385,7 +390,7 @@ function playKickAttack() {
   if (isAttacking) return;
   startAttack('attackKick', ATTACK_KICK_HOLD_TIME);
   swooshes.push({ x: P.x + 20 * (P.flip ? -1 : 1), y: P.y + 20, dir: P.flip ? -1 : 1, t: 0 });
-  shakeCamera(KICK_SHAKE_DURATION, KICK_SHAKE_STRENGTH); hitStop(HITSTOP_KICK);   // NO ENEMY YET, SO THE KICK STANDS IN FOR "THE HIT CONNECTED"
+  shakeCamera(KICK_SHAKE_DURATION, KICK_SHAKE_STRENGTH); hitStop(HITSTOP_KICK); sfx('kick');   // NO ENEMY YET, SO THE KICK STANDS IN FOR "THE HIT CONNECTED"
 }
 function pressKick() {
   if (isAttacking) return;
@@ -398,7 +403,7 @@ function playAirKick() {
   isAttacking = true; attackT = 0; airKickReady = false; dashTimer = 0; jumpStartTimer = 0; landTimer = 0; wallSlideHOffset = 0;
   currentAnim = 'airKick'; visualLift = 0; playSheetAnim('airKick');
   airKick.t = A.holdTime; airKick.dir = P.flip ? -1 : 1; airKick.hit = false; airKick.ghostAcc = A.ghostInterval; airKick.ghostN = 0; kickSquash(A.squash.x, A.squash.y);
-  P.vy *= A.vyKeep; P.gs = A.gravityScale;
+  P.vy *= A.vyKeep; P.gs = A.gravityScale; sfx('airKick');
 }
 function updateAirKick(dt) {   // LUNGE + ENDING THE KICK. RUNS WHILE isAttacking (THE MAIN UPDATE IS SKIPPED THEN)
   const A = AIR_KICK; if (airKick.t <= 0) return;
@@ -414,12 +419,12 @@ function tryDash() {
   if (!P.grounded && !airDashReady) return;
   if (!P.grounded) airDashReady = false;
   dashDir = P.flip ? -1 : 1; dashTimer = DASH_TIME; dashCooldown = DASH_COOLDOWN;
-  kickSquash(SQUASH_DASH.x, SQUASH_DASH.y); kickCape(1);
+  kickSquash(SQUASH_DASH.x, SQUASH_DASH.y); kickCape(1); sfx('dash');
 }
 function startDoubleJump() {
   airJumpReady = false; dashTimer = 0; P.vy = -PHYS.doubleJump; jumpStartTimer = 0; landTimer = 0;
   doubleJump.t = DOUBLE_JUMP.spinTime; doubleJump.pre = DOUBLE_JUMP.inTime; doubleJump.post = 0; doubleJump.angle = 0; doubleJump.angVel = 0; doubleJump.dir = P.flip ? -1 : 1; doubleJump.ghostAcc = doubleJump.moteAcc = doubleJump.ghostN = 0;
-  playAnim('doubleJump'); P.frame = doubleJump.pre > 0 ? JUMP_FRAME.flipIn : JUMP_FRAME.flip; kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1); spawnDoubleJumpBurst();
+  playAnim('doubleJump'); P.frame = doubleJump.pre > 0 ? JUMP_FRAME.flipIn : JUMP_FRAME.flip; kickSquash(DOUBLE_JUMP.squash.x, DOUBLE_JUMP.squash.y); kickCape(-1); spawnDoubleJumpBurst(); sfx('doubleJump');
 }
 function updateDoubleJump(dt) {
   const D = DOUBLE_JUMP;
@@ -442,11 +447,11 @@ function pressJump() {
   if (isAttacking) { jumpBufT = PHYS.jumpBuffer; return; }
   if (P.grounded || coyoteT > 0) {
     jumpBufT = 0; jumpCutReady = true;
-    P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0; kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
+    P.vy = -PHYS.jump; P.grounded = false; coyoteT = 0; jumpStartTimer = JUMP_START_TIME; landTimer = 0; kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1); sfx('jump');
   } else if (touching) {   // WALL JUMP: UP AND AWAY FROM THE WALL BEING CLUNG TO
     jumpBufT = 0; jumpCutReady = true;
     wallJumpPushDir = touching.dir * -1; P.vy = -PHYS.wallJump; wallJumpLock = WALL_JUMP_LOCK_TIME; touching = null;
-    P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart'); kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1);
+    P.flip = wallJumpPushDir === -1; jumpStartTimer = JUMP_START_TIME; playAnim('jumpStart'); kickSquash(SQUASH_JUMP.x, SQUASH_JUMP.y); kickCape(-1); sfx('wallJump');
   } else if (DOUBLE_JUMP.enabled && airJumpReady) { jumpBufT = 0; jumpCutReady = true; startDoubleJump(); }
   else jumpBufT = PHYS.jumpBuffer;   // NOTHING TO JUMP FROM YET: REMEMBER THE PRESS FOR A MOMENT (JUMP BUFFER)
 }
@@ -931,6 +936,8 @@ function tick(dt) {
     else if (k === 'k') { worm.on = !worm.on; if (!worm.on) resetWorm(); }
     else if (k === 'j') wormGo(P.x + (P.flip ? -1 : 1) * 220, P.flip ? -1 : 1);
     else if (k === 'b') ARCADE.on = !ARCADE.on;
+    else if (k === 'm') toggleMusic();
+    else if (k === 'p') toggleBlips();
   }
   while (releaseQ.length) { releaseQ.shift(); if (!down('up', 'w', 'space')) releaseJump(); }
   if (jumpBufT > 0) {   // A BUFFERED JUMP FIRES THE MOMENT SHE CAN JUMP; IF THE KEY IS ALREADY UP BY THEN IT IS A SHORT HOP
@@ -979,10 +986,13 @@ function mainUpdate(dt) {   // THE KAPLAY onUpdate, PORTED LINE FOR LINE
   if (grounded) airKickReady = true;   // THE AIR KICK ONLY REFILLS ON THE GROUND, SO IT CANNOT BE CHAINED ALONG A WALL TO HOVER
   let wallSliding = false;   // AIRBORNE + TOUCHING A WALL + HOLDING INTO IT (CLASSIC CLING)
   if (!grounded && wallJumpLock <= 0 && touching && P.vy >= 0) wallSliding = (touching.dir === 1 && down('right', 'd')) || (touching.dir === -1 && down('left', 'a'));
+  if (grounded && wasAirborne && airPeakFall >= SFX_LAND_MIN) sfx('land', { volume: 0.35 + 0.65 * Math.min(1, (airPeakFall - SFX_LAND_MIN) / (SFX_LAND_FULL - SFX_LAND_MIN)) });
   if (grounded) { if (wasAirborne && airPeakFall >= JUMP_LAND_MIN_IMPACT) landTimer = moving ? JUMP_LAND_TIME_MOVING : JUMP_LAND_TIME; airPeakFall = 0; }
   else if (wallSliding) airPeakFall = 0;
   else airPeakFall = Math.max(airPeakFall, P.vy);
   wasAirborne = !grounded;
+  if (wallSliding && !wasWallSliding) sfx('wallGrab');
+  wasWallSliding = wallSliding;
   if (wallSliding) {
     if (P.vy > PHYS.wallSlide) P.vy = PHYS.wallSlide;
     P.flip = touching.dir === 1;   // FACE AWAY FROM THE WALL
@@ -1024,6 +1034,33 @@ function physics(dt) {
   touching = null;   // WALL CONTACT FOR THE NEXT STEP: THE HITBOX GROWN BY 1 px OVERLAPS A WALL
   for (const w of walls) if (P.x - HIT_W / 2 - 1 < w.x + w.w && P.x + HIT_W / 2 + 1 > w.x && P.y - HIT_H < w.y + w.h && P.y > w.y) touching = { dir: P.x < w.x + w.w / 2 ? 1 : -1 };
 }
+
+/* ---------- AUDIO (js/audio.js) ----------
+   MUSIC LOOPS GAPLESS FROM THE FIRST KEY / CLICK (BROWSERS STAY SILENT UNTIL THEN). M = MUSIC ON / OFF, P = PLACEHOLDER BLIPS.
+   TO ADD A SOUND: DROP THE FILE IN src/assets/audio/sfx/ AND PUT ITS PATH IN src BELOW. .ogg IS BEST (.wav / .mp3 WORK TOO).
+   src CAN BE AN ARRAY OF TAKES ('jump_1.ogg', 'jump_2.ogg', ...): ONE IS PICKED AT RANDOM EACH TIME, NEVER THE SAME ONE TWICE IN A ROW.
+   pitch = RANDOM PLAYBACK RATE RANGE PER PLAY (SMALL WOBBLE = REPEATS DON'T SOUND ROBOTIC). cooldown = MIN SECONDS BETWEEN TWO PLAYS.
+   src: null = NOT MADE YET: SILENT, OR A BLIP WHILE BLIPS (P) IS ON. A WRONG PATH WARNS IN THE CONSOLE AND SHOWS 'missing' IN THE HUD.
+   EVERY HOOK IS ONE LINE: sfx('name') (OR sfx('name', { volume: 0.5 })). A NEW EVENT = A NEW ROW HERE + ONE sfx() CALL WHERE IT HAPPENS. */
+const MUSIC = { src: 'assets/audio/SpectralFrequency.ogg', volume: 0.6 };
+const SFX_DIR = 'assets/audio/sfx/';
+const SFX = {
+  jump:       { src: null, volume: 0.8, pitch: [0.97, 1.03] },   // GROUND JUMP (pressJump)
+  wallJump:   { src: null, volume: 0.8, pitch: [0.97, 1.03] },   // KICK OFF A WALL
+  doubleJump: { src: null, volume: 0.8 },                        // THE SPIN / SPIRAL BURST
+  land:       { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // VOLUME ALSO SCALES WITH HOW HARD SHE LANDS
+  footstep:   { src: null, volume: 0.4, pitch: [0.9, 1.1], cooldown: 0.08, voices: 3 },   // EACH 'contact' POSE OF THE RUN CYCLE
+  wallGrab:   { src: null, volume: 0.6 },                        // THE MOMENT A WALL SLIDE STARTS
+  dash:       { src: null, volume: 0.8, pitch: [0.97, 1.03] },
+  spell:      { src: null, volume: 0.9 },                        // Z
+  kick:       { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X ON THE GROUND
+  airKick:    { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X IN THE AIR
+  respawn:    { src: null, volume: 0.7 },                        // THE SPAWN BEAM (R, FALLING OFF, A NEW MAP)
+};
+const SFX_LAND_MIN = 150, SFX_LAND_FULL = 1300;   // LANDING IMPACT (px/s) FOR THE QUIETEST / LOUDEST LANDING SOUND
+const AUDIO_PREFS_KEY = 'playAudio_v1';
+const audioOk = () => !!window.OSWAudio;
+function sfx(name, opts) { if (audioOk()) OSWAudio.sfx.play(name, opts); }
 
 /* ---------- FX (VISUAL ONLY: NOTHING HERE TOUCHES P.x / P.y / P.vx / P.vy OR THE HITBOX) ----------
    PORTED FROM THE KAPLAY FILE WITH THE SAME NUMBERS. THE STEPPING RUNS INSIDE tick() (FIXED 1/50 s), SO HIT-STOP FREEZES IT TOO;
@@ -1764,7 +1801,8 @@ function drawHud() {
     'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
     'worm (K): ' + (worm.on ? worm.state + (worm.state === 'hidden' ? ' ' + Math.max(0, worm.t).toFixed(1) + 's' : (worm.state === 'tunnel' ? '   ridge x ' + worm.tx.toFixed(0) : '') + '   exit x ' + worm.x0.toFixed(0) + (worm.dir > 0 ? ' >' : ' <')) + '   particles ' + wormParts.length : 'off') + '   J = tunnel under Nova, come up in front of her',
     'pet (C): ' + (pet.phase === 'none' ? (pet.msgT > 0 ? pet.msg : 'ready') : pet.phase + (pet.dbg ? '   reach ' + (pet.dbg.reach * 100).toFixed(0) + '%   shoulder ' + pet.dbg.r1.toFixed(1) + 'deg   elbow ' + pet.dbg.r2.toFixed(1) + 'deg' : '')),
-    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes',
+    'audio: ' + audioHud(),
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes   M music   P blips',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
 }
@@ -1874,6 +1912,47 @@ async function initCharacters() {
   OSWClient.on('library.changed', () => { clearTimeout(t); t = setTimeout(async () => { await fill(); await useCharacter(sel.value); }, 300); });
 }
 
+/* ---------- AUDIO UI + PREFS ---------- */
+const audioPrefs = { music: true, musicVol: MUSIC.volume, sfxVol: 0.8, blips: false };
+function saveAudioPrefs() { try { localStorage.setItem(AUDIO_PREFS_KEY, JSON.stringify(audioPrefs)); } catch (e) { /* STORAGE CAN BE UNAVAILABLE */ } }
+function syncAudioUI() {
+  const $ = id => document.getElementById(id);
+  $('musBtn').classList.toggle('on', audioPrefs.music); $('blipBtn').classList.toggle('on', audioPrefs.blips);
+  $('musVol').value = Math.round(audioPrefs.musicVol * 100); $('sfxVol').value = Math.round(audioPrefs.sfxVol * 100);
+}
+function toggleMusic() { if (!audioOk()) return; audioPrefs.music = OSWAudio.music.toggle(); saveAudioPrefs(); syncAudioUI(); }
+function toggleBlips() { if (!audioOk()) return; audioPrefs.blips = OSWAudio.blips = !OSWAudio.blips; saveAudioPrefs(); syncAudioUI(); }
+const fmtTime = t => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+function audioHud() {
+  if (!audioOk() || !OSWAudio.supported) return 'not available in this browser';
+  const m = OSWAudio.music, names = OSWAudio.sfx.names(), have = names.filter(n => OSWAudio.sfx.status(n) === 'ok').length;
+  const bad = names.filter(n => /missing|files/.test(OSWAudio.sfx.status(n)));
+  const mus = m.error ? 'ERROR ' + m.error : !m.buffer ? 'loading...' : (m.wantPlay ? 'on ' : 'off ') + fmtTime(m.position()) + ' / ' + fmtTime(m.buffer.duration);
+  return (OSWAudio.running ? '' : '[CLICK OR PRESS A KEY TO START AUDIO]   ') + 'music (M): ' + mus + '   sfx: ' + have + '/' + names.length + ' have files' + (bad.length ? '   MISSING: ' + bad.join(', ') : '') + '   blips (P): ' + (OSWAudio.blips ? 'on' : 'off');
+}
+function initAudio() {
+  if (!audioOk()) { console.warn('[play] js/audio.js did not load: no sound'); return; }
+  try { Object.assign(audioPrefs, JSON.parse(localStorage.getItem(AUDIO_PREFS_KEY) || '{}')); } catch (e) { /* IGNORE */ }
+  OSWAudio.setMusicVolume(audioPrefs.musicVol); OSWAudio.setSfxVolume(audioPrefs.sfxVol); OSWAudio.blips = !!audioPrefs.blips;
+  const table = {}; for (const [n, d] of Object.entries(SFX)) table[n] = Object.assign({}, d, { src: d.src == null ? null : [].concat(d.src).map(f => /[\/:]/.test(f) ? f : SFX_DIR + f) });   // A BARE FILE NAME MEANS sfx/<name>
+  OSWAudio.sfx.register(table);
+  OSWAudio.music.load(MUSIC.src); if (audioPrefs.music) OSWAudio.music.play();   // play() BEFORE THE UNLOCK IS FINE: IT STARTS THE MOMENT THE CONTEXT RUNS
+  OSWAudio.unlockOn(window);
+  const $ = id => document.getElementById(id), back = () => { document.activeElement && document.activeElement.blur(); cv.focus(); };
+  $('musBtn').onclick = () => { OSWAudio.resume(); toggleMusic(); back(); };
+  $('blipBtn').onclick = () => { OSWAudio.resume(); toggleBlips(); back(); };
+  $('musVol').oninput = e => { audioPrefs.musicVol = e.target.value / 100; OSWAudio.setMusicVolume(audioPrefs.musicVol); };
+  $('sfxVol').oninput = e => { audioPrefs.sfxVol = e.target.value / 100; OSWAudio.setSfxVolume(audioPrefs.sfxVol); };
+  $('musVol').onchange = $('sfxVol').onchange = () => { saveAudioPrefs(); back(); };
+  syncAudioUI();
+  // IN THE WIZARD, SWITCHING TO ANOTHER TOOL HIDES THIS IFRAME (NO visibilitychange FIRES FOR THAT), SO WATCH FOR IT: HIDDEN = EVERYTHING FREEZES IN PLACE, BACK = CARRIES ON
+  let away = false;
+  setInterval(() => {
+    let hidden = document.hidden; try { const f = window.frameElement; if (f && (f.hidden || !f.getClientRects().length)) hidden = true; } catch (e) { /* NOT SAME-ORIGIN */ }
+    if (hidden && !away) { away = true; OSWAudio.suspend(); } else if (!hidden && away) { away = false; if (navigator.userActivation ? navigator.userActivation.hasBeenActive : true) OSWAudio.resume(); }
+  }, 400);
+}
+
 /* ---------- BOOT ---------- */
 function showError(e) { const d = document.createElement('div'); d.id = 'err'; d.textContent = 'PLAY load error: ' + e.message + '. Serve the folder over http (the app does; plain file:// cannot read the sprite sheets).'; document.body.appendChild(d); }
 (async function () {
@@ -1881,9 +1960,9 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   try { await loadAssets(); } catch (e) { showError(e); return; }
   await loadCapeConfig(); initCapeConfigUI();   // BEFORE THE CHARACTER, SO THE SHEET'S cape.sim GOES ON TOP OF THE FILE
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
-  initCharacters(); initMaps();
+  initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
