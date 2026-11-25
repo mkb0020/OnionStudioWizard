@@ -106,7 +106,8 @@ async function loadData(){
 }
 
 /* ---------- parameters ---------- */
-const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, scarfFollow:.5, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
+const BASE = { chestDepth:40, neckLen:26, headR:30,   // chestDepth / neckLen / headR: skeleton-overlay shapes only (no menu sliders since Nov 24 2026; still read from rig_config.json)
+   bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, scarfFollow:.5, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
   spPassing:1, spTakeoff:.7, spUp:.1, spContact:.35, spDown:.4,
   guides:false, joints:true, floor:true, scroll:1, zoom:1, lineW:6, tint:true,
   stomach:true, stomachWChest:45, stomachWPelvis:45, stomachColor:'#000000',
@@ -968,13 +969,22 @@ addEventListener('keydown',e=>{
 
 const MENUS={
  'Parts':[{show:1}],
+ 'Pivots':[{pivots:1}],
  'Body':[
   {k:'spineAngle',l:'Pelvis→chest °',min:10,max:90,step:1},
   {k:'chestAngle',l:'Chest rect °',min:10,max:95,step:1},
-  {k:'chestDepth',l:'Chest depth',min:20,max:80,step:1},
   {k:'neckAngle',l:'Neck tilt °',min:0,max:50,step:1},
-  {k:'neckLen',l:'Neck length',min:8,max:50,step:1},
-  {k:'headR',l:'Head radius',min:16,max:42,step:1},
+  {head:'CHARACTER ART'},
+  {k:'art',l:'Character art',check:1},
+  {k:'skel',l:'Skeleton overlay',check:1},
+  {k:'farTint',l:'Far-side tint',min:0,max:.6,step:.01,on:()=>rebuildTints()},
+  {k:'pelvisTilt',l:'Pelvis follows lean',min:0,max:1,step:.05},
+  {k:'headFollow',l:'Head follows neck',min:0,max:1,step:.05},
+  {k:'scarfFollow',l:'Scarf follows head',min:0,max:1,step:.05},
+  {k:'neckW',l:'Neck width',min:6,max:50,step:1},
+  {k:'neckTrim',l:'Neck shortening',min:0,max:40,step:1},
+  {k:'waistTrim',l:'Waist shortening',min:0,max:60,step:1},
+  {k:'nearLegOver',l:'Near leg over pelvis',check:1},
   {head:'STOMACH'},
   {k:'stomach',l:'Stomach fill',check:1},
   {k:'stomachWChest',l:'Width at chest',min:10,max:90,step:1},
@@ -1021,18 +1031,7 @@ const MENUS={
   {k:'bgLight',l:'Light background',check:1},
   {k:'bgGrid',l:'Back grid',check:1},
   {k:'gridSize',l:'Grid cell px',min:10,max:100,step:5},
-  {k:'gridAlpha',l:'Grid strength',min:0,max:1,step:.05},
-  {head:'CHARACTER ART'},
-  {k:'art',l:'Character art',check:1},
-  {k:'skel',l:'Skeleton overlay',check:1},
-  {k:'farTint',l:'Far-side tint',min:0,max:.6,step:.01,on:()=>rebuildTints()},
-  {k:'pelvisTilt',l:'Pelvis follows lean',min:0,max:1,step:.05},
-  {k:'headFollow',l:'Head follows neck',min:0,max:1,step:.05},
-  {k:'scarfFollow',l:'Scarf follows head',min:0,max:1,step:.05},
-  {k:'neckW',l:'Neck width',min:6,max:50,step:1},
-  {k:'neckTrim',l:'Neck shortening',min:0,max:40,step:1},
-  {k:'waistTrim',l:'Waist shortening',min:0,max:60,step:1},
-  {k:'nearLegOver',l:'Near leg over pelvis',check:1}],
+  {k:'gridAlpha',l:'Grid strength',min:0,max:1,step:.05}],
  'Bag':[
   {k:'bag',l:'Crossbody bag',check:1},
   {k:'bagOverArm',l:'Bag over near arm',check:1},
@@ -1052,8 +1051,7 @@ const MENUS={
   {k:'strapColor',l:'Strap colour',color:1},
   {k:'strapEdge',l:'Strap edge',color:1},
   {note:'The bag hangs from its two strap tabs on the near hip; the O-ring and crystal hang from the big ring, the rune tag from the side ring. Each piece swings as its own pendulum, baked per phase so it loops and scrubs. Footfall surge = how hard each step jerks the body forward and back (walk uses 35% of it). Move where the bag hangs and where the strap crosses the shoulder in Pivots → Edit pivots (Bag hang point, Strap over shoulder).'}],
- 'Export':[{frames:1}],
- 'Pivots':[{pivots:1}]
+ 'Export':[{frames:1}]
 };
 const syncers=[];
 /* ---------- docks: side panels of collapsible sections (any number open at once). buildDock('left',MENUS); the cape menu can be buildDock('right',...) ---------- */
