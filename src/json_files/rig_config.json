@@ -2,18 +2,18 @@
   "meta": {
     "name": "mannequin",
     "description": "Rig Lab slider defaults for one character.",
-    "exported": "2026-11-12T00:14:12.691Z"
+    "exported": "2026-11-25T01:32:50.376Z"
   },
   "shared": {
     "body": {
       "chestDepth": 30,
-      "neckLen": 50,
+      "neckLen": 35,
       "headR": 27,
       "neckW": 21,
-      "neckTrim": 31,
+      "neckTrim": 19,
       "waistTrim": 0,
       "pelvisTilt": 1,
-      "headFollow": 1,
+      "headFollow": 0.65,
       "stomach": true,
       "stomachWChest": 40,
       "stomachWPelvis": 33,
@@ -22,7 +22,7 @@
     "motion": { "range": 0.4, "lag": 1.2, "footLag": 0 },
     "poseSpeed": { "spPassing": 1.2, "spTakeoff": 0.6, "spUp": 0, "spContact": 0.35, "spDown": 0.4 },
     "feet": { "bootOn": true, "soleOff": 93, "footLen": 123, "heelFrac": 0.34 },
-    "art": { "art": true, "skel": false, "farTint": 0.6, "nearLegOver": false },
+    "art": { "art": true, "skel": false, "farTint": 0.6, "nearLegOver": true },
     "view": {
       "bgLight": true,
       "bgGrid": true,
@@ -57,13 +57,13 @@
   "cycles": {
     "run": {
       "params": {
-        "spineAngle": 56,
-        "chestAngle": 58,
-        "neckAngle": 36,
+        "spineAngle": 60,
+        "chestAngle": 40,
+        "neckAngle": 38,
         "cycleSec": 2,
         "airtime": 10,
-        "twist": 16,
-        "hipTwist": 4,
+        "twist": 6,
+        "hipTwist": 0,
         "headBob": 0.5,
         "headJut": 1,
         "ssAmt": 1.4
@@ -141,19 +141,19 @@
     }
   },
   "pivots": {
-    "hip": [542, 597],
-    "knee": [549, 733],
-    "ankle": [535.6, 895.9],
-    "shoulder": [513.5, 446.5],
+    "hip": [552, 593.5],
+    "knee": [544.5, 724],
+    "ankle": [525.5, 906],
+    "shoulder": [524.5, 427.5],
     "elbow": [499.5, 525],
     "wrist": [504.5, 597],
-    "rib": [547, 538],
-    "neck": [522, 449],
-    "headPivot": [515, 405],
-    "neckFrom": [531.5, 455.5],
-    "neckTo": [531, 409],
-    "stomachFrom": [527, 564],
-    "stomachTo": [526.5, 491],
+    "rib": [543.5, 500],
+    "neck": [514.5, 414],
+    "headPivot": [538, 374],
+    "neckFrom": [531.5, 423],
+    "neckTo": [533.5, 389.5],
+    "stomachFrom": [558, 543.5],
+    "stomachTo": [563.5, 490],
     "bagHip": [800.5, 574],
     "strapTop": [824, 431.5]
   }

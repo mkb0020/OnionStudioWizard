@@ -12,7 +12,7 @@
   },
   "bones": {
     "thigh": {
-      "length": 139.8,
+      "length": 145.8,
       "from": "hip",
       "to": "knee",
       "angleKey": "thigh"

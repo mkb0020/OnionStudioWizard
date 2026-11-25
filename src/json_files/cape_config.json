@@ -21,7 +21,7 @@
   "rootOffset": { "x": -65, "y": -205 },
   "spring": { "stiffness": 150, "damping": 80, "runAngle": 0, "fallAngle": 12, "kick": 260, "strips": 50, "ampMin": 6, "ampMax": 24, "freqMin": 1, "freqMax": 3, "phase": 5 },
   "idle": {
-    "enabled": true, "root": { "x": 68, "y": -245 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 1550, "gust": 1050,
+    "enabled": true, "root": { "x": 55, "y": -240 }, "rootBob": [0, -2, -3, -4, -3, -2], "blendRate": 5, "backBias": 150, "gust": 1050,
     "gustHz": 0.35, "flutter": 150, "layered": false, "topWidth": 0, "liningShift": 0.12,
     "liningColors": ["#0000FF", "#0000FF", "#0000FF"], "liningEdge": "#0000FF", "liningGlow": "#0000ff"
   },
