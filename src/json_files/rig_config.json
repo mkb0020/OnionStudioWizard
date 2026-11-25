@@ -2,7 +2,7 @@
   "meta": {
     "name": "mannequin",
     "description": "Rig Lab slider defaults for one character.",
-    "exported": "2026-11-25T01:32:50.376Z"
+    "exported": "2026-11-25T02:25:24.152Z"
   },
   "shared": {
     "body": {
@@ -10,10 +10,12 @@
       "neckLen": 35,
       "headR": 27,
       "neckW": 21,
-      "neckTrim": 19,
+      "neckTrim": 40,
       "waistTrim": 0,
       "pelvisTilt": 1,
-      "headFollow": 0.65,
+      "headFollow": 0.7,
+      "scarfFollow": 0.5,
+      "scarfTilt": 0,
       "stomach": true,
       "stomachWChest": 40,
       "stomachWPelvis": 33,
@@ -57,9 +59,9 @@
   "cycles": {
     "run": {
       "params": {
-        "spineAngle": 60,
-        "chestAngle": 40,
-        "neckAngle": 38,
+        "spineAngle": 53,
+        "chestAngle": 69,
+        "neckAngle": 30,
         "cycleSec": 2,
         "airtime": 10,
         "twist": 6,
@@ -142,21 +144,21 @@
   },
   "pivots": {
     "hip": [552, 593.5],
-    "knee": [544.5, 724],
-    "ankle": [525.5, 906],
-    "shoulder": [524.5, 427.5],
+    "knee": [547, 719],
+    "ankle": [522, 899],
+    "shoulder": [522.5, 422.5],
     "elbow": [499.5, 525],
     "wrist": [504.5, 597],
-    "rib": [543.5, 500],
-    "neck": [514.5, 414],
-    "headPivot": [538, 374],
-    "neckFrom": [531.5, 423],
-    "neckTo": [533.5, 389.5],
-    "stomachFrom": [558, 543.5],
-    "stomachTo": [563.5, 490],
+    "rib": [559, 517.5],
+    "neck": [516, 424.5],
+    "headPivot": [510.5, 371.5],
+    "neckFrom": [543, 423.5],
+    "neckTo": [537, 380.5],
+    "stomachFrom": [560.5, 555],
+    "stomachTo": [573, 459.5],
     "bagHip": [800.5, 574],
     "strapTop": [824, 431.5],
-    "hoodPivot": [538, 374],
-    "scarfPivot": [514.5, 414]
+    "hoodPivot": [526.5, 370.5],
+    "scarfPivot": [516.5, 411.5]
   }
 }
