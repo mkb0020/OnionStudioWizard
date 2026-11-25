@@ -451,7 +451,7 @@
 - If the idle is redrawn, re-measure `shoulderBob`; if the head pat sheet is redrawn with his head somewhere else, move `headX` (`CRITTER_KINDS.aetherling.pat`).
 
 ### Rig Lab: hood, scarf and part visibility (Nov 24 2026)
-- Hood and scarf are their own parts (`ART_NAMES`, frames 1 and 2). Draw order at the top: head, then hood, then scarf. The hood rides the head exactly; the scarf rides a blend of chest and head set by **Body → Scarf follows head** (`scarfFollow`, 0 = chest, 1 = head, default .5, saved in `shared.body`).
+- Hood and scarf are their own parts (`ART_NAMES`, frames 1 and 2). Draw order at the top: head, then scarf, then hood (the scarf goes under the hood). The hood rides the head exactly; the scarf rides a blend of chest and head set by **Body → Scarf follows head** (`scarfFollow`, 0 = chest, 1 = head, default .5, saved in `shared.body`).
 - New pivots `hoodPivot` (owned by the hood) and `scarfPivot` (owned by the scarf): the point on that art that lands on the head pivot / neck base. Equal to `headPivot` / `neck` = drawn in place; move them in Pivots → Edit pivots to slide the hood or scarf on their own. Added to `rig_config.json`.
 - **Parts** menu (top of the left dock): a checkbox per part plus Neck line, All / None / Head / Torso / Arms / Legs buttons, and Near side / Far side for the limbs. Hidden parts are skipped in the animation, the pivot editor and frame export. Stored in localStorage `rigPartShow_v1` only (not in the config).
 - All `ART_BOX` crops were re-measured for the new sheet (calf and shoe were redrawn: the boot shaft is on the calf now). Check the ankle pivot. SLICE INTO LIBRARY in the draw tool now knows the 13-frame order (adds `nova side hood` / `nova side scarf`); re-slice to refresh library parts.

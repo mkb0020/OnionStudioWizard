@@ -683,7 +683,7 @@ function drawPivotEditor(r){
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.setTransform(s*DPR,0,0,s*DPR,tx*DPR,ty*DPR);
   ctx.fillStyle='#C4C3D0';ctx.fillRect(0,0,FRAME,FRAME);
-  if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','hood','scarf','upperArm','forearm','handL','handR']){
+  if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','scarf','hood','upperArm','forearm','handL','handR']){
     if(SHOW[n]===false) continue; const p=PARTS[n], [im,sx,sy]=partSrc(p); ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
   if(E.ghost&&E.ghostImg){ctx.globalAlpha=.5;ctx.drawImage(E.ghostImg,0,0,FRAME,FRAME);ctx.globalAlpha=1;}
   if(E.grid){
@@ -830,12 +830,12 @@ function drawCharacter(r){
    limbPart('forearm',V.elbow,V.wrist,a.elbow,a.wrist,false);
    limbPart('upperArm',V.shoulder,V.elbow,a.root,a.elbow,false);}
   if(P.bagOverArm) bagOut();
-  /* head, then the hood over it (the cowl drapes over the chest and the near shoulder; the hands never reach it in the run or walk), then the scarf.
+  /* head, then the scarf, then the hood over both (the cowl drapes over the chest and the near shoulder; the hands never reach it in the run or walk).
      Hood: rides the head exactly. Scarf: rides a blend of the chest and the head (Scarf follows head: 0 = chest only, 1 = head only), anchored at the neck base. */
   placePart('head',V.headPivot,hp,hdRot,1,null,false);
-  placePart('hood',V.hoodPivot,hp,hdRot,1,null,false);
   {const f=P.scarfFollow, a=chestPt(r,V.neck), b=mapPt(V.headPivot,hp,hdRot,V.neck);
    placePart('scarf',V.scarfPivot,[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],chRot+(hdRot-chRot)*f,1,null,false);}
+  placePart('hood',V.hoodPivot,hp,hdRot,1,null,false);
 }
 function drawArm(a,col){
   seg(a.root,a.elbow,col,P.lineW*.85);seg(a.elbow,a.wrist,col,P.lineW*.85);
