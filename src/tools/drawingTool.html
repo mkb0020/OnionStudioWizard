@@ -7013,20 +7013,22 @@ const Pose = (() => {
 
   /* ----- slice the side-view sheet into the library ----- */
   const SHEET_URL = 'assets/images/nova/mannequins/sideView.png', SHEET_FR = 1000;   // frame size in px (must match FRAME in animatedRig.html)
-  // Frame order of sideView.png (see BRIEFME.md): eleven 1000x1000 frames. `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
+  // Frame order of sideView.png (see BRIEFME.md): thirteen 1000x1000 frames. `slot` is the Rig Lab part name (ART_NAMES in animatedRig.html).
   const SHEET_FRAMES = [
     { i: 0, type: 'view', view: 'right' },            // the full mannequin; it faces right (toe toward +x), like the rig
-    { i: 1, type: 'part', label: 'head', slot: 'head' },
-    { i: 2, type: 'part', label: 'chest', slot: 'chest' },
-    { i: 3, type: 'part', label: 'pelvis', slot: 'pelvis' },
-    { i: 4, type: 'part', label: 'upper arm', slot: 'upperArm' },
-    { i: 5, type: 'part', label: 'lower arm', slot: 'forearm' },
-    { i: 6, type: 'part', label: 'near hand', slot: 'handR' },
-    { i: 7, type: 'part', label: 'far hand', slot: 'handL' },
-    { i: 8, type: 'part', label: 'thigh', slot: 'thigh' },
-    { i: 9, type: 'part', label: 'calf', slot: 'calf' },
-    { i: 10, type: 'part', label: 'shoe', slot: 'shoe' }
-  ];   // THE BAG FRAME WAS REMOVED OCT 28 2026 (THE BAG COMES FROM accessories.png); THE FILLER DISC FRAME WAS REMOVED NOV 4 2026
+    { i: 1, type: 'part', label: 'hood', slot: 'hood' },
+    { i: 2, type: 'part', label: 'scarf', slot: 'scarf' },
+    { i: 3, type: 'part', label: 'head', slot: 'head' },
+    { i: 4, type: 'part', label: 'chest', slot: 'chest' },
+    { i: 5, type: 'part', label: 'pelvis', slot: 'pelvis' },
+    { i: 6, type: 'part', label: 'upper arm', slot: 'upperArm' },
+    { i: 7, type: 'part', label: 'lower arm', slot: 'forearm' },
+    { i: 8, type: 'part', label: 'near hand', slot: 'handR' },
+    { i: 9, type: 'part', label: 'far hand', slot: 'handL' },
+    { i: 10, type: 'part', label: 'thigh', slot: 'thigh' },
+    { i: 11, type: 'part', label: 'calf', slot: 'calf' },
+    { i: 12, type: 'part', label: 'shoe', slot: 'shoe' }
+  ];   // THE BAG FRAME WAS REMOVED OCT 28 2026 (THE BAG COMES FROM accessories.png); THE FILLER DISC FRAME WAS REMOVED NOV 4 2026; HOOD + SCARF FRAMES ADDED NOV 24 2026
   // RE-SAVING A PART REPLACES ITS META, SO CARRY OVER THE PIVOT SIDECAR RIG LAB WROTE (meta.pivots) OR IT WOULD BE LOST
   const keepPivots = async (meta, id) => { try { const ex = await OSWClient.library.get(id); if (ex && ex.meta && ex.meta.pivots) meta.pivots = ex.meta.pivots; } catch (e) { /* NEW ITEM */ } return meta; };
   const loadImg = url => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('could not load ' + url)); im.src = url; });

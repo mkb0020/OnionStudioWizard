@@ -41,17 +41,18 @@
    ====================================================================== */
 const R2D = Math.PI / 180, FPS = 24;
 /* ======================= CHARACTER ART =======================
-   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of eleven 1000x1000 frames (11000x1000; the first sheet was twelve 800x800 frames): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
-   1 head, 2 chest, 3 pelvis, 4 upperArm, 5 lowerArm (forearm), 6 near hand (handR), 7 far hand (handL), 8 thigh, 9 calf, 10 shoe. ART_FRAME maps each part name to its frame.
+   SHEET_URL (assets/images/nova/mannequins/sideView.png) is a sheet of thirteen 1000x1000 frames (13000x1000; the first sheet was twelve 800x800 frames): 0 full mannequin (ghost), then each part drawn IN PLACE on the mannequin:
+   1 hood, 2 scarf, 3 head, 4 chest, 5 pelvis, 6 upperArm, 7 lowerArm (forearm), 8 near hand (handR), 9 far hand (handL), 10 thigh, 11 calf, 12 shoe. ART_FRAME maps each part name to its frame.
+   (Hood and scarf frames were added Nov 24 2026. The hood rides the head; the scarf rides a blend of chest and head, set by the "Scarf follows head" slider.)
    (The bag frame was removed Oct 28 2026: the bag comes from accessories.png. The blue filler disc frame was removed Nov 4 2026 with the 1000px redraw: draw it in code if it is still needed.)
    The page loads that file on start (so redrawing the sheet updates the rig); it must be served over http.
    Pivots are positions inside the 1000x1000 frame (FRAME), taken from the green joint dots on the redrawn art; the rig maps each
    part's own pivot-to-pivot axis onto the matching skeleton bone (rotating and stretching it along the bone). */
-const FRAME=1000, SHEET_FRAMES=11;   // art frame size in px, and frames per sheet
+const FRAME=1000, SHEET_FRAMES=13;   // art frame size in px, and frames per sheet
 const SHEET_URL='assets/images/nova/mannequins/sideView.png', SHEET_W=FRAME*SHEET_FRAMES;   // frame 0 of this sheet is the full mannequin
-const ART_NAMES=["head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
-const ART_FRAME={"head": 1, "chest": 2, "pelvis": 3, "upperArm": 4, "forearm": 5, "handR": 6, "handL": 7, "thigh": 8, "calf": 9, "shoe": 10};   // frame index of each part in the sheet
-const ART_BOX={"head": [430, 254, 199, 191], "chest": [496, 401, 100, 155], "pelvis": [492, 516, 91, 121], "upperArm": [484, 418, 55, 117], "forearm": [479, 514, 52, 116], "handR": [491, 601, 62, 77], "handL": [490, 604, 64, 71], "thigh": [492, 544, 93, 200], "calf": [489, 713, 95, 217], "shoe": [489, 863, 134, 131]};   // [x,y,w,h] crop of each frame (bbox + 4px margin; stray specks under 30px ignored; Nov 11 2026 sheet)
+const ART_NAMES=["hood", "scarf", "head", "chest", "pelvis", "upperArm", "forearm", "handR", "handL", "thigh", "calf", "shoe"];
+const ART_FRAME={"hood": 1, "scarf": 2, "head": 3, "chest": 4, "pelvis": 5, "upperArm": 6, "forearm": 7, "handR": 8, "handL": 9, "thigh": 10, "calf": 11, "shoe": 12};   // frame index of each part in the sheet
+const ART_BOX={"hood": [431, 245, 176, 220], "scarf": [453, 381, 137, 87], "head": [467, 285, 142, 137], "chest": [498, 407, 109, 146], "pelvis": [498, 509, 92, 121], "upperArm": [487, 419, 47, 125], "forearm": [482, 515, 47, 118], "handR": [483, 609, 62, 67], "handL": [483, 609, 61, 58], "thigh": [497, 543, 92, 201], "calf": [486, 702, 96, 228], "shoe": [492, 898, 129, 98]};   // [x,y,w,h] crop of each frame (bbox + 4px margin; specks under 30px or 5% of the part ignored; Nov 24 2026 sheet)
 const ART_PIV={
   hip:[539.1,589.4], knee:[545.2,729.1], ankle:[535.6,895.9],        // hip = centre of the thigh's top cap; knee = centre of the thigh/calf overlap; ankle = centre of the calf/shoe overlap (sole 93px below, heel 42px behind; Nov 11 2026 redraw)
   shoulder:[512.3,441.6], elbow:[504.1,524.6], wrist:[510.3,613],    // shoulder = centre of the upper arm's top cap; elbow / wrist = centres of the part overlaps
@@ -60,7 +61,9 @@ const ART_PIV={
   neckFrom:[522,412], neckTo:[530,385],                          // neck line: inside the chest top / inside the skull (estimates)
   stomachFrom:[545,565], stomachTo:[548,530],                    // stomach fill: just inside the pelvis top / just inside the chest bottom (estimates)
   bagHip:[521.5,547.5],                                              // crossbody bag: where its two strap loops hang on the near hip (estimate)
-  strapTop:[538,437.5]                                             // crossbody strap: the apex over the far shoulder (estimate)
+  strapTop:[538,437.5],                                            // crossbody strap: the apex over the far shoulder (estimate)
+  hoodPivot:[530,392],                                             // the point on the HOOD art that lands on the head pivot (same as headPivot = drawn in place; move it to slide the hood)
+  scarfPivot:[522,408]                                             // the point on the SCARF art that lands on the neck base (same as neck = drawn in place; move it to slide the scarf)
 };
 /* Pivot edits made in the Pivots menu are remembered in this browser (localStorage). They are discarded automatically if the
    defaults change. The defaults come from json_files/rig_config.json ("pivots"); the block above holds the built-in defaults. */
@@ -75,6 +78,13 @@ const artBonesCalc=()=>({ thigh:dist2(ART_PIV.hip,ART_PIV.knee), shin:dist2(ART_
 const ART_BONES=artBonesCalc();
 let ART_NECK=dist2(ART_PIV.neck,ART_PIV.headPivot);
 const PARTS={}; let partsReady=false, artLabel='loading...';
+/* Part visibility (Parts menu): a layout aid only, so it is remembered in this browser (localStorage), not written to rig_config.json.
+   A hidden part is skipped wherever it is drawn: the animation, the pivot editor and frame export. Near side / Far side hide the limbs of one side. */
+const SHOW_KEY='rigPartShow_v1', SHOW=(()=>{const o={_near:true,_far:true,neckLine:true};ART_NAMES.forEach(n=>o[n]=true);
+  try{const sv=JSON.parse(localStorage.getItem(SHOW_KEY)||'{}');for(const k in o) if(typeof sv[k]==='boolean') o[k]=sv[k];}catch(e){}return o;})();
+const LIMB_PARTS=['upperArm','forearm','handR','handL','thigh','calf','shoe'];
+const partShown=(n,far)=>SHOW[n]!==false&&(!LIMB_PARTS.includes(n)||SHOW[(far||n==='handL')?'_far':'_near']!==false);   // the far hand is placed untinted, so it is told apart by name
+function showSave(){try{localStorage.setItem(SHOW_KEY,JSON.stringify(SHOW));}catch(e){}}
 
 /* ---------- data (fetched from json_files/*.json, so serve over http, e.g. VS Code Live Server) ---------- */
 let bones, gait, dataSrc = 'json_files/';
@@ -96,7 +106,7 @@ async function loadData(){
 }
 
 /* ---------- parameters ---------- */
-const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
+const BASE = { chestDepth:40, neckLen:26, headR:30, bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, scarfFollow:.5, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
   spPassing:1, spTakeoff:.7, spUp:.1, spContact:.35, spDown:.4,
   guides:false, joints:true, floor:true, scroll:1, zoom:1, lineW:6, tint:true,
   stomach:true, stomachWChest:45, stomachWPelvis:45, stomachColor:'#000000',
@@ -162,7 +172,7 @@ const fv=(t,k)=>((FGRIDS[footMode()][S.cycle][t]||{})[k])||0;
    used when the file is missing. "Export config" writes the live slider values in this format;
    "Import config" loads one without needing a server. Missing or invalid keys are skipped, so partial configs are fine. */
 const CFG_GROUPS={
-  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','stomach','stomachWChest','stomachWPelvis','stomachColor'],
+  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','scarfFollow','stomach','stomachWChest','stomachWPelvis','stomachColor'],
   motion:['range','lag','footLag'],
   poseSpeed:['spPassing','spTakeoff','spUp','spContact','spDown'],
   feet:['bootOn','soleOff','footLen','heelFrac'],
@@ -528,13 +538,13 @@ function recomputeArt(){   // after any pivot change: new bone lengths + neck di
 }
 
 /* ---------- OSW LIBRARY ART ----------
-   Inside the Wizard the ART SOURCE menu can switch the ten body parts from the sheet to library parts (type part, meta.view 'side',
+   Inside the Wizard the ART SOURCE menu can switch the twelve body parts from the sheet to library parts (type part, meta.view 'side',
    meta.slot = a name in ART_NAMES, grouped by meta.character). A library PNG is a tight crop drawn on a 1000x1000 canvas (FRAME), so it is
    drawn at meta.origin and every pivot stays valid. A slot the library lacks keeps its sheet art.
    PIVOT SIDECARS: pivots live in the part's manifest entry as meta.pivots = { pivotName: [x,y] } (1000x1000 art px, same space as ART_PIV).
    Each pivot is owned by ONE part, so two parts never disagree: a part owns the joint at its far end plus the attachment points drawn on it.
    Hands and shoe own none (they hang from the wrist / ankle). Edits in the pivot editor save to the sidecars 0.8 s after the last change. */
-const PIV_OWNER={pelvis:['hip','bagHip','stomachFrom'],chest:['rib','shoulder','neck','neckFrom','strapTop','stomachTo'],head:['headPivot','neckTo'],upperArm:['elbow'],forearm:['wrist'],thigh:['knee'],calf:['ankle']};
+const PIV_OWNER={pelvis:['hip','bagHip','stomachFrom'],chest:['rib','shoulder','neck','neckFrom','strapTop','stomachTo'],head:['headPivot','neckTo'],hood:['hoodPivot'],scarf:['scarfPivot'],upperArm:['elbow'],forearm:['wrist'],thigh:['knee'],calf:['ankle']};
 const LIB={on:false,slug:null,chars:{},saveT:0,evT:0,writing:0,dirty:false,stat:'',pref:'rigArtSrc_v1'};
 const libOK=()=>!!(window.OSWClient&&OSWClient.hosted);
 const libSig=slug=>JSON.stringify(Object.values(LIB.chars[slug]||{}).map(i=>i.id+'@'+i.updated).sort());
@@ -609,8 +619,9 @@ const PIV_INFO=[
  ['rib','Waist','chest bottom / stomach joint'],['neck','Neck base','chest top, where the head attaches'],['headPivot','Head pivot','head rotates here; neck length = neck base to here'],
  ['neckFrom','Neck line start','black neck line, on the chest'],['neckTo','Neck line end','black neck line, on the head'],
  ['stomachFrom','Stomach start','stomach fill: on the pelvis, just inside its top edge'],['stomachTo','Stomach end','stomach fill: on the chest, just inside its bottom edge'],
- ['bagHip','Bag hang point','where the bag\'s strap loops hang on the near hip (the bag rotates about here; it stays on the pelvis art)'],['strapTop','Strap over shoulder','crossbody strap apex, on the chest art, over the far shoulder']];
-const PIV_COL={hip:'#cc0000',knee:'#cc0000',ankle:'#cc0000',shoulder:'#c71585',elbow:'#c71585',wrist:'#c71585',rib:'#830cde',neck:'#ff6200',headPivot:'#ff6200',neckFrom:'#2f9e2a',neckTo:'#2f9e2a',stomachFrom:'#fecd39',stomachTo:'#fecd39',bagHip:'#0092b3',strapTop:'#764ba2'};
+ ['bagHip','Bag hang point','where the bag\'s strap loops hang on the near hip (the bag rotates about here; it stays on the pelvis art)'],['strapTop','Strap over shoulder','crossbody strap apex, on the chest art, over the far shoulder'],
+ ['hoodPivot','Hood pivot','the point on the hood art that lands on the head pivot (equal to Head pivot = drawn in place; move it to slide the hood)'],['scarfPivot','Scarf pivot','the point on the scarf art that lands on the neck base (equal to Neck base = drawn in place; move it to slide the scarf)']];
+const PIV_COL={hip:'#cc0000',knee:'#cc0000',ankle:'#cc0000',shoulder:'#c71585',elbow:'#c71585',wrist:'#c71585',rib:'#830cde',neck:'#ff6200',headPivot:'#ff6200',neckFrom:'#2f9e2a',neckTo:'#2f9e2a',stomachFrom:'#fecd39',stomachTo:'#fecd39',bagHip:'#0092b3',strapTop:'#764ba2',hoodPivot:'#0303ff',scarfPivot:'#4b69f3'};
 const PIV_LINES=[['hip','knee'],['knee','ankle'],['shoulder','elbow'],['elbow','wrist'],['hip','rib'],['rib','shoulder'],['neck','headPivot'],['neckFrom','neckTo'],['stomachFrom','stomachTo']];
 const E={z:1,cx:FRAME/2,cy:FRAME*.52,sel:null,hover:null,drag:null,pan:null,ghost:true,grid:true,ghostImg:null,map:{s:1,tx:0,ty:0},inputs:{},rows:{},txt:null,editBtn:null};
 function pivSave(){if(LIB.on){libSaveSoon();return;}   // library art: pivots go to the part sidecars, not this browser's localStorage
@@ -672,8 +683,8 @@ function drawPivotEditor(r){
   ctx.shadowBlur=0;ctx.globalAlpha=1;
   ctx.setTransform(s*DPR,0,0,s*DPR,tx*DPR,ty*DPR);
   ctx.fillStyle='#C4C3D0';ctx.fillRect(0,0,FRAME,FRAME);
-  if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','upperArm','forearm','handL','handR']){
-    const p=PARTS[n], [im,sx,sy]=partSrc(p); ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
+  if(partsReady) for(const n of ['thigh','calf','shoe','pelvis','chest','head','hood','scarf','upperArm','forearm','handL','handR']){
+    if(SHOW[n]===false) continue; const p=PARTS[n], [im,sx,sy]=partSrc(p); ctx.drawImage(im,sx,sy,p.bw,p.bh,p.bx,p.by,p.bw,p.bh);}
   if(E.ghost&&E.ghostImg){ctx.globalAlpha=.5;ctx.drawImage(E.ghostImg,0,0,FRAME,FRAME);ctx.globalAlpha=1;}
   if(E.grid){
     ctx.lineWidth=1/s;
@@ -733,7 +744,7 @@ cv.addEventListener('wheel',ev=>{
 },{passive:false});
 /* place one part: its pivot lands on atRig, it is rotated by rot (rad, clockwise) and stretched by s along axis (art-space unit vector) */
 function placePart(name,pivot,atRig,rot,s,axis,far){
-  const p=PARTS[name]; if(!p) return;
+  const p=PARTS[name]; if(!p||!partShown(name,far)) return;
   ctx.save();ctx.translate(atRig[0],atRig[1]);ctx.rotate(rot);
   if(axis&&Math.abs(s-1)>1e-4){const k=s-1;ctx.transform(1+k*axis[0]*axis[0],k*axis[0]*axis[1],k*axis[0]*axis[1],1+k*axis[1]*axis[1],0,0);}
   ctx.translate(-pivot[0],-pivot[1]);ctx.imageSmoothingEnabled=true;
@@ -810,7 +821,7 @@ function drawCharacter(r){
   const nd=[Math.sin(P.neckAngle*R2D),-Math.cos(P.neckAngle*R2D)], hp=add(add(r.shTop,nd,ART_NECK-P.neckTrim),[P.headJut*r.lc,-P.headBob*r.lc]);
   const shC=add(r.shTop,[Math.cos(P.chestAngle*R2D),-Math.sin(P.chestAngle*R2D)],-12), chRot=limbRot(V.rib,V.shoulder,r.rib,shC), hdRot=P.headFollow*P.neckAngle*R2D;
   const n0=mapPt(V.rib,r.rib,chRot,V.neckFrom), n1=mapPt(V.headPivot,hp,hdRot,V.neckTo);
-  ctx.save();ctx.lineCap='round';ctx.strokeStyle='#000';ctx.lineWidth=P.neckW;ctx.beginPath();ctx.moveTo(n0[0],n0[1]);ctx.lineTo(n1[0],n1[1]);ctx.stroke();ctx.restore();
+  if(SHOW.neckLine){ctx.save();ctx.lineCap='round';ctx.strokeStyle='#000';ctx.lineWidth=P.neckW;ctx.beginPath();ctx.moveTo(n0[0],n0[1]);ctx.lineTo(n1[0],n1[1]);ctx.stroke();ctx.restore();}
   limbPart('chest',V.rib,V.shoulder,r.rib,shC,false);
   if(!P.bagOverArm) bagOut();   // the bag is on the near hip: over the pelvis, near thigh and chest, under the near arm
   /* near arm in front of the chest */
@@ -819,8 +830,12 @@ function drawCharacter(r){
    limbPart('forearm',V.elbow,V.wrist,a.elbow,a.wrist,false);
    limbPart('upperArm',V.shoulder,V.elbow,a.root,a.elbow,false);}
   if(P.bagOverArm) bagOut();
-  /* hooded head last: the cowl drapes over the chest and the near shoulder (the hands never reach the hood in the run or walk) */
+  /* head, then the hood over it (the cowl drapes over the chest and the near shoulder; the hands never reach it in the run or walk), then the scarf.
+     Hood: rides the head exactly. Scarf: rides a blend of the chest and the head (Scarf follows head: 0 = chest only, 1 = head only), anchored at the neck base. */
   placePart('head',V.headPivot,hp,hdRot,1,null,false);
+  placePart('hood',V.hoodPivot,hp,hdRot,1,null,false);
+  {const f=P.scarfFollow, a=chestPt(r,V.neck), b=mapPt(V.headPivot,hp,hdRot,V.neck);
+   placePart('scarf',V.scarfPivot,[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],chRot+(hdRot-chRot)*f,1,null,false);}
 }
 function drawArm(a,col){
   seg(a.root,a.elbow,col,P.lineW*.85);seg(a.elbow,a.wrist,col,P.lineW*.85);
@@ -952,6 +967,7 @@ addEventListener('keydown',e=>{
 });
 
 const MENUS={
+ 'Parts':[{show:1}],
  'Body':[
   {k:'spineAngle',l:'Pelvis→chest °',min:10,max:90,step:1},
   {k:'chestAngle',l:'Chest rect °',min:10,max:95,step:1},
@@ -1012,6 +1028,7 @@ const MENUS={
   {k:'farTint',l:'Far-side tint',min:0,max:.6,step:.01,on:()=>rebuildTints()},
   {k:'pelvisTilt',l:'Pelvis follows lean',min:0,max:1,step:.05},
   {k:'headFollow',l:'Head follows neck',min:0,max:1,step:.05},
+  {k:'scarfFollow',l:'Scarf follows head',min:0,max:1,step:.05},
   {k:'neckW',l:'Neck width',min:6,max:50,step:1},
   {k:'neckTrim',l:'Neck shortening',min:0,max:40,step:1},
   {k:'waistTrim',l:'Waist shortening',min:0,max:60,step:1},
@@ -1062,6 +1079,7 @@ function buildDock(side,menus){
 function addRow(pn,it){
   if(it.pivots){buildPivotPanel(pn);return;}
   if(it.frames){buildFramesPanel(pn);return;}
+  if(it.show){buildShowPanel(pn);return;}
   if(it.head){const h=document.createElement('div');h.className='head';h.textContent=it.head;pn.appendChild(h);return;}
   if(it.grid){const h=document.createElement('div');pn.appendChild(h);gridUI[it.grid]={host:h,rows:{}};return;}
   if(it.note){const d=document.createElement('div');d.className='note';d.textContent=it.note;pn.appendChild(d);return;}
@@ -1087,6 +1105,30 @@ function addRow(pn,it){
   row.append(lab,inp,val);pn.appendChild(row);
 }
 function syncAll(){syncers.forEach(f=>f());}
+/* Parts menu: show / hide each part while lining things up (see SHOW) */
+const SHOW_INFO=[['hood','Hood'],['scarf','Scarf'],['head','Head'],['neckLine','Neck line'],['chest','Chest'],['pelvis','Pelvis'],
+ ['upperArm','Upper arms'],['forearm','Forearms'],['handR','Near hand'],['handL','Far hand'],['thigh','Thighs'],['calf','Calves'],['shoe','Shoes']];
+const SHOW_GROUPS={Head:['hood','scarf','head','neckLine'],Torso:['chest','pelvis'],Arms:['upperArm','forearm','handR','handL'],Legs:['thigh','calf','shoe']};
+function buildShowPanel(pn){
+  const boxes={}, sync=()=>{for(const k in boxes) boxes[k].checked=SHOW[k]!==false;};
+  const set=(keys,on)=>{keys.forEach(k=>SHOW[k]=on);showSave();sync();};
+  const bt=document.createElement('div');bt.className='pvbtns';
+  const mk=(txt,tip,fn)=>{const b=document.createElement('button');b.className='btn';b.textContent=txt;b.title=tip;b.onclick=e=>{fn();e.target.blur();};bt.appendChild(b);};
+  mk('All','Show every part',()=>set(Object.keys(SHOW),true));
+  mk('None','Hide every part',()=>set(SHOW_INFO.map(([k])=>k),false));
+  for(const g in SHOW_GROUPS) mk(g,'Toggle '+g.toLowerCase()+' on / off',()=>{const ks=SHOW_GROUPS[g];set(ks,!ks.some(k=>SHOW[k]!==false));});
+  pn.appendChild(bt);
+  const grid=document.createElement('div');grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin:6px 0';
+  const add=(k,lbl,host)=>{const l=document.createElement('label');l.style.cssText='display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none';
+    const i=document.createElement('input');i.type='checkbox';i.style.accentColor='#00ffff';i.onchange=()=>{SHOW[k]=i.checked;showSave();i.blur();};
+    boxes[k]=i;l.append(i,document.createTextNode(lbl));host.appendChild(l);};
+  SHOW_INFO.forEach(([k,l])=>add(k,l,grid));pn.appendChild(grid);
+  const h=document.createElement('div');h.className='head';h.textContent='LIMB SIDES';pn.appendChild(h);
+  const g2=document.createElement('div');g2.style.cssText=grid.style.cssText;add('_near','Near side',g2);add('_far','Far side',g2);pn.appendChild(g2);
+  const nt=document.createElement('div');nt.className='note';
+  nt.textContent='Hide parts while lining others up (e.g. hide the arms to fit the legs, or the hood to fit the head). Applies to the animation, the pivot editor and frame export. Near / Far side hides the arms and legs of that side. Remembered in this browser only, not saved in rig_config.json.';
+  pn.appendChild(nt); sync();
+}
 
 /* ---------- editable grids (squash/stretch, feet) ---------- */
 const GRIDDEFS={
