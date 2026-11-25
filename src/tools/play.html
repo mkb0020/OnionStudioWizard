@@ -174,9 +174,7 @@ const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/im
 const ARCADE = {
   src: 'assets/images/map/background_column.png', cropX: 180, cropW: 640, cropH: 1000, baseY: 1000, wallTop: 20, wallBot: 260,
   hazeColor: '#463f7c', shadeColor: '#020008', on: true,
-  layers: [
-    { size: 0.46, base: 0.68, speed: 0.12, v: 0.05, haze: 0.1, shade: 0.2,    offset: 0.30 },   // FAR: SMALL, LIGHT, SLOW
-    { size: 0.66, base: 0.78, speed: 0.22, v: 0.09, haze: 0.05, shade: 0.35, offset: 0.72 },
+  layers: [   // JUST THE NEAR LAYER NOW (THE TWO FARTHER ONES WERE REMOVED; MORE CAN BE ADDED BACK FAR -> NEAR)
     { size: 1.02, base: 0.84, speed: 0.34, v: 0.14, haze: 0.01, shade: 0.50, offset: 0.05 },   // NEAR: BIG, DARK, FASTER
   ],
 };
