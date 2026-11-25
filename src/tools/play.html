@@ -172,12 +172,12 @@ const BACKDROP = { bgSrc: 'assets/images/map/background.png', colSrc: 'assets/im
    speed = SIDEWAYS CAMERA FOLLOW (SAME MEANING AS BACKDROP.speed). v = VERTICAL CAMERA FOLLOW (LIKE vCol). haze = HOW MUCH hazeColor IS MIXED IN (LIGHTER = FARTHER).
    shade = HOW MUCH shadeColor IS MIXED IN (DARKER = NEARER). offset = SIDEWAYS NUDGE IN TILE WIDTHS, SO THE LAYERS' ARCHES DON'T LINE UP. */
 const ARCADE = {
-  src: 'assets/images/map/background_column.png', cropX: 180, cropW: 640, cropH: 900, baseY: 887, wallTop: 20, wallBot: 260,
+  src: 'assets/images/map/background_column.png', cropX: 180, cropW: 640, cropH: 1000, baseY: 1000, wallTop: 20, wallBot: 260,
   hazeColor: '#463f7c', shadeColor: '#020008', on: true,
   layers: [
-    { size: 0.46, base: 0.68, speed: 0.12, v: 0.05, haze: 0.55, shade: 0,    offset: 0.30 },   // FAR: SMALL, LIGHT, SLOW
-    { size: 0.66, base: 0.78, speed: 0.22, v: 0.09, haze: 0.30, shade: 0.05, offset: 0.72 },
-    { size: 1.02, base: 0.84, speed: 0.34, v: 0.14, haze: 0.08, shade: 0.30, offset: 0.05 },   // NEAR: BIG, DARK, FASTER
+    { size: 0.46, base: 0.68, speed: 0.12, v: 0.05, haze: 0.1, shade: 0.2,    offset: 0.30 },   // FAR: SMALL, LIGHT, SLOW
+    { size: 0.66, base: 0.78, speed: 0.22, v: 0.09, haze: 0.05, shade: 0.35, offset: 0.72 },
+    { size: 1.02, base: 0.84, speed: 0.34, v: 0.14, haze: 0.01, shade: 0.50, offset: 0.05 },   // NEAR: BIG, DARK, FASTER
   ],
 };
 /* THE FLOOR STRIP (background_bottom.png): PINNED TO THE BOTTOM OF THE SCREEN, OVER THE BACKDROP, SO NOTHING SHOWS THROUGH UNDER THE LEVEL. top / bot = ITS OPAQUE ROWS (SOURCE PX).

@@ -12,13 +12,13 @@
   },
   "bones": {
     "thigh": {
-      "length": 145.8,
+      "length": 160,
       "from": "hip",
       "to": "knee",
       "angleKey": "thigh"
     },
     "shin": {
-      "length": 167.1,
+      "length": 170,
       "from": "knee",
       "to": "ankle",
       "angleKey": "shin"
@@ -37,7 +37,7 @@
     }
   },
   "derived": {
-    "legLength": 306.9,
+    "legLength": 330,
     "armLength": 172.0,
     "shinToThighRatio": 1.2,
     "forearmToUpperArmRatio": 1.06
