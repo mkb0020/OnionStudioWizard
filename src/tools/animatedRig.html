@@ -107,7 +107,7 @@ async function loadData(){
 
 /* ---------- parameters ---------- */
 const BASE = { chestDepth:40, neckLen:26, headR:30,   // chestDepth / neckLen / headR: skeleton-overlay shapes only (no menu sliders since Nov 24 2026; still read from rig_config.json)
-   bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, scarfFollow:.5, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
+   bgLight:true, bgGrid:true, gridSize:50, gridAlpha:.5, bootOn:true, art:true, skel:false, farTint:.22, neckTrim:12, waistTrim:24, nearLegOver:true, pelvisTilt:.85, headFollow:.4, scarfFollow:.5, scarfTilt:0, neckW:26, soleOff:96.2, footLen:95, heelFrac:.259, footLag:0, lag:1.5, range:.5,
   spPassing:1, spTakeoff:.7, spUp:.1, spContact:.35, spDown:.4,
   guides:false, joints:true, floor:true, scroll:1, zoom:1, lineW:6, tint:true,
   stomach:true, stomachWChest:45, stomachWPelvis:45, stomachColor:'#000000',
@@ -173,7 +173,7 @@ const fv=(t,k)=>((FGRIDS[footMode()][S.cycle][t]||{})[k])||0;
    used when the file is missing. "Export config" writes the live slider values in this format;
    "Import config" loads one without needing a server. Missing or invalid keys are skipped, so partial configs are fine. */
 const CFG_GROUPS={
-  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','scarfFollow','stomach','stomachWChest','stomachWPelvis','stomachColor'],
+  body:['chestDepth','neckLen','headR','neckW','neckTrim','waistTrim','pelvisTilt','headFollow','scarfFollow','scarfTilt','stomach','stomachWChest','stomachWPelvis','stomachColor'],
   motion:['range','lag','footLag'],
   poseSpeed:['spPassing','spTakeoff','spUp','spContact','spDown'],
   feet:['bootOn','soleOff','footLen','heelFrac'],
@@ -834,8 +834,8 @@ function drawCharacter(r){
   /* head, then the scarf, then the hood over both (the cowl drapes over the chest and the near shoulder; the hands never reach it in the run or walk).
      Hood: rides the head exactly. Scarf: rides a blend of the chest and the head (Scarf follows head: 0 = chest only, 1 = head only), anchored at the neck base. */
   placePart('head',V.headPivot,hp,hdRot,1,null,false);
-  {const f=P.scarfFollow, a=chestPt(r,V.neck), b=mapPt(V.headPivot,hp,hdRot,V.neck);
-   placePart('scarf',V.scarfPivot,[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],chRot+(hdRot-chRot)*f,1,null,false);}
+  {const f=P.scarfFollow, a=chestPt(r,V.neck), b=mapPt(V.headPivot,hp,hdRot,V.neck), d=Math.atan2(Math.sin(hdRot-chRot),Math.cos(hdRot-chRot));   // blend the short way round (chRot can be e.g. -295 deg = +65 deg)
+   placePart('scarf',V.scarfPivot,[a[0]+(b[0]-a[0])*f,a[1]+(b[1]-a[1])*f],chRot+d*f+P.scarfTilt*R2D,1,null,false);}
   placePart('hood',V.hoodPivot,hp,hdRot,1,null,false);
 }
 function drawArm(a,col){
@@ -981,6 +981,7 @@ const MENUS={
   {k:'pelvisTilt',l:'Pelvis follows lean',min:0,max:1,step:.05},
   {k:'headFollow',l:'Head follows neck',min:0,max:1,step:.05},
   {k:'scarfFollow',l:'Scarf follows head',min:0,max:1,step:.05},
+  {k:'scarfTilt',l:'Scarf tilt °',min:-45,max:45,step:.5},
   {k:'neckW',l:'Neck width',min:6,max:50,step:1},
   {k:'neckTrim',l:'Neck shortening',min:0,max:40,step:1},
   {k:'waistTrim',l:'Waist shortening',min:0,max:60,step:1},
