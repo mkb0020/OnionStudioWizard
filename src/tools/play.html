@@ -193,10 +193,17 @@ const COLUMN_FRAME = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3,
 const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;
 const WALL_W = COLUMN_FRAME - COLUMN_SHAFT_INSET * 2;
 const WALLS = [{ x: 4000, h: 400 }, { x: 12000 + 160, h: 440 }, { x: 12550, h: 400 }];
-const PLATS = [
-  { x: 700, y: 300, w: 200 }, { x: 500, y: 110, w: 160 }, { x: 550, y: 0, w: 200 }, { x: 3000, y: 300, w: 160 },
-  { x: 4000, y: 330, w: 240 }, { x: 5000, y: 260, w: 160 }, { x: 6000, y: 300, w: 240 }, { x: 7000, y: 380, w: 160 },
-  { x: 8000, y: 240, w: 200 }, { x: 9000, y: 300, w: 240 }, { x: 11000, y: 300, w: 280 },
+/* PLATFORM ART (map/platforms.png, 400 x 200 ROUGH DRAFT, NOT TILEABLE YET): EACH TEST-LEVEL PLATFORM IS ONE WHOLE PIECE, DRAWN AT scale.
+   pieces = SOURCE RECTS IN THE PNG. cap = HEIGHT (SOURCE PX) OF THE TOP BRICK ROW YOU STAND ON = THE COLLISION STRIP. THE LAYERS + VINES BELOW IT ARE ART ONLY.
+   A PLATFORM'S WIDTH COMES FROM ITS PIECE (piece.w x scale). on: false = THE OLD 50 PX tiles.png PLATFORMS (USING THE OLD w) TO COMPARE. */
+const PLATFORM_ART = {
+  on: true, src: 'assets/images/map/platforms.png', scale: 1, cap: 24,
+  pieces: { long: { sx: 0, sy: 0, w: 400, h: 100 }, shortA: { sx: 0, sy: 100, w: 199, h: 89 }, shortB: { sx: 200, sy: 100, w: 200, h: 89 } },
+};
+const PLATS = [   // art = WHICH PIECE (long / shortA / shortB). w = OLD TILE WIDTH, ONLY USED WHEN PLATFORM_ART.on IS false
+  { x: 700, y: 300, w: 200, art: 'shortA' }, { x: 500, y: 110, w: 160, art: 'shortB' }, { x: 550, y: 0, w: 200, art: 'shortA' }, { x: 3000, y: 300, w: 160, art: 'shortB' },
+  { x: 4000, y: 330, w: 240, art: 'long' }, { x: 5000, y: 260, w: 160, art: 'shortA' }, { x: 6000, y: 300, w: 240, art: 'long' }, { x: 7000, y: 380, w: 160, art: 'shortB' },
+  { x: 8000, y: 240, w: 200, art: 'shortA' }, { x: 9000, y: 300, w: 240, art: 'long' }, { x: 11000, y: 300, w: 280, art: 'long' },
 ];
 const BG = '#030013';
 
@@ -239,7 +246,12 @@ function buildLevel() {
   solids.push({ x: 0, y: GROUND_Y, w: GROUND_W, h: GROUND_H });
   const rand = makeRng(TILE_SEED); let prev = -1;
   const pickMid = () => { let f; do { f = Math.floor(rand() * TILE_FRAME_COUNT); } while (f === prev && TILE_FRAME_COUNT > 1); prev = f; return f; };
-  PLATS.forEach(pd => { const cols = Math.ceil(pd.w / TILE_SIZE), tiles = []; for (let i = 0; i < cols; i++) tiles.push(pickMid()); oneWays.push({ x: pd.x, y: pd.y, w: pd.w, h: PLATFORM_H, tiles }); });
+  const A = PLATFORM_ART;
+  PLATS.forEach(pd => {
+    const pc = A.on && A.pieces[pd.art];
+    if (pc) { oneWays.push({ x: pd.x, y: pd.y, w: pc.w * A.scale, h: A.cap * A.scale, tiles: [], art: pc }); return; }   // ONE WHOLE PIECE OF platforms.png
+    const cols = Math.ceil(pd.w / TILE_SIZE), tiles = []; for (let i = 0; i < cols; i++) tiles.push(pickMid()); oneWays.push({ x: pd.x, y: pd.y, w: pd.w, h: PLATFORM_H, tiles });
+  });
   const r2 = makeRng(COLUMN_SEED);
   WALLS.forEach(w => {
     const wall = { x: w.x, y: GROUND_Y - w.h, w: WALL_W, h: w.h, pieces: [] };
@@ -343,7 +355,8 @@ async function loadAssets() {
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
   IMG.spell = await loadImg(SPELL.src); try { IMG.catSpell = await loadImg(CAT_SPELL.src); } catch (e) { console.warn('[play] no cat spell sheet (' + e.message + ')'); } IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
-  IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
+  IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png');
+  try { IMG.platforms = await loadImg(PLATFORM_ART.src); } catch (e) { console.warn('[play] no platform art, using tiles (' + e.message + ')'); } IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
   try { IMG.swordSpin = await loadImg(DOUBLE_SLASH.spinSrc); } catch (e) { console.warn('[play] no sword spin (' + e.message + ')'); }   // OPTIONAL: THE COMBO PLAYS WITHOUT THE SAW BLADE
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
@@ -2103,7 +2116,7 @@ function drawLevel(vl, vr) {
   if (MAP.on) { drawMapLevel(vl, vr); return; }
   const g = IMG.ground;
   for (let i = Math.max(0, Math.floor(vl / GROUND_TILE_W)); i * GROUND_TILE_W < Math.min(vr, GROUND_W); i++) ctx.drawImage(g, i * GROUND_TILE_W, GROUND_Y, GROUND_TILE_W, GROUND_H);
-  for (const o of oneWays) { if (o.x > vr || o.x + o.w + TILE_SIZE < vl) continue; o.tiles.forEach((f, i) => ctx.drawImage(IMG.tiles, f * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, o.x + i * TILE_SIZE, o.y, TILE_SIZE, TILE_SIZE)); }
+  for (const o of oneWays) { if (o.x > vr || o.x + o.w + TILE_SIZE < vl) continue; if (o.art) { if (!IMG.platforms) continue; const p = o.art, k = PLATFORM_ART.scale; ctx.drawImage(IMG.platforms, p.sx, p.sy, p.w, p.h, o.x, o.y, p.w * k, p.h * k); continue; } o.tiles.forEach((f, i) => ctx.drawImage(IMG.tiles, f * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, o.x + i * TILE_SIZE, o.y, TILE_SIZE, TILE_SIZE)); }
   for (const w of walls) { if (w.x > vr || w.x + w.w + COLUMN_FRAME < vl) continue; for (const p of w.pieces) ctx.drawImage(IMG.column, p.frame * COLUMN_FRAME, 0, COLUMN_FRAME, COLUMN_FRAME, w.x - COLUMN_SHAFT_INSET, w.y + p.y, COLUMN_FRAME, p.h); }
 }
 function drawPlayer(x, y) {
@@ -2311,7 +2324,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { PLATFORM_ART, PLATS, DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
