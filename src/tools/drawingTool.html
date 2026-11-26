@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev,#jtPrev{pointer-events:none}
 #ruler[hidden]{display:none}
 /* tile mode grid: plain DOM over the canvases (no pixels, never exported) */
 #tileGrid{pointer-events:none;overflow:hidden;--cs:250px;
@@ -399,6 +399,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="bend" title="Bend strip (Y): lay a flat strip of hair / fabric / scales along a curve, same width"><svg viewBox="0 0 24 24"><path d="M3 9c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 16c4-6 9 4 13-1 2-2.5 4-3 5-3"/><path d="M3 9v7M21 5v7"/><path d="M8 8.3l-.6 7M13 10.5l-.4 7" opacity=".6"/></svg></button>
       <button class="tb" data-tool="pose" title="Pose guide (F): a stick figure whose bones turn but never stretch, for one-shot moves"><svg viewBox="0 0 24 24"><circle cx="8" cy="4" r="2"/><path d="M8 6.5l1 6"/><path d="M8.5 8.5l-3.5 3M8.5 8.5l4 1.5"/><path d="M9 12.5l-2.5 4.5L7 21"/><path d="M9 12.5l6 1 6-3"/></svg></button>
       <button class="tb" data-tool="squash" title="Squash &amp; stretch (S): squash or stretch a layer, keeping its volume; ANIMATE sets it per frame"><svg viewBox="0 0 24 24"><ellipse cx="7" cy="17" rx="5" ry="3"/><ellipse cx="17" cy="10" rx="3" ry="7"/><path d="M7 4v6M5 8l2 2 2-2" opacity=".7"/></svg></button>
+      <button class="tb" data-tool="joint" title="Joint (Z): link 2-3 layers of this frame at joints (thigh + calf at the knee), then turn, bend or move them together right on the canvas"><svg viewBox="0 0 24 24"><path d="M4 4l6 9"/><path d="M10 13l9 4"/><circle cx="10" cy="13" r="2.4"/><circle cx="4" cy="4" r="1.6"/><circle cx="19" cy="17" r="1.6"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="tileBtn" title="Tile mode: split the canvas into a grid; every stroke, fill, move and transform stays inside one cell"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M7.5 3v18M12 3v18M16.5 3v18M3 7.5h18M3 12h18M3 16.5h18" opacity=".7"/><rect x="12" y="7.5" width="4.5" height="4.5" fill="currentColor" stroke="none"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
@@ -741,6 +742,24 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <p class="note" id="sqNote"></p>
     </div>
 
+    <div class="sec" id="jointSec" hidden>
+      <h2>Joint <span class="sub">this frame only</span></h2>
+      <div class="onion-row">
+        <span class="lbl">CHAIN</span>
+        <span class="note" id="jtChain" style="flex:1">-</span>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="jtLink" style="width:auto;flex:1" title="Tap where the selected layer meets another piece to link them; on a linked layer, arms one tap to add a third">+ LINK</button>
+        <button class="tgl" id="jtUnlink" style="width:auto;flex:1" title="Take the selected layer out of its link (the art stays where it is)">UNLINK</button>
+        <button class="tgl" id="jtEdit" style="width:auto;flex:1" title="Drag the round ends to move the end points only (the art stays), e.g. to put the hip end right on the hip">EDIT POINTS</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">PIN</span>
+        <div class="seg" id="jtPin" style="flex:1"><button data-v="-1" title="Nothing pinned: round ends turn their piece">NONE</button><button data-v="0" title="Pin the first layer's end: dragging the other end bends the chain">FIRST</button><button data-v="1" title="Pin the last layer's end: dragging the other end bends the chain">LAST</button></div>
+      </div>
+      <p class="note" id="jtNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -798,6 +817,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="bendPrev" width="1000" height="1000"></canvas>
       <canvas id="posePrev" width="1000" height="1000"></canvas>
       <canvas id="sqPrev" width="1000" height="1000"></canvas>
+      <canvas id="jtPrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
       <div id="tileGrid" hidden><div id="tileSel" hidden></div></div>
     </div>
@@ -1121,6 +1141,8 @@ const Engine = (() => {
     clone(w, h) {
       const f = new Frame(w, h, true);
       f.layers = this.layers.map(l => l.clone(w, h)); f.activeLayer = this.activeLayer; f.hold = this.hold;
+      if (this.links) f.links = this.links.filter(c => c.layers.every(l => this.layers.includes(l))).map(c => ({   // JOINT links come along, on the copies
+        layers: c.layers.map(l => f.layers[this.layers.indexOf(l)]), joints: c.joints.map(p => ({ ...p })), ends: c.ends.map(p => ({ ...p })), pinned: c.pinned }));
       return f;
     }
   }
@@ -3653,6 +3675,7 @@ const Pose = (() => {
     if (bendReady) requestBend();               // the bend preview can follow a guide
     if (poseReady) requestPose();
     if (sqReady) requestSq();
+    if (jtReady) requestJt();
     if (guideRaf) return;
     guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
   }
@@ -4529,7 +4552,7 @@ const Pose = (() => {
     const x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); sqDraw(x, l.canvas, a, A);
     sqPrevCache.set(l, { key, cv }); return cv;
   }
-  Engine.setLayerView(sqView);
+  Engine.setLayerView((l, f) => (jtReady && jtView(l, f)) || sqView(l, f));   // the JOINT drag preview (below) wins, else squash
 
   const sqD0 = () => 150 / state.zoom;                          // arrow length at 0% (canvas px, steady on screen)
   function sqGeo() {
@@ -4739,6 +4762,346 @@ const Pose = (() => {
   syncSqUI();
   window.__sq = { geo: () => sqGeo(), state: sq, amountAt: i => sqAmountAt(i) };
 
+  /* ---------- joint (JOINT tool, Z) ----------
+     Links 2 or 3 layers OF THIS FRAME ONLY at joints (thigh + calf at the knee, + foot at the ankle), right on the canvas.
+     Links live on the frame (frame.links) and point at the layer objects, so a same-named layer in another frame is never
+     touched; DUPLICATE FRAME copies them. A link: { layers: [L0, L1, L2?], joints: [{x,y}, ...] (one per seam),
+     ends: [{x,y}, {x,y}] (the free end of the first / last layer), pinned: -1 | 0 | 1 (which end is pinned) }.
+       TAP (LINK armed)      link the selected layer with the top layer painted under the pen; tapping beside a 2-layer
+                             link's end layer adds a third.
+       ROUND END HANDLE      turn that end piece around its joint (the knee stays put, both stay attached).
+                             With the OTHER end PINNED it bends instead (2-bone IK; the third piece rides along).
+       DIAMOND (3 layers)    turn the middle piece around the joint on the first-layer side (or the pinned side), carrying the rest.
+       JOINT DOT             move the joint itself (where it bends), no art moves. EDIT POINTS: end handles move like this too.
+       DRAG THE ART          move the whole chain.
+     Pixels: while dragging, the layers are SHOWN moved (Engine.setLayerView) from a cached copy of their pixels; on release
+     each changed layer is drawn once from that copy (one undo step). Several drags in a row keep resampling from the same
+     untouched copy, so turning a piece back and forth does not soften it. Any other edit to the layer starts a new copy. */
+  var jtReady = false;                          // var: requestGuide / the layer view above check it before this runs
+  const jtEl = $('#jtPrev'), jtctx = jtEl.getContext('2d');
+  const jt = { armed: false, edit: false };
+  let jtRaf = 0, jtdrag = null, jtTap = null;
+  const jtOn = () => state.tool === 'joint';
+  const jtSrc = new WeakMap();                  // layer -> { cv: untouched pixels, M: DOMMatrix from cv to the layer now, ver }
+  const jtPrevCv = new WeakMap();               // layer -> preview canvas
+  const JT_MAX = 3;
+
+  function requestJt() { if (jtRaf) return; jtRaf = requestAnimationFrame(() => { jtRaf = 0; drawJt(); }); }
+  function jtRefresh() { requestRender(); requestOnion(); requestJt(); syncJtUI(); }
+
+  const jtLinks = f => (f.links || []).filter(c => c.layers.length >= 2 && c.layers.every(l => f.layers.includes(l)));   // a deleted layer hides its link (undo brings both back)
+  const jtLinkOf = (l, f = project.frame) => jtLinks(f).find(c => c.layers.includes(l)) || null;
+  const jtCopy = c => ({ layers: c.layers.slice(), joints: c.joints.map(p => ({ ...p })), ends: c.ends.map(p => ({ ...p })), pinned: c.pinned });
+  const jtSnapFrame = f => (f.links || []).map(jtCopy);
+  function jtStructEdit(label, fn) {   // link / unlink / pin: undoable, no pixels
+    const f = project.frame, before = jtSnapFrame(f);
+    if (fn(f) === false) return false;
+    const after = jtSnapFrame(f); project.dirty = true;
+    history.push({ label, frame: f, bytes: 0, undo: () => { f.links = before.map(jtCopy); jtRefresh(); }, redo: () => { f.links = after.map(jtCopy); jtRefresh(); } });
+    jtRefresh(); return true;
+  }
+
+  /* pixels under the pen / far end of a piece */
+  function jtPainted(l, x, y, r) {
+    const W = l.canvas.width, H = l.canvas.height, x0 = clamp(Math.floor(x - r), 0, W - 1), y0 = clamp(Math.floor(y - r), 0, H - 1);
+    const w = clamp(Math.ceil(x + r), 1, W) - x0, h = clamp(Math.ceil(y + r), 1, H) - y0; if (w <= 0 || h <= 0) return false;
+    const d = l.ctx.getImageData(x0, y0, w, h).data;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return true;
+    return false;
+  }
+  function jtFarthest(l, p) {   // the painted pixel farthest from p: where the free end handle starts
+    const W = l.canvas.width, H = l.canvas.height, d = l.ctx.getImageData(0, 0, W, H).data;
+    let best = null, bd = -1;
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (d[(y * W + x) * 4 + 3] > 8) { const q = (x - p.x) ** 2 + (y - p.y) ** 2; if (q > bd) { bd = q; best = { x, y }; } }
+    return best;
+  }
+
+  /* create / extend / remove */
+  function jtLinkAt(p) {
+    const f = project.frame, a = project.layer;
+    if (!a || a.locked || !a.visible) { flash('Select an unlocked, visible layer first, then tap where it should join another'); return; }
+    const r = Math.max(4, 10 / state.zoom), hits = [];
+    for (let i = f.layers.length - 1; i >= 0; i--) { const l = f.layers[i]; if (l.visible && jtPainted(l, p.x, p.y, r)) hits.push(l); }
+    const jp = { x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 };
+    const grow = (c, at, add) => {   // add a third layer at the end piece `at`
+      if (c.layers.length >= JT_MAX) { flash('A link holds up to ' + JT_MAX + ' layers'); return; }
+      const side = c.layers[0] === at ? 0 : c.layers[c.layers.length - 1] === at ? 1 : -1;
+      if (side < 0) { flash('"' + at.name + '" is the middle of its link: add to an END layer'); return; }
+      const e = jtFarthest(add, jp) || { ...jp };
+      jtStructEdit('Link "' + add.name + '"', f2 => {
+        const lc = f2.links.find(x => x === c) || c;
+        if (side === 0) { lc.layers.unshift(add); lc.joints.unshift(jp); lc.ends[0] = e; if (lc.pinned === 0) lc.pinned = -1; }
+        else { lc.layers.push(add); lc.joints.push(jp); lc.ends[1] = e; if (lc.pinned === 1) lc.pinned = -1; }
+      });
+      jt.armed = false; flash('Linked "' + add.name + '" to "' + at.name + '": ' + c.layers.map(l => l.name).join(' + '));
+    };
+    const ca = jtLinkOf(a);
+    if (ca) {   // the selected layer is linked: add the unlinked piece under the pen to whichever END piece is there too
+      const free = hits.find(l => !jtLinkOf(l));
+      if (!free) { flash('No unlinked piece painted under the pen'); return; }
+      const n = ca.layers.length, ends = [ca.layers[0], ca.layers[n - 1]].filter(l => hits.includes(l));
+      const near = k => Math.hypot(ca.ends[k].x - p.x, ca.ends[k].y - p.y);
+      const at = ends.length === 1 ? ends[0] : near(0) <= near(1) ? ca.layers[0] : ca.layers[n - 1];
+      grow(ca, at, free); return;
+    }
+    const b = hits.find(l => l !== a);
+    if (!b) { flash('Nothing painted under the pen on another layer: tap where "' + a.name + '" meets the other piece'); return; }
+    const cb = jtLinkOf(b);
+    if (cb) { grow(cb, b, a); return; }
+    const e0 = jtFarthest(a, jp) || { ...jp }, e1 = jtFarthest(b, jp) || { ...jp };
+    jtStructEdit('Link "' + a.name + '" + "' + b.name + '"', f2 => { (f2.links = f2.links || []).push({ layers: [a, b], joints: [jp], ends: [e0, e1], pinned: -1 }); });
+    jt.armed = false; flash('Linked "' + a.name + '" + "' + b.name + '". Drag a round end to turn it, the art to move both');
+  }
+  function jtUnlink() {
+    const l = project.layer, c = jtLinkOf(l); if (!c) { flash('"' + (l && l.name) + '" is not linked on this frame'); return; }
+    jtStructEdit('Unlink "' + l.name + '"', f => {
+      const live = f.links.find(x => x === c); const n = live.layers.length, i = live.layers.indexOf(l);
+      if (n > 2 && (i === 0 || i === n - 1)) {   // an end of 3: the other two stay linked; the freed joint becomes the new end
+        if (i === 0) { live.layers.shift(); live.ends[0] = live.joints.shift(); if (live.pinned === 0) live.pinned = -1; }
+        else { live.layers.pop(); live.ends[1] = live.joints.pop(); if (live.pinned === 1) live.pinned = -1; }
+      } else f.links = f.links.filter(x => x !== live);
+    });
+    flash('Unlinked "' + l.name + '"');
+  }
+
+  /* geometry: rigid moves as DOMMatrix */
+  const rotAbout = (P, deg) => new DOMMatrix().translate(P.x, P.y).rotate(deg).translate(-P.x, -P.y);
+  const xp = (M, p) => { const q = M.transformPoint(new DOMPoint(p.x, p.y)); return { x: q.x, y: q.y }; };
+  const ang = (a, b) => Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+  const jtMid = c => c.layers.length === 3 ? { x: (c.joints[0].x + c.joints[1].x) / 2, y: (c.joints[0].y + c.joints[1].y) / 2 } : null;
+  // two-bone IK: root R stays, bones L1 (R->J) and L2 (J->E), reach for T, bend on side s (+1 / -1). -> { J, E }
+  function solve2(R, L1, L2, T, s) {
+    let dx = T.x - R.x, dy = T.y - R.y, d = Math.hypot(dx, dy);
+    const lo = Math.abs(L1 - L2) + 0.01, hi = L1 + L2 - 0.01;
+    if (d < 1e-6) { dx = 1; dy = 0; d = 1e-6; }
+    const dc = clamp(d, lo, hi), ux = dx / d, uy = dy / d;
+    const a = (L1 * L1 - L2 * L2 + dc * dc) / (2 * dc), h = Math.sqrt(Math.max(0, L1 * L1 - a * a));
+    const J = { x: R.x + ux * a - s * uy * h, y: R.y + uy * a + s * ux * h };
+    return { J, E: { x: R.x + ux * dc, y: R.y + uy * dc } };
+  }
+  // rigid move that takes segment a->b onto a2->b2 (same length)
+  const fitSeg = (a, b, a2, b2) => new DOMMatrix().translate(a2.x, a2.y).rotate(ang(a2, b2) - ang(a, b)).translate(-a.x, -a.y);
+
+  /* pointer */
+  function jtHit(p) {   // handles first (selected layer's link wins ties), then art
+    const f = project.frame, hit = HANDLE_PX / state.zoom, cs = jtLinks(f), sel = jtLinkOf(project.layer);
+    const order = sel ? [sel, ...cs.filter(c => c !== sel)] : cs;
+    let best = null, bd = hit;
+    for (const c of order) {
+      const cand = [];
+      c.joints.forEach((q, k) => cand.push({ kind: 'joint', k, q }));
+      c.ends.forEach((q, k) => cand.push({ kind: 'end', k, q }));
+      const m = jtMid(c); if (m) cand.push({ kind: 'mid', k: 1, q: m });
+      for (const h of cand) { const d = Math.hypot(h.q.x - p.x, h.q.y - p.y); if (d < bd - 0.01) { bd = d; best = { c, ...h }; } }
+      if (best && c === sel) break;
+    }
+    if (best) return best;
+    for (let i = f.layers.length - 1; i >= 0; i--) {
+      const l = f.layers[i]; if (!l.visible) continue; const c = jtLinkOf(l, f);
+      if (c && jtPainted(l, p.x, p.y, 1)) return { c, kind: 'art', layer: l };
+    }
+    return null;
+  }
+  function jtDown(e, p) {
+    const sel = jtLinkOf(project.layer);
+    if (jt.armed && sel) { jtTap = { id: e.pointerId, p }; return; }   // + LINK pressed: this tap links, even on a handle (an end handle sits right on the next joint)
+    const h = jtHit(p);
+    if (h && (h.kind !== 'art' || sel)) { jtStart(e, p, h); return; }
+    if (!sel) { jtTap = { id: e.pointerId, p }; return; }          // unlinked layer selected: tapping the art links it
+    flash(sel ? 'Drag a round end to turn a piece, a joint dot to move the joint, the art to move the chain. LINK adds a layer.' : 'Tap where the selected layer meets another one to link them');
+  }
+  function jtStart(e, p, h) {
+    const c = h.c, f = project.frame;
+    if (h.kind !== 'joint' && !(jt.edit && h.kind === 'end')) {
+      const bad = c.layers.find(l => l.locked || !l.visible);
+      if (bad) { flash('"' + bad.name + '" is ' + (bad.locked ? 'locked' : 'hidden') + ': unlock / show it to move the chain'); return; }
+    }
+    let act = h.kind === 'art' ? 'move' : h.kind === 'joint' || (jt.edit && h.kind === 'end') ? 'point' : 'turn';
+    if (act === 'turn' && h.kind === 'end' && c.pinned === h.k) { flash('That end is PINNED: drag the other end to bend, or UNPIN'); return; }
+    if (act === 'turn' && h.kind === 'end' && c.pinned === 1 - h.k) act = 'ik';
+    // the untouched copies (reused while nothing else edited the layer)
+    const base = c.layers.map(l => {
+      let s = jtSrc.get(l);
+      if (!s || s.ver !== l.ver) { const cv = makeCv(l.canvas.width, l.canvas.height); cv.getContext('2d').drawImage(l.canvas, 0, 0); s = { cv, M: new DOMMatrix(), ver: l.ver }; jtSrc.set(l, s); }
+      return s;
+    });
+    jtdrag = { id: e.pointerId, c, f, act, h, start: p, base, D: c.layers.map(() => new DOMMatrix()), before: jtCopy(c), moved: false };
+    if (act === 'ik') {
+      const n = c.layers.length, pe = c.pinned, order = pe === 0 ? [...c.layers.keys()] : [...c.layers.keys()].reverse(), js = pe === 0 ? c.joints : c.joints.slice().reverse();
+      const R = c.ends[pe], J = js[0], E = n === 3 ? js[1] : c.ends[1 - pe];
+      const cr = (J.x - R.x) * (E.y - R.y) - (J.y - R.y) * (E.x - R.x);
+      jtdrag.ik = { order, R: { ...R }, J: { ...J }, E: { ...E }, L1: Math.hypot(J.x - R.x, J.y - R.y), L2: Math.hypot(E.x - J.x, E.y - J.y), s: cr > 0 ? -1 : 1 };
+    }
+    requestJt();
+  }
+  function jtMove(p) {
+    const d = jtdrag, c = d.c, B = d.before, n = c.layers.length, I = () => new DOMMatrix();
+    if (!d.moved && Math.hypot(p.x - d.start.x, p.y - d.start.y) * state.zoom < 2) return;
+    d.moved = true;
+    const dx = p.x - d.start.x, dy = p.y - d.start.y;
+    if (d.act === 'point') {
+      const arr = d.h.kind === 'joint' ? c.joints : c.ends, q = (d.h.kind === 'joint' ? B.joints : B.ends)[d.h.k];
+      arr[d.h.k] = { x: Math.round((q.x + dx) * 10) / 10, y: Math.round((q.y + dy) * 10) / 10 };
+      requestJt(); return;
+    }
+    let D;
+    if (d.act === 'move') { const T = new DOMMatrix().translate(dx, dy); D = c.layers.map(() => T); }
+    else if (d.act === 'turn') {
+      // which joint it turns on, and which pieces go with it
+      let P, set;
+      if (d.h.kind === 'end') { P = d.h.k === 0 ? B.joints[0] : B.joints[n - 2]; set = [d.h.k === 0 ? 0 : n - 1]; }
+      else if (c.pinned === 1) { P = B.joints[1]; set = [0, 1]; }   // middle of 3, last end pinned: turn on the ankle side
+      else { P = B.joints[0]; set = [1, 2]; }
+      const g0 = d.h.kind === 'end' ? B.ends[d.h.k] : jtMid(B);
+      let a = ang(P, p) - ang(P, g0); a = ((a + 540) % 360) - 180;
+      const R = rotAbout(P, a); D = c.layers.map((_, i) => set.includes(i) ? R : I());
+    } else {   // ik
+      const k = d.ik, T = { x: k.E.x + dx, y: k.E.y + dy }, sol = solve2(k.R, k.L1, k.L2, T, k.s);
+      const M1 = rotAbout(k.R, ang(k.R, sol.J) - ang(k.R, k.J)), M2 = fitSeg(k.J, k.E, sol.J, sol.E), Mt = new DOMMatrix().translate(sol.E.x - k.E.x, sol.E.y - k.E.y);
+      D = c.layers.map(() => I()); D[k.order[0]] = M1; D[k.order[1]] = M2; if (n === 3) D[k.order[2]] = Mt;
+    }
+    d.D = D;
+    // points follow their pieces: joint k sits on layer k AND k + 1 (every move keeps the two agreeing there), ends follow the end layers
+    c.joints = B.joints.map((q, k2) => xp(D[k2], q));
+    c.ends = [xp(D[0], B.ends[0]), xp(D[n - 1], B.ends[1])];
+    requestRender(); requestOnion(); requestJt();
+  }
+  function jtUp(ok) {
+    const d = jtdrag; jtdrag = null;
+    const c = d.c, live = (d.f.links || []).includes(c);
+    if (!ok || !d.moved || !live) { Object.assign(c, jtCopy(d.before)); jtRefresh(); return; }
+    if (d.act === 'point') {
+      const after = jtCopy(c), before = d.before, f = d.f;
+      project.dirty = true;
+      history.push({ label: d.h.kind === 'joint' ? 'Move joint' : 'Move end point', frame: f, bytes: 0, undo: () => { Object.assign(c, jtCopy(before)); jtRefresh(); }, redo: () => { Object.assign(c, jtCopy(after)); jtRefresh(); } });
+      jtRefresh(); return;
+    }
+    const jobs = c.layers.map((l, i) => ({ l, s: d.base[i], D: d.D[i] })).filter(j => !j.D.isIdentity);
+    const before = [], after = [];
+    for (const j of jobs) {
+      const w = j.l.canvas.width, h = j.l.canvas.height, M = j.D.multiply(j.s.M);
+      before.push(j.l.ctx.getImageData(0, 0, w, h));
+      const x = j.l.ctx; x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, w, h);
+      x.imageSmoothingEnabled = !state.crisp; x.imageSmoothingQuality = 'high'; x.setTransform(M); x.drawImage(j.s.cv, 0, 0); x.restore();
+      after.push(j.l.ctx.getImageData(0, 0, w, h));
+      j.l.ver++; jtSrc.set(j.l, { cv: j.s.cv, M, ver: j.l.ver });   // keep the untouched copy for the next drag
+    }
+    const layers = jobs.map(j => j.l), cb = d.before, ca = jtCopy(c), w = project.width, h = project.height;
+    project.dirty = true;
+    history.push({ label: d.act === 'move' ? 'Move chain' : d.act === 'ik' ? 'Bend chain' : 'Turn "' + layers.map(l => l.name).join('" + "') + '"',
+      frame: d.f, layer: project.layer, touched: layers, bytes: layers.length * w * h * 8,
+      undo: () => { layers.forEach((l, k) => l.ctx.putImageData(before[k], 0, 0)); Object.assign(c, jtCopy(cb)); jtRefresh(); },
+      redo: () => { layers.forEach((l, k) => l.ctx.putImageData(after[k], 0, 0)); Object.assign(c, jtCopy(ca)); jtRefresh(); } });
+    drawThumb(project.frames.indexOf(d.f)); refreshLayers(); jtRefresh();
+  }
+  function jtTapUp(e, ok) {
+    const t = jtTap; jtTap = null; if (!ok) return;
+    const p = toCanvas(e);
+    if (Math.hypot(p.x - t.p.x, p.y - t.p.y) * state.zoom > 12) { jt.armed = false; syncJtUI(); flash('Tap (don\'t drag) where the two pieces meet to link them'); return; }
+    jtLinkAt(t.p);
+  }
+  function cancelJtDrag() { if (jtdrag) { const d = jtdrag; jtdrag = null; Object.assign(d.c, jtCopy(d.before)); jtRefresh(); } jtTap = null; }
+
+  /* on-screen preview while dragging (never touches the layer) */
+  function jtView(l, frame) {
+    const d = jtdrag; if (!jtReady || !d || d.f !== frame || d.act === 'point') return null;
+    const i = d.c.layers.indexOf(l); if (i < 0 || d.D[i].isIdentity) return null;
+    let cv = jtPrevCv.get(l); if (!cv || cv.width !== l.canvas.width) { cv = makeCv(l.canvas.width, l.canvas.height); jtPrevCv.set(l, cv); }
+    const x = cv.getContext('2d'); x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, cv.width, cv.height);
+    x.imageSmoothingEnabled = !state.crisp; x.imageSmoothingQuality = 'high'; x.setTransform(d.D[i].multiply(d.base[i].M)); x.drawImage(d.base[i].cv, 0, 0); x.setTransform(1, 0, 0, 1, 0, 0);
+    return cv;
+  }
+  function makeCv(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+  /* overlay */
+  function drawJt() {
+    jtctx.clearRect(0, 0, jtEl.width, jtEl.height);
+    if (!jtOn() || playing) return;
+    const z = state.zoom, x = jtctx, sel = jtLinkOf(project.layer), R = 9 / z;
+    x.save(); x.lineCap = 'round'; x.lineJoin = 'round';
+    for (const c of jtLinks(project.frame)) {
+      const on = c === sel || (jtdrag && jtdrag.c === c);
+      x.globalAlpha = on ? 1 : 0.5;
+      const pts = [c.ends[0], ...c.joints, c.ends[1]];
+      x.setLineDash([6 / z, 5 / z]);
+      x.strokeStyle = '#170032'; x.lineWidth = 4 / z; x.beginPath(); pts.forEach((q, k) => k ? x.lineTo(q.x, q.y) : x.moveTo(q.x, q.y)); x.stroke();
+      x.strokeStyle = '#00ffff'; x.lineWidth = 1.6 / z; x.stroke(); x.setLineDash([]);
+      c.ends.forEach((q, k) => {
+        if (c.pinned === k) {   // pinned end: a yellow pin head
+          x.fillStyle = '#fecd39'; x.strokeStyle = '#170032'; x.lineWidth = 2 / z;
+          x.beginPath(); x.moveTo(q.x, q.y); x.lineTo(q.x - R * 0.55, q.y - R * 1.4); x.lineTo(q.x + R * 0.55, q.y - R * 1.4); x.closePath(); x.fill(); x.stroke();
+          x.beginPath(); x.arc(q.x, q.y - R * 1.8, R * 0.85, 0, Math.PI * 2); x.fill(); x.stroke();
+          x.fillStyle = '#170032'; x.beginPath(); x.arc(q.x, q.y, R * 0.3, 0, Math.PI * 2); x.fill();
+        } else {
+          x.fillStyle = jt.edit ? '#170032' : '#00ffff'; x.strokeStyle = jt.edit ? '#00ffff' : '#170032'; x.lineWidth = 2 / z;
+          x.beginPath(); x.arc(q.x, q.y, R * 1.1, 0, Math.PI * 2); x.fill(); x.stroke();
+        }
+      });
+      const m = jtMid(c);
+      if (m) { x.fillStyle = '#A55AFF'; x.strokeStyle = '#170032'; x.lineWidth = 2 / z; x.beginPath(); x.moveTo(m.x, m.y - R); x.lineTo(m.x + R, m.y); x.lineTo(m.x, m.y + R); x.lineTo(m.x - R, m.y); x.closePath(); x.fill(); x.stroke(); }
+      c.joints.forEach(q => {
+        x.fillStyle = '#170032'; x.strokeStyle = '#ff69b4'; x.lineWidth = 3 / z; x.beginPath(); x.arc(q.x, q.y, R * 0.9, 0, Math.PI * 2); x.fill(); x.stroke();
+        x.fillStyle = '#ff69b4'; x.beginPath(); x.arc(q.x, q.y, R * 0.35, 0, Math.PI * 2); x.fill();
+      });
+    }
+    x.restore();
+  }
+
+  /* panel */
+  function syncJtUI() {
+    if (!jtReady) return;
+    const l = project.layer, c = l && jtLinkOf(l), armed = jt.armed || !c;
+    $('#jtLink').classList.toggle('on', armed);
+    $('#jtUnlink').disabled = !c;
+    $('#jtEdit').classList.toggle('on', jt.edit);
+    const pb = $$('#jtPin button');
+    pb.forEach(b => { const v = +b.dataset.v; b.disabled = !c; b.classList.toggle('on', !!c && c.pinned === v); });
+    if (c) { pb[1].textContent = c.layers[0].name.slice(0, 12).toUpperCase(); pb[2].textContent = c.layers[c.layers.length - 1].name.slice(0, 12).toUpperCase(); }
+    else { pb[1].textContent = 'FIRST'; pb[2].textContent = 'LAST'; }
+    $('#jtChain').textContent = c ? c.layers.map(x => x.name).join(' + ') : '-';
+    const n = jtLinks(project.frame).length;
+    $('#jtNote').textContent = !l ? ''
+      : !c ? 'Tap where "' + l.name + '" meets another piece to link them (this frame only). ' + (n ? n + ' link' + (n > 1 ? 's' : '') + ' on this frame.' : '')
+      : jt.armed ? 'Tap where "' + c.layers[0].name + '" or "' + c.layers[c.layers.length - 1].name + '" meets a third piece to add it (up to 3).'
+      : jt.edit ? 'EDIT POINTS: drag a joint dot or a round end to move the point only; the art stays.'
+      : c.pinned >= 0 ? 'Pinned at the "' + c.layers[c.pinned ? c.layers.length - 1 : 0].name + '" end: drag the other round end to bend the chain.'
+      : 'Drag a round end to turn that piece around its joint' + (c.layers.length === 3 ? ', the diamond to turn the middle piece' : '') + ', the art to move the chain, a pink dot to move a joint.';
+  }
+  $('#jtLink').addEventListener('click', () => {
+    if (!jtLinkOf(project.layer)) { flash('Tap where the selected layer meets another piece'); return; }
+    jt.armed = !jt.armed; syncJtUI();
+  });
+  $('#jtUnlink').addEventListener('click', () => { jtUnlink(); jt.armed = false; syncJtUI(); });
+  $('#jtEdit').addEventListener('click', () => { jt.edit = !jt.edit; syncJtUI(); requestJt(); });
+  $$('#jtPin button').forEach(b => b.addEventListener('click', () => {
+    const c = jtLinkOf(project.layer); if (!c) return; const v = +b.dataset.v; if (c.pinned === v) return;
+    jtStructEdit(v < 0 ? 'Unpin chain' : 'Pin chain end', f => { const live = f.links.find(x => x === c); live.pinned = v; });
+  }));
+
+  /* saving / loading: links by frame index + layer index */
+  function jtManifest() {
+    const out = [];
+    project.frames.forEach((f, fi) => jtLinks(f).forEach(c => out.push({ frame: fi, layers: c.layers.map(l => f.layers.indexOf(l)),
+      joints: c.joints.map(p => [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]), ends: c.ends.map(p => [Math.round(p.x * 10) / 10, Math.round(p.y * 10) / 10]), pinned: c.pinned })));
+    return out;
+  }
+  function loadJt(m, frames) {
+    jtdrag = null; jtTap = null; jt.armed = false; jt.edit = false;
+    frames.forEach(f => { f.links = []; });
+    const pt = a => Array.isArray(a) && isFinite(+a[0]) && isFinite(+a[1]) ? { x: +a[0], y: +a[1] } : null;
+    for (const d of (Array.isArray(m) ? m : []).slice(0, 2000)) {
+      const f = d && frames[d.frame | 0]; if (!f || !Array.isArray(d.layers)) continue;
+      const ls = d.layers.map(i => f.layers[i | 0]), js = (d.joints || []).map(pt), es = (d.ends || []).map(pt);
+      if (ls.length < 2 || ls.length > JT_MAX || ls.some(l => !l) || new Set(ls).size !== ls.length || js.length !== ls.length - 1 || es.length !== 2 || js.concat(es).some(q => !q)) continue;
+      if (ls.some(l => f.links.some(c => c.layers.includes(l)))) continue;
+      f.links.push({ layers: ls, joints: js, ends: es, pinned: [0, 1].includes(d.pinned) ? d.pinned : -1 });
+    }
+    syncJtUI(); requestJt();
+  }
+  jtReady = true;
+  syncJtUI();
+  window.__jt = { state: jt, links: () => jtLinks(project.frame), linkAt: p => jtLinkAt(p), solve2, manifest: () => jtManifest(), load: m => loadJt(m, project.frames), drag: () => jtdrag };
+
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
   let popBg = '', popPix = '', popLbl = '', popPlaced = false;
@@ -4920,6 +5283,9 @@ const Pose = (() => {
     $('#squashSec').hidden = t !== 'squash';
     if (t !== 'squash') cancelSqDrag();
     if (sqReady) { syncSqUI(); sqRefresh(); }
+    $('#jointSec').hidden = t !== 'joint';
+    if (t !== 'joint') cancelJtDrag();
+    if (jtReady) { syncJtUI(); requestJt(); }
     if (t !== 'wave') cancelWaveDrag();
     if (t !== 'bend') cancelBendDrag();
     if (t === 'bend') syncBendUI();
@@ -4935,7 +5301,7 @@ const Pose = (() => {
     cursorEl.style.width = cursorEl.style.height = d + 'px';
   }
   function moveCursor(e) {
-    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.tool === 'pose' || state.tool === 'squash' || state.space) { cursorEl.style.display = 'none'; return; }
+    if (e.pointerType === 'touch' || state.tool === 'hand' || state.tool === 'move' || state.tool === 'fill' || state.tool === 'picker' || state.tool === 'wave' || state.tool === 'bend' || state.tool === 'pose' || state.tool === 'squash' || state.tool === 'joint' || state.space) { cursorEl.style.display = 'none'; return; }
     const s = stagePt(e);
     cursorEl.style.display = 'block';
     cursorEl.style.left = s.x + 'px'; cursorEl.style.top = s.y + 'px';
@@ -4967,7 +5333,7 @@ const Pose = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
-    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag();
+    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -5247,6 +5613,9 @@ const Pose = (() => {
     } else if (state.tool === 'squash') {
       if (chain) finishChain();
       sqDown(e, p);
+    } else if (state.tool === 'joint') {
+      if (chain) finishChain();
+      jtDown(e, p);
     }
   });
 
@@ -5267,6 +5636,7 @@ const Pose = (() => {
     if (bdrag && bdrag.id === e.pointerId) { bendMove(p); return; }
     if (pdrag && pdrag.id === e.pointerId) { poseMove(p); return; }
     if (sqdrag && sqdrag.id === e.pointerId) { sqMove(p); return; }
+    if (jtdrag && jtdrag.id === e.pointerId) { jtMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -5289,6 +5659,8 @@ const Pose = (() => {
     if (bdrag && bdrag.id === e.pointerId) { bendUp(e.type === 'pointerup'); return; }
     if (pdrag && pdrag.id === e.pointerId) { poseUp(e.type === 'pointerup'); return; }
     if (sqdrag && sqdrag.id === e.pointerId) { sqUp(e.type === 'pointerup'); return; }
+    if (jtdrag && jtdrag.id === e.pointerId) { jtUp(e.type === 'pointerup'); return; }
+    if (jtTap && jtTap.id === e.pointerId) { jtTapUp(e, e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -5377,7 +5749,7 @@ const Pose = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag) return false;
+    if (stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -5437,6 +5809,7 @@ const Pose = (() => {
     clearTimeout(msgTimer); msgTimer = setTimeout(() => { el.textContent = ''; }, 2200);
   }
   function refreshLayers() {
+    if (jtReady) { syncJtUI(); requestJt(); }   // the selected layer decides which joint link is active
     const ls = project.frame.layers;
     layerList.innerHTML = '';
     for (let i = ls.length - 1; i >= 0; i--) {            // top of the stack first
@@ -6345,6 +6718,7 @@ const Pose = (() => {
                              and bend (bend strip settings, hand curve, strip as a PNG data URL)
                              and pose (pose guide: size, body, keys by frame index with hip x/y + bone angles)
                              and squash (squash & stretch settings + amount keys by frame index; pixels only change on APPLY)
+                             and joints (JOINT tool links: frame index, layer indices in that frame, joint / end points, pinned end)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -6361,7 +6735,7 @@ const Pose = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -6419,6 +6793,7 @@ const Pose = (() => {
       bend: bendManifest(),
       pose: poseManifest(),
       squash: sqManifest(),
+      joints: jtManifest(),
       tile: tileManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
@@ -6518,6 +6893,7 @@ const Pose = (() => {
     loadBend(m.bend);
     loadPose(m.pose, frames);
     loadSq(m.squash, frames);
+    loadJt(m.joints, frames);
     loadTile(m.tile);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
@@ -6785,6 +7161,7 @@ const Pose = (() => {
       case 'y': setTool('bend'); break;
       case 'f': setTool('pose'); break;
       case 's': setTool('squash'); break;
+      case 'z': setTool('joint'); break;
       case 't': setFill(!state.filled); break;
       case 'o': toggleOnion(); break;
       case 'k': toggleClip(); break;
@@ -6806,7 +7183,7 @@ const Pose = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
