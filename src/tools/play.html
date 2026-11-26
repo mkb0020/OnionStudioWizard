@@ -35,7 +35,7 @@
    THE GAME RUNS ON A FIXED 1/50 s STEP WITH VELOCITY UPDATED BEFORE POSITION (KAPLAY'S OWN STEP),
    SO A JUMP OF 1000 px/s UNDER GRAVITY 1800 PEAKS AT THE SAME ~268 px AS BEFORE.
    WORLD UNITS = CSS PX. THE PLAYER'S POSITION IS ITS FEET (BOTTOM CENTRE); THE HITBOX IS 35 x 65 WORLD PX.
-   DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / CAT SPELL (E) / KICK / AIR KICK, CAMERA, LEVEL.
+   DONE:   RUN / JUMP / FALL / WALL SLIDE + WALL JUMP / DASH / DOUBLE JUMP / SPELL / CAT SPELL (E) / KICK / AIR KICK / DOUBLE SLASH COMBO (F), CAMERA, LEVEL.
    CHEAP FX (F2 TOGGLES ALL): SQUASH + STRETCH, HIT-STOP, CAMERA SHAKE, RUN / AIR MOTES, LANDING PUFF, DASH + AIR KICK AFTERIMAGES.
    CAPE: 3 MODES (V), GHOST TAIL (G). DISSOLVE (SPAWN IN, R DISSOLVES OUT AND RESPAWNS), DOUBLE JUMP SPIRAL. LIGHTING (L) + TORCHES. EVERYTHING FROM THE KAPLAY PLAYGROUND IS NOW HERE.
    PHYSICS NUMBERS COME FROM THE CHARACTER SHEET (library/characters/<name>/character.json, "physics" ROWS, MATCHED BY LABEL)
@@ -76,7 +76,7 @@ const LABEL_KEYS = {
   groundaccel: ['groundAccel', 1, 1, 100000], grounddecel: ['groundDecel', 1, 1, 100000], airaccel: ['airAccel', 1, 1, 100000], airdecel: ['airDecel', 1, 1, 100000],
 };
 
-/* ---------- PLAYER SHEETS (ONE ROW OF 400x400 FRAMES EACH) ---------- */
+/* ---------- PLAYER SHEETS (400x400 FRAMES: ONE ROW EACH, OR A GRID WHEN cols IS SET - READ LEFT->RIGHT, TOP->BOTTOM) ---------- */
 const PLAYER_FRAME = 400, SCALE = 0.5, FIXED_DT = 1 / 50; // <- NOTE TO SELF SO I CAN FIND THIS EASILY AGAIN - THIS IS WHERE THE SCALE IS SET - 0.5 IS WHERE IT SHOULD BE BUT IF IT'S SET TO 0.9, IT'S BECAUSE I AM TESTING A NEW SPRITE SHEET
 const SHEET_DIR = 'assets/images/nova/sprites/';
 const PLAYER_SHEETS = {
@@ -87,8 +87,9 @@ const PLAYER_SHEETS = {
   attack:     { src: 'attack.png',     frames: 1 },
   kick:       { src: 'kick.png',       frames: 6 },
   airKick:    { src: 'airKick.png',    frames: 8 },
+  doubleSlash:{ src: 'doubleSlash.png', frames: 20, cols: 4 },   // 4 x 5 GRID. 1-8 SLASH 1, 9 TRANSITION, 10-20 SLASH 2 + BACK TO IDLE
 };
-const RUN = { from: 0, to: 7 };
+const RUN ={ from: 0, to: 7 };
 const JUMP_FRAME = { start: 0, rise: 1, flipIn: 2, flip: 3, flipOut: 4, fall: 5, land: 6 };
 const JUMP_START_TIME = 0.05, JUMP_LAND_TIME = 0.07, JUMP_LAND_TIME_MOVING = 0.05, JUMP_LAND_MIN_IMPACT = 250;
 const PLAYER_SHEET_TWEAKS = {   // VISUAL ONLY. snapFeet DROPS EACH FRAME BY ITS FOOT GAP; snapFrames DOES IT FOR THE LISTED FRAMES ONLY
@@ -119,6 +120,48 @@ const DOUBLE_JUMP = { enabled: true, spinTime: 0.45, turns: 2, pivotY: 200, squa
   moteColors: ['#00ffff', '#dc4ce8', '#A55AFF', '#c4b5fd', '#ff69b4'] };
 const SPELL = { src: 'assets/images/vfx/spell.png', frames: 7, scale: 1, fps: 14, handHeightRatio: 1 / 2, forwardOffset: 40 };
 const SWOOSH = { src: 'assets/images/vfx/swoosh.png', frames: 4, fps: 25, scale: 1.3 };
+/* ---------- DOUBLE SLASH (F): TWO-HIT SWORD COMBO FROM doubleSlash.png ----------
+   PRESS F ONCE  = SLASH 1 (FRAMES 1-8), THEN FRAME 9 EASES BACK TO IDLE.
+   PRESS F AGAIN WHILE THE COMBO WINDOW IS OPEN (comboWindow, IN FRAME NUMBERS) = FRAME 9 FLOWS STRAIGHT INTO SLASH 2 (FRAMES 10-20).
+   A PRESS BEFORE THE WINDOW OPENS IS IGNORED, SO MASHING F DOES NOT COUNT - IT HAS TO BE TIMED. THE HUD SHOWS "WINDOW OPEN" WHILE IT IS.
+   frames = ONE ROW PER SHEET FRAME, NUMBERED 1-20 LIKE THE SHEET. EVERY FIELD EXCEPT fps CAN BE LEFT OUT:
+     fps   = HOW FAST THAT ONE FRAME PLAYS (IT SHOWS FOR 1 / fps SECONDS). LOWER = HOLDS LONGER, HIGHER = FLASHES BY (17 IS A SMEAR, SO IT IS FAST).
+     lift  = ART PX NOVA IS RAISED ON THAT FRAME. VISUAL ONLY (THE HITBOX STAYS ON THE FLOOR). EASES UP AT liftUp, DROPS AT liftDown.
+     step  = px/s SHE SLIDES FORWARD WHILE THAT FRAME SHOWS (0 / LEFT OUT = PLANTED).
+     spin  = ALPHA OF THE swordSpin.png SAW BLADE BEHIND HER (0 / LEFT OUT = HIDDEN). EASES AT spinFade.
+     hand  = [x, y] ART PX IN THE 400 PX CELL WHERE HER HANDS GRIP THE HILT = THE CENTRE OF THE SAW BLADE.
+     tip   = [x, y] ART PX WHERE THE CLIPPED SWORD TIP LEAVES THE CELL. flash = HOW BRIGHT THE IMPACT FLASH THERE IS (COVERS THE CUT). sparks = HOW MANY SPARK STREAKS FLY OFF WHEN THE FRAME STARTS.
+     hit   = THE MOMENT THE BLOW LANDS: { shake: [SECONDS, PX], stop: HIT-STOP SECONDS, burst: [x, y] ART PX FOR A FAN OF MOTES (OPTIONAL) }. */
+const DOUBLE_SLASH = {
+  enabled: true, groundOnly: true,
+  comboWindow: { from: 5, to: 9 },
+  liftUp: 16, liftDown: 40,
+  spinSrc: 'assets/images/misc/swordSpin.png', spinScale: 0.85, spinSpeed: -1260, spinFade: 30, spinGhosts: 2, spinGhostLag: 14,   // spinSpeed deg/s (NEGATIVE = COUNTER-CLOCKWISE ON SCREEN FACING RIGHT, THE WAY SHE SWINGS IT). spinGhosts = FAINTER TRAILING COPIES, spinGhostLag DEG APART
+  spark: { colors: ['#ffffff', '#00ffff', '#FFC7FF', '#dc4ce8', '#ff69b4', '#67FEBD'], speed: [380, 980], spread: 70, life: [0.1, 0.28], gravity: 1500, drag: 3.5, len: 0.03, width: [1.2, 2.6] },
+  flash: { size: 52, rays: 7, rayLen: 2.1, colors: ['#ffffff', '#00ffff', '#dc4ce8'] },
+  frames: [
+    /*  1 */ { fps: 14 },
+    /*  2 */ { fps: 16 },
+    /*  3 */ { fps: 16 },
+    /*  4 */ { fps: 20, step: 260 },
+    /*  5 */ { fps: 18, step: 120, tip: [390, 254], flash: 1,    sparks: 22, hit: { shake: [0.12, 7], stop: 0.07 } },
+    /*  6 */ { fps: 18,            tip: [396, 258], flash: 0.85, sparks: 8 },
+    /*  7 */ { fps: 14,            tip: [393, 262], flash: 0.6,  sparks: 5 },
+    /*  8 */ { fps: 16 },
+    /*  9 */ { fps: 12 },
+    /* 10 */ { fps: 16, lift: 15, spin: 0.12, hand: [236, 94] },
+    /* 11 */ { fps: 18, lift: 45, spin: 0.5,  hand: [198, 60] },
+    /* 12 */ { fps: 18, lift: 60, spin: 0.55, hand: [172, 100] },
+    /* 13 */ { fps: 18, lift: 55, spin: 0.5,  hand: [224, 112] },
+    /* 14 */ { fps: 20, lift: 30, spin: 0.12, hand: [240, 46], step: 200 },
+    /* 15 */ { fps: 14, hit: { shake: [0.18, 10], stop: 0.09, burst: [245, 385] } },
+    /* 16 */ { fps: 12 },
+    /* 17 */ { fps: 40 },
+    /* 18 */ { fps: 16 },
+    /* 19 */ { fps: 14 },
+    /* 20 */ { fps: 10 },
+  ],
+};
 const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
 const ONE_WAY_TOLERANCE = 4;
 const CAM_Y_OFFSET = 225, CAM_LERP_SPEED = 6;
@@ -140,6 +183,7 @@ const PLAYER_ANIMS = {
   attack:     { sheet: 'attack',     from: 0, to: 0, duration: ATTACK_HOLD_TIME },
   attackKick: { sheet: 'kick',       from: 0, to: PLAYER_SHEETS.kick.frames - 1, duration: ATTACK_KICK_HOLD_TIME, holds: KICK_FRAME_HOLDS },
   airKick:    { sheet: 'airKick',    from: 0, to: PLAYER_SHEETS.airKick.frames - 1, duration: AIR_KICK.holdTime, holds: AIR_KICK.holds },
+  doubleSlash:{ sheet: 'doubleSlash', from: 0, to: PLAYER_SHEETS.doubleSlash.frames - 1, manual: true },   // FRAMES ARE STEPPED BY updateDoubleSlash (PER-FRAME fps IN DOUBLE_SLASH.frames)
 };
 
 /* ---------- LEVEL (SAME LAYOUT AS THE KAPLAY PLAYGROUND) ---------- */
@@ -295,12 +339,13 @@ function measureFootGaps(key, img, frames) {   // SCANS THE SHEET ONCE. FAILS SO
 }
 async function loadAssets() {
   for (const [key, sh] of Object.entries(PLAYER_SHEETS)) {
-    const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / im.naturalHeight;
+    const im = await loadImg(SHEET_DIR + sh.src); IMG[key] = im; sheetScales[key] = PLAYER_FRAME / (im.naturalHeight / sheetGrid(key).rows);
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
   IMG.spell = await loadImg(SPELL.src); try { IMG.catSpell = await loadImg(CAT_SPELL.src); } catch (e) { console.warn('[play] no cat spell sheet (' + e.message + ')'); } IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png'); IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
+  try { IMG.swordSpin = await loadImg(DOUBLE_SLASH.spinSrc); } catch (e) { console.warn('[play] no sword spin (' + e.message + ')'); }   // OPTIONAL: THE COMBO PLAYS WITHOUT THE SAW BLADE
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
   try { IMG.bgBottom = await loadImg(BG_BOTTOM.src); } catch (e) { console.warn('[play] no floor strip (' + e.message + ')'); }
   for (const [kind, K] of Object.entries(CRITTER_KINDS)) {
@@ -314,6 +359,11 @@ async function loadAssets() {
     buildPetArm();
   } catch (e) { console.warn('[play] head pats off: ' + e.message); }
 }
+function sheetGrid(key) { const sh = PLAYER_SHEETS[key], cols = sh.cols || sh.frames; return { cols, rows: Math.ceil(sh.frames / cols) }; }
+function cellRect(key, frame) {   // SOURCE RECT OF ONE FRAME: A SINGLE ROW (NO cols) OR A GRID READ LEFT->RIGHT, TOP->BOTTOM
+  const im = IMG[key], g = sheetGrid(key), w = Math.floor(im.naturalWidth / g.cols), h = Math.floor(im.naturalHeight / g.rows);
+  return { sx: (frame % g.cols) * w, sy: Math.floor(frame / g.cols) * h, w, h };
+}
 function sheetTweak(key) { return (PLAYER_SHEET_TWEAKS[key] = PLAYER_SHEET_TWEAKS[key] || { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false }); }
 function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX SHIFT (FORWARD-MIRRORED / DOWN)
   const tw = sheetTweak(key), s = (sheetScales[key] || 1) * tw.scale, snap = tw.snapFeet || (tw.snapFrames && tw.snapFrames.includes(frame));
@@ -324,7 +374,7 @@ function sheetPlace(key, frame, flip) {   // s = FINAL SCALE, ox / oy = LOCAL PX
 /* ---------- INPUT ---------- */
 const keys = new Set(), pressQ = [], releaseQ = [];
 const KEY_NAMES = { arrowleft: 'left', arrowright: 'right', arrowup: 'up', ' ': 'space', spacebar: 'space' };
-const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j', 'm', 'p', 'e']);
+const USED = new Set(['left', 'right', 'up', 'a', 'd', 'w', 'space', 'shift', 'c', 'z', 'x', 'r', 'f1', 'f2', 'f3', 'v', 'g', 'l', 'n', 'b', 'k', 'j', 'm', 'p', 'e', 'f']);
 const keyName = e => { const k = (e.key || '').toLowerCase(); return KEY_NAMES[k] || k; };
 addEventListener('keydown', e => { if (e.ctrlKey || e.metaKey || e.altKey) return; const k = keyName(e); if (!USED.has(k)) return; e.preventDefault(); if (!keys.has(k) && !e.repeat) pressQ.push(k); keys.add(k); });
 addEventListener('keyup', e => { const k = keyName(e); keys.delete(k); if (k === 'up' || k === 'w' || k === 'space') releaseQ.push(k); });
@@ -340,6 +390,8 @@ let dashTimer = 0, dashCooldown = 0, dashDir = 1, airDashReady = true, airJumpRe
 let jumpStartTimer = 0, landTimer = 0, wasAirborne = false, airPeakFall = 0, coyoteT = 0;
 let jumpBufT = 0, jumpCutReady = false;   // JUMP BUFFER TIMER; TRUE WHILE THE CURRENT JUMP CAN STILL BE CUT SHORT BY LETTING GO
 const airKick = { t: 0, dir: 1, hit: false, ghostAcc: 0, ghostN: 0 };
+const slash = { on: false, i: 0, t: 0, queued: false, combo: false, spinA: 0, spinAng: 0, hand: null };   // DOUBLE SLASH: i = FRAME INDEX (0-19), t = TIME INTO IT, queued = SECOND PRESS LANDED IN THE WINDOW
+const slashSparks = [];
 const doubleJump = { t: 0, pre: 0, post: 0, angle: 0, angVel: 0, dir: 1, ghostAcc: 0, moteAcc: 0, ghostN: 0 };   // pre / post = TIME LEFT ON THE flipIn / flipOut FRAMES (t = TIME LEFT ON THE SPIN)
 const spells = [], swooshes = [];
 const cam = { x: 100, y: GROUND_Y - CAM_Y_OFFSET, fy: GROUND_Y - CAM_Y_OFFSET };   // fy = THE HEIGHT THE DEAD ZONE IS CENTRED ON (cam.y EASES TOWARD IT)
@@ -349,7 +401,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 }); cancelPet();
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0; jumpBufT = 0; jumpCutReady = false; P.vx = 0;
-  airKick.t = 0; doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; catSpells.length = 0; catFx.length = 0; catCool = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
+  airKick.t = 0; resetSlash(); doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; catSpells.length = 0; catFx.length = 0; catCool = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
   wasWallSliding = false; sfx('respawn');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
@@ -411,6 +463,123 @@ function updateAirKick(dt) {   // LUNGE + ENDING THE KICK. RUNS WHILE isAttackin
   const u = 1 - airKick.t / A.holdTime;
   P.mx = airKick.dir * A.lunge * (1 - u * u);
   airKick.t -= dt; if (airKick.t <= 0) end();
+}
+
+/* ---------- DOUBLE SLASH (F) - TUNING LIVES IN DOUBLE_SLASH NEAR THE TOP ---------- */
+const SLASH_LAST_1 = 8;   // INDEX OF FRAME 9: THE END OF SLASH 1 / THE HINGE INTO SLASH 2
+function slashWindowOpen() { const n = slash.i + 1, W = DOUBLE_SLASH.comboWindow; return slash.on && !slash.combo && n >= W.from && n <= W.to; }
+function pressSlash() {
+  const D = DOUBLE_SLASH; if (!D.enabled) return;
+  if (slash.on) { if (slashWindowOpen()) slash.queued = true; return; }   // SECOND PRESS: ONLY COUNTS INSIDE THE WINDOW
+  if (isAttacking || dashTimer > 0 || (D.groundOnly && !P.grounded)) return;
+  isAttacking = true; attackT = 0; dashTimer = 0; jumpStartTimer = 0; landTimer = 0; wallSlideHOffset = 0;
+  currentAnim = 'doubleSlash'; playSheetAnim('doubleSlash');
+  Object.assign(slash, { on: true, i: 0, t: 0, queued: false, combo: false, hand: null });
+  enterSlashFrame(0); sfx('slash');
+}
+function resetSlash() { slash.on = false; slash.queued = slash.combo = false; slash.spinA = 0; slash.hand = null; slashSparks.length = 0; }
+function endSlash() { slash.on = false; slash.queued = false; isAttacking = false; }   // mainUpdate PICKS IDLE / RUN / FALL ON THE NEXT TICK
+function enterSlashFrame(i) {   // ONE-SHOT EVENTS WHEN A FRAME STARTS: HIT (SHAKE + HIT-STOP + MOTES) AND SPARKS
+  const row = DOUBLE_SLASH.frames[i]; P.frame = i; if (row.hand) slash.hand = row.hand;
+  if (row.hit) {
+    const h = row.hit; if (h.shake) shakeCamera(h.shake[0], h.shake[1]); if (h.stop) hitStop(h.stop); sfx('slashHit');
+    if (h.burst && FX.on) { const b = slashArtToWorld(h.burst[0], h.burst[1]), dir = P.flip ? -1 : 1; for (let k = 0; k < 18; k++) { const th = rnd(-1, 1) * 80 * Math.PI / 180 - Math.PI / 2 * rnd(0, 0.6), sp = rnd(180, 520); spawnTrail(b.x, b.y, dir * Math.cos(th) * sp, Math.sin(th) * sp - 80, { color: BURST_COLORS[k % BURST_COLORS.length], life: rnd(0.3, 0.55), size: rnd(3, 6), drag: 2.2 }); } }
+  }
+  if (row.sparks && row.tip && FX.on) spawnSlashSparks(row.tip, row.sparks);
+}
+function updateDoubleSlash(dt) {   // RUNS EVERY TICK (THE MAIN UPDATE IS SKIPPED WHILE isAttacking)
+  const D = DOUBLE_SLASH;
+  if (slash.on && currentAnim !== 'doubleSlash') endSlash();   // SOMETHING ELSE TOOK OVER (RESPAWN, A MAP LOAD...)
+  if (!slash.on) { slash.spinA = Math.max(0, slash.spinA - dt * D.spinFade * 0.5); return; }
+  slash.t += dt;
+  while (slash.t >= 1 / D.frames[slash.i].fps) {
+    slash.t -= 1 / D.frames[slash.i].fps;
+    if (slash.i === SLASH_LAST_1) {
+      if (!slash.queued) { endSlash(); return; }                    // NO SECOND PRESS: FRAME 9 WAS THE WAY BACK TO IDLE
+      slash.combo = true; slash.queued = false; sfx('slashCombo');  // SECOND PRESS LANDED: ON INTO SLASH 2
+    }
+    if (slash.i >= D.frames.length - 1) { endSlash(); return; }
+    enterSlashFrame(slash.i + 1); slash.i++;
+  }
+  const row = D.frames[slash.i];
+  P.frame = slash.i; P.mx = (P.flip ? -1 : 1) * (row.step || 0);
+  const lift = row.lift || 0; visualLift += (lift - visualLift) * Math.min(1, dt * (lift > visualLift ? D.liftUp : D.liftDown));
+  slash.spinA += ((row.spin || 0) - slash.spinA) * Math.min(1, dt * D.spinFade);
+  slash.spinAng += D.spinSpeed * dt;
+}
+function slashHud() {
+  if (!DOUBLE_SLASH.enabled) return 'off';
+  if (!slash.on) return 'ready   window = frames ' + DOUBLE_SLASH.comboWindow.from + '-' + DOUBLE_SLASH.comboWindow.to;
+  return 'frame ' + (slash.i + 1) + (slash.combo ? '   COMBO!' : slash.queued ? '   queued' : slashWindowOpen() ? '   WINDOW OPEN' : '') + '   lift ' + visualLift.toFixed(0);
+}
+
+/* SLASH FX: ART SPACE = PX INSIDE THE CURRENT 400 PX CELL, MIRRORED WITH FACING. SAME PLACEMENT MATH AS drawPlayer */
+function slashArtXform() { const pl = sheetPlace(P.sheet, P.frame, P.flip), r = cellRect(P.sheet, P.frame), sz = PLAYER_FRAME * pl.s; return { pl, sz, u: sz / r.w }; }
+function slashArtToWorld(ax, ay) {
+  const { pl, sz, u } = slashArtXform(), dir = P.flip ? -1 : 1;
+  return { x: P.x + SCALE * squash.x * (wallSlideHOffset + pl.ox + dir * (-sz / 2 + ax * u)), y: P.y + SCALE * squash.y * (-visualLift + pl.oy - sz + ay * u) };
+}
+function inSlashArtSpace(x, y, fn) {
+  const { pl, sz, u } = slashArtXform();
+  ctx.save(); ctx.translate(x, y); ctx.scale(SCALE * squash.x, SCALE * squash.y); ctx.translate(wallSlideHOffset, -visualLift);
+  ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1); ctx.translate(-sz / 2, -sz); ctx.scale(u, u);
+  fn(); ctx.restore();
+}
+function spawnSlashSparks(tip, n) {   // STREAKS FLYING OFF THE SWORD TIP, MOSTLY FORWARD
+  const S = DOUBLE_SLASH.spark, p = slashArtToWorld(tip[0], tip[1]), dir = P.flip ? -1 : 1;
+  for (let k = 0; k < n; k++) {
+    const th = rnd(-1, 1) * S.spread * Math.PI / 180 + (Math.random() < 0.2 ? Math.PI : 0), sp = rnd(S.speed[0], S.speed[1]);   // A FEW KICK BACK THE OTHER WAY
+    slashSparks.push({ x: p.x, y: p.y, vx: dir * Math.cos(th) * sp, vy: Math.sin(th) * sp - rnd(0, 200), age: 0, life: rnd(S.life[0], S.life[1]), w: rnd(S.width[0], S.width[1]), color: S.colors[k % S.colors.length] });
+  }
+}
+function stepSlashSparks(dt) {
+  const S = DOUBLE_SLASH.spark;
+  if (!FX.on) { slashSparks.length = 0; return; }
+  for (let i = slashSparks.length - 1; i >= 0; i--) {
+    const p = slashSparks[i]; p.age += dt; if (p.age >= p.life) { slashSparks.splice(i, 1); continue; }
+    const d = Math.exp(-S.drag * dt); p.vx *= d; p.vy = p.vy * d + S.gravity * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+  }
+}
+function drawSwordSpin(x, y) {   // swordSpin.png, CENTRED ON THE HANDS, SPINNING, SEE-THROUGH, WITH A COUPLE OF FAINTER TRAILING COPIES
+  const D = DOUBLE_SLASH, im = IMG.swordSpin; if (!im || !slash.hand || slash.spinA < 0.01 || P.sheet !== 'doubleSlash' || dissolveAmount > 0) return;
+  inSlashArtSpace(x, y, () => {
+    const w = im.naturalWidth * D.spinScale, h = im.naturalHeight * D.spinScale;
+    ctx.translate(slash.hand[0], slash.hand[1]);
+    for (let g = D.spinGhosts; g >= 0; g--) {
+      ctx.save(); ctx.globalAlpha = slash.spinA * Math.pow(0.45, g);
+      ctx.rotate((slash.spinAng - Math.sign(D.spinSpeed) * g * D.spinGhostLag) * Math.PI / 180);
+      ctx.drawImage(im, -w / 2, -h / 2, w, h); ctx.restore();
+    }
+  });
+}
+function drawSlashFx(x, y) {
+  const D = DOUBLE_SLASH;
+  if (FX.on && slash.on && P.sheet === 'doubleSlash') {   // IMPACT FLASH: A GLOWING STAR OVER WHERE THE TIP WAS CLIPPED. FADES ACROSS ITS FRAME, ROTATES A LITTLE EACH FRAME
+    const row = D.frames[slash.i];
+    if (row.tip && row.flash) inSlashArtSpace(x, y, () => {
+      const F = D.flash, k = row.flash * (1 - 0.4 * Math.min(1, slash.t * row.fps)), r = F.size * (0.75 + 0.35 * k);
+      ctx.translate(row.tip[0], row.tip[1]); ctx.globalCompositeOperation = 'lighter';
+      const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, r);
+      gr.addColorStop(0, 'rgba(255,255,255,' + k + ')'); gr.addColorStop(0.25, 'rgba(0,255,255,' + 0.8 * k + ')'); gr.addColorStop(0.6, 'rgba(220,76,232,' + 0.35 * k + ')'); gr.addColorStop(1, 'rgba(131,12,222,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+      ctx.rotate(slash.i * 0.7);
+      for (let j = 0; j < F.rays; j++) {   // LONG THIN NEEDLE RAYS, LONGER ON EVEN ONES, BIASED FORWARD (+x)
+        const a = (j / F.rays) * Math.PI * 2, len = r * F.rayLen * (j % 2 ? 0.55 : 1) * (Math.cos(a + slash.i * 0.7) > 0 ? 1.25 : 0.8), wd = r * 0.09;
+        ctx.save(); ctx.rotate(a); ctx.globalAlpha = k;
+        ctx.fillStyle = F.colors[j % F.colors.length]; ctx.beginPath(); ctx.moveTo(0, -wd * 2); ctx.lineTo(len, 0); ctx.lineTo(0, wd * 2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(0, -wd * 0.7); ctx.lineTo(len * 0.7, 0); ctx.lineTo(0, wd * 0.7); ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+    });
+  }
+  if (!slashSparks.length) return;
+  const S = DOUBLE_SLASH.spark; ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round';
+  for (const p of slashSparks) {
+    const t = p.age / p.life, a = 1 - t * t, tx = p.x - p.vx * S.len, ty = p.y - p.vy * S.len;
+    ctx.strokeStyle = p.color; ctx.globalAlpha = 0.35 * a; ctx.lineWidth = p.w * 3; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(p.x, p.y); ctx.stroke();
+    ctx.strokeStyle = '#ffffff'; ctx.globalAlpha = a; ctx.lineWidth = p.w; ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(p.x, p.y); ctx.stroke();
+  }
+  ctx.restore();
 }
 function tryDash() {
   if (isAttacking || dashTimer > 0 || dashCooldown > 0 || wallJumpLock > 0) return;
@@ -794,7 +963,7 @@ const PET_ARM = {
 const PET = { gap: 171, reach: 320, comeSpeed: 1.3, comeTimeout: 3, minLoops: 2, reachTime: 0.16, tuck: [20, 45] };
 // gap = ART PX FROM NOVA'S FEET TO THE CRITTER'S anchorX. reach = WORLD PX A CRITTER CAN BE FROM THE PAT SPOT AND STILL COME OVER. comeSpeed = x HIS WALK SPEED.
 // reachTime = SECONDS FOR THE ARM TO GO OUT / COME BACK. tuck = WHERE THE PALM STARTS AND ENDS (ART PX FROM THE SHOULDER: TUCKED BEHIND HER BODY)
-const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r', 'e']);
+const PET_STOP_KEYS = new Set(['up', 'w', 'space', 'shift', 'z', 'x', 'r', 'e', 'f']);
 const pet = { phase: 'none', c: null, spot: 0, dir: 1, k: 0, t: 0, endAt: 0, msg: '', msgT: 0, dbg: null };   // phase: none | wait (HE IS COMING) | pat | release (ARM GOING BACK)
 const petArm = { upper: null, lower: null, L1: 0, L2: 0, bend: 1 };
 function resetPet() { Object.assign(pet, { phase: 'none', c: null, k: 0, t: 0, endAt: 0, dbg: null }); }
@@ -924,6 +1093,7 @@ function tick(dt) {
     else if (k === 'z') playAttack();
     else if (k === 'e') castCat();
     else if (k === 'x') pressKick();
+    else if (k === 'f') pressSlash();
     else if (k === 'r') dissolveOutAndRespawn();
     else if (k === 'f1') showHitboxes = !showHitboxes;
     else if (k === 'f2') { FX.on = !FX.on; if (!FX.on) resetFx(); }
@@ -952,13 +1122,13 @@ function tick(dt) {
   else mainUpdate(dt);
   stepCritters(dt); stepWorm(dt);
   if (pet.msgT > 0) pet.msgT -= dt;
-  updateAirKick(dt); updateDoubleJump(dt);
+  updateAirKick(dt); updateDoubleSlash(dt); updateDoubleJump(dt);
   if (isAttacking || pet.phase !== 'none') P.vx = P.mx;   // ATTACKS / HEAD PAT DRIVE SIDEWAYS SPEED DIRECTLY (NO ACCEL SMOOTHING)
   if (P.grounded) coyoteT = PHYS.coyote; else if (coyoteT > 0) coyoteT -= dt;
   physics(dt);
   stepAnim(dt);
   if (currentAnim === 'run') updateRun(dt);
-  stepFx(dt); stepDissolve(dt); stepCape(dt);
+  stepFx(dt); stepSlashSparks(dt); stepDissolve(dt); stepCape(dt);
   spells.forEach(s => s.t += dt); for (let i = spells.length - 1; i >= 0; i--) if (spells[i].t * SPELL.fps >= SPELL.frames) spells.splice(i, 1);
   stepCatSpells(dt);
   swooshes.forEach(s => s.t += dt); for (let i = swooshes.length - 1; i >= 0; i--) if (swooshes[i].t * SWOOSH.fps >= SWOOSH.frames) swooshes.splice(i, 1);
@@ -1057,6 +1227,9 @@ const SFX = {
   catChomp:   { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // E: THE CHOMP
   kick:       { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X ON THE GROUND
   airKick:    { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // X IN THE AIR
+  slash:      { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // F: FIRST SWING
+  slashCombo: { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // F AGAIN IN TIME: THE SECOND SWING STARTS
+  slashHit:   { src: null, volume: 0.9, pitch: [0.95, 1.05] },   // A SLASH FRAME WITH hit: (FRAME 5 AND THE FRAME 15 SLAM)
   respawn:    { src: null, volume: 0.7 },                        // THE SPAWN BEAM (R, FALLING OFF, A NEW MAP)
 };
 const SFX_LAND_MIN = 150, SFX_LAND_FULL = 1300;   // LANDING IMPACT (px/s) FOR THE QUIETEST / LOUDEST LANDING SOUND
@@ -1322,9 +1495,9 @@ function stepShake(dt) {   // REAL TIME, NOT THE FIXED STEP
 const silCache = new Map();   // sheet|frame|color -> FLAT-COLOUR COPY OF THAT CELL (BOUNDED: FRAMES x COLOURS)
 function silhouette(sheet, frame, color) {
   const key = sheet + '|' + frame + '|' + color; let c = silCache.get(key); if (c) return c;
-  const im = IMG[sheet], cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[sheet].frames), ch = im.naturalHeight;
+  const im = IMG[sheet], r = cellRect(sheet, frame), cw = r.w, ch = r.h;
   c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d');
-  g.drawImage(im, frame * cw, 0, cw, ch, 0, 0, cw, ch); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, cw, ch);
+  g.drawImage(im, r.sx, r.sy, cw, ch, 0, 0, cw, ch); g.globalCompositeOperation = 'source-in'; g.fillStyle = color; g.fillRect(0, 0, cw, ch);
   silCache.set(key, c); return c;
 }
 function drawParticles() {
@@ -1345,12 +1518,12 @@ function drawOneShots(front) {   // BOTTOM-ANCHORED ONE-SHOT SPRITES: THE LANDIN
 function drawGhosts() {
   for (const g of ghosts) {
     const t = g.age / g.life, pl = sheetPlace(g.sheet, g.frame, g.flip), sc = SCALE * (g.grow ? 1 + g.grow * t : 1 - 0.12 * t), im = IMG[g.sheet];
-    const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[g.sheet].frames), sz = PLAYER_FRAME * pl.s;
+    const r = cellRect(g.sheet, g.frame), cw = r.w, ch = r.h, sz = PLAYER_FRAME * pl.s;
     ctx.save(); ctx.globalAlpha = g.alpha * Math.pow(1 - t, 1.5); ctx.translate(g.x, g.y); ctx.scale(sc * g.sx, sc * g.sy);
     if (g.ang) { const cy = pl.oy - g.pivot * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(g.ang * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
     ctx.translate(pl.ox, pl.oy); if (g.flip) ctx.scale(-1, 1);
-    if (g.mode === 'dissolve') { ctx.globalAlpha = g.alpha * (1 - 0.5 * t); const c = dissolveDraw(im, g.frame * cw, 0, cw, im.naturalHeight, Math.min(1, 0.1 + t * 0.95), g.cell); ctx.drawImage(c, 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz); }   // STARTS ALMOST WHOLE, ENDS FULLY EATEN
-    else ctx.drawImage(silhouette(g.sheet, g.frame, g.color), 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);
+    if (g.mode === 'dissolve') { ctx.globalAlpha = g.alpha * (1 - 0.5 * t); const c = dissolveDraw(im, r.sx, r.sy, cw, ch, Math.min(1, 0.1 + t * 0.95), g.cell); ctx.drawImage(c, 0, 0, cw, ch, -sz / 2, -sz, sz, sz); }   // STARTS ALMOST WHOLE, ENDS FULLY EATEN
+    else ctx.drawImage(silhouette(g.sheet, g.frame, g.color), 0, 0, cw, ch, -sz / 2, -sz, sz, sz);
     ctx.restore();
   }
 }
@@ -1439,8 +1612,8 @@ function stepDissolve(dt) {
    EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
 const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
 const CLOAK_POSE = { run: { x: 135, y: 20, rot: 0 } };
-const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
-const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'wallSlide', 'doubleJump']);
+const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'doubleSlash', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
+const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'doubleSlash', 'wallSlide', 'doubleJump']);
 const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
 const CAPE_SPRING = { stiffness: 150, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
 const CAPE_ROOT_OFFSET = { x: -110, y: -200 };   // THE RUN POSE'S ROOT = CLOAK_POSE.run + THIS (SPRITE ART PX)
@@ -1939,9 +2112,9 @@ function drawPlayer(x, y) {
   if (P.spin) { const cy = pl.oy - DOUBLE_JUMP.pivotY * pl.s; ctx.translate(pl.ox, cy); ctx.rotate(P.spin * Math.PI / 180); ctx.translate(-pl.ox, -cy); }
   drawCloak('back');
   ctx.save(); ctx.translate(pl.ox, pl.oy); if (P.flip) ctx.scale(-1, 1);
-  const cw = Math.floor(im.naturalWidth / PLAYER_SHEETS[P.sheet].frames), sz = PLAYER_FRAME * pl.s;
-  if (dissolveAmount > 0) ctx.drawImage(dissolveDraw(im, P.frame * cw, 0, cw, im.naturalHeight, dissolveAmount, DISSOLVE.cell), 0, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);
-  else ctx.drawImage(im, P.frame * cw, 0, cw, im.naturalHeight, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
+  const r = cellRect(P.sheet, P.frame), sz = PLAYER_FRAME * pl.s;
+  if (dissolveAmount > 0) ctx.drawImage(dissolveDraw(im, r.sx, r.sy, r.w, r.h, dissolveAmount, DISSOLVE.cell), 0, 0, r.w, r.h, -sz / 2, -sz, sz, sz);
+  else ctx.drawImage(im, r.sx, r.sy, r.w, r.h, -sz / 2, -sz, sz, sz);   // ANCHOR "bot" = BOTTOM CENTRE OF THE CELL
   ctx.restore();
   drawCloak('front');
   ctx.restore();
@@ -1972,9 +2145,10 @@ function drawHud() {
     'cape config: ' + capeCfgSrc,
     'critters (N): ' + (crittersOn ? critters.map(c => c.kind + ' ' + c.state + (c.dir > 0 ? ' >' : ' <') + ' x ' + c.x.toFixed(0)).join('   ') || 'none' : 'off'),
     'worm (K): ' + (worm.on ? worm.state + (worm.state === 'hidden' ? ' ' + Math.max(0, worm.t).toFixed(1) + 's' : (worm.state === 'tunnel' ? '   ridge x ' + worm.tx.toFixed(0) : '') + '   exit x ' + worm.x0.toFixed(0) + (worm.dir > 0 ? ' >' : ' <')) + '   particles ' + wormParts.length : 'off') + '   J = tunnel under Nova, come up in front of her',
+    'slash (F): ' + slashHud(),
     'pet (C): ' + (pet.phase === 'none' ? (pet.msgT > 0 ? pet.msg : 'ready') : pet.phase + (pet.dbg ? '   reach ' + (pet.dbg.reach * 100).toFixed(0) + '%   shoulder ' + pet.dbg.r1.toFixed(1) + 'deg   elbow ' + pet.dbg.r2.toFixed(1) + 'deg' : '')),
     'audio: ' + audioHud(),
-    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   E cat spell   X kick   C head pats (hold)   J worm   R respawn   F1 hitboxes   M music   P blips',
+    'arrows/WASD move   up/W/space jump (again = double jump, on a wall = wall jump)   shift dash   Z spell   E cat spell   X kick   F slash (F again in time = double slash)   C head pats (hold)   J worm   R respawn   F1 hitboxes   M music   P blips',
   ];
   lines.forEach((t, i) => { ctx.fillStyle = i === lines.length - 1 ? '#657383' : '#00ffff'; ctx.fillText(t, 20, 20 + i * 15); });
 }
@@ -1995,7 +2169,9 @@ function render(alpha) {
   drawCatSpells();                                                        // z 9: CAT SPELL (E) + ITS SPECTRAL TRAIL
   drawCloth(x, y);                                                        // z 9.5: THE VERLET CAPE, BEHIND THE BODY
   drawPetArm(x, y, alpha);                                                // z 9.7: HEAD PAT ARM, OVER THE CRITTER, UNDER THE BODY
+  drawSwordSpin(x, y);                                                    // z 9.8: DOUBLE SLASH SAW BLADE, BEHIND THE BODY
   drawPlayer(x, y);
+  drawSlashFx(x, y);                                                      // z 10.5: IMPACT FLASH OVER THE CLIPPED TIP + SPARK STREAKS
   drawOneShots(true);                                                     // z 11: THE SPAWN BEAM
   drawSwooshes();                                                         // z 11: IN FRONT
   if (showHitboxes) {
@@ -2135,7 +2311,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
