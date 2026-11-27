@@ -162,7 +162,7 @@ const DOUBLE_SLASH = {
     /* 20 */ { fps: 10 },
   ],
 };
-const HIT_W = 35, HIT_H = 65;             // HITBOX IN WORLD PX, CENTRED ON THE FEET (MEASURED FROM THE KAPLAY BUILD)
+const HIT_W = 35, HIT_H = 148;            // HITBOX IN WORLD PX, CENTRED ON THE FEET. SEPARATE FROM THE ART: JUST UNDER 4 TILES (160), SO SHE CLEARS 4-TILE CORRIDORS
 const ONE_WAY_TOLERANCE = 4;
 const CAM_Y_OFFSET = 225, CAM_LERP_SPEED = 6;
 /* VERTICAL DEAD ZONE: THE CAMERA'S HEIGHT ONLY FOLLOWS THE PLAYER WHEN THEY LEAVE A BAND AROUND IT (up PX ABOVE, down PX BELOW),
@@ -187,23 +187,30 @@ const PLAYER_ANIMS = {
 };
 
 /* ---------- LEVEL (SAME LAYOUT AS THE KAPLAY PLAYGROUND) ---------- */
-const GROUND_Y = 460, GROUND_W = 16000, GROUND_H = 80, GROUND_TILE_W = 381;
-const TILE_SIZE = 50, PLATFORM_H = 50, TILE_FRAME_COUNT = 6, TILE_SEED = 1337;
-const COLUMN_FRAME = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3, 4, 5], COLUMN_BASE = 6;
-const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;
-const WALL_W = COLUMN_FRAME - COLUMN_SHAFT_INSET * 2;
-const WALLS = [{ x: 4000, h: 400 }, { x: 12000 + 160, h: 440 }, { x: 12550, h: 400 }];
+/* GAME SCALE: 1 TILE = 40 WORLD PX (= SCREEN PX AT 1920 x 1080, SO THE SCREEN IS 48 x 27 TILES). ART IS DRAWN AT 2x AND RENDERED AT 0.5.
+   NOVA ~ 4 TILES TALL, HITBOX JUST UNDER 4 TILES (HIT_H). ONE STONE BRICK = 1 TILE TALL. THE TEST LEVEL IS LAID OUT IN TILES:
+   x COUNTS FROM THE LEFT EDGE, HEIGHTS COUNT UP FROM THE GROUND LINE (GROUND_Y). PHYSICS IS IN WORLD PX: A SINGLE JUMP PEAKS ~268 px = ~6.7 TILES. */
+const TILE = 40;
+const GROUND_Y = 460, GROUND_W = 16000, GROUND_H = 2 * TILE, TILE_SEED = 1337;
+/* GROUND: ONE ROW OF BIG BRICKS 2 TILES TALL (MEGALITHIC) = THE TILE LAB BRICKS AT 2x. style 'image' = A REPEATING PNG INSTEAD
+   (DRAWN GROUND_H TALL; MAKE ITS WIDTH A MULTIPLE OF 80 SO IT SITS ON THE TILE GRID). */
+const GROUND_ART = { style: 'bricks', bricks: [1, 2], image: 'assets/images/map/ground.png' };
+/* WALLS (CLING / WALL JUMP): column.png (7 FRAMES OF 50 PX: TOP, PLAIN, 4 RUNES, BASE), 1 TILE WIDE. x IN TILES, h IN TILES. */
+const COLUMN_SRC = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3, 4, 5], COLUMN_BASE = 6;
+const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;   // INSET = SOURCE PX OF ART EACH SIDE OF THE SOLID SHAFT
+const WALL_W = TILE, COLUMN_K = WALL_W / (COLUMN_SRC - COLUMN_SHAFT_INSET * 2), COLUMN_FRAME = COLUMN_SRC * COLUMN_K;   // COLUMN_FRAME = DRAWN SIZE OF ONE 50 PX PIECE
+const WALLS = [{ x: 100, h: 10 }, { x: 304, h: 11 }, { x: 314, h: 10 }];
 /* PLATFORMS: STONE SLABS HELD UP BY COLUMNS, BUILT FROM THE TILE LAB BRICK SHEET (map/tileTest.png, 8 x 8 CELLS, SHEET INDEX = row * 8 + col).
    THE SLAB IS ONE ROW OF LIGHT BRICKS = THE ONE-WAY PLATFORM (LAND ON IT FROM ABOVE, JUMP UP THROUGH IT).
    THE COLUMNS ARE ART ONLY (NO COLLISION): EACH ONE IS BUILT DOWN TO THE FIRST SURFACE UNDER IT (THE GROUND OR A LOWER SLAB) FROM
    ITS CAPITAL (top), AS MANY STACKED MIDDLES AS IT NEEDS (mid, LAID FROM THE BOTTOM UP) AND ITS BASE (bot). A COLUMN UNDER 3 CELLS
    DROPS ITS MIDDLES (2 = CAPITAL + BASE, 1 = BASE ONLY).
-   cell   = WORLD PX PER TILE (64 = THE SAME SIZE AS TILE LAB MAPS). A SINGLE JUMP PEAKS ~268 px, SO h: 4 (256 px) IS THE TALLEST
-            SLAB YOU CAN REACH FROM THE GROUND WITHOUT THE DOUBLE JUMP.
+   cell   = WORLD PX PER TILE (TILE = 40: ONE BRICK = ONE TILE). A SINGLE JUMP PEAKS ~268 px, SO h: 6 (240 px) IS THE TALLEST
+            SLAB YOU CAN REACH FROM THE GROUND WITHOUT THE DOUBLE JUMP. THE SHORTEST WITH A FULL COLUMN IS h: 4 (3-TILE COLUMN + SLAB).
    slab   = SHEET TILES: left / right ENDS, mid = PICKED AT RANDOM (SEEDED, SO THE LEVEL LOOKS THE SAME EVERY TIME), single = A 1-WIDE SLAB.
    columns = STYLES (c = SHEET COLUMN, top / mid / bot = SHEET ROWS). style = THE DEFAULT. */
 const PLATFORM = {
-  src: 'assets/images/map/tileTest.png', sheetCols: 8, cell: 64,
+  src: 'assets/images/map/tileTest.png', sheetCols: 8, cell: TILE,
   slab: { left: 0, mid: [1, 2], right: 3, single: 1 },
   columns: {
     fluted: { c: 6, top: [4], mid: [5, 6], bot: [7] },   // FAN CAPITAL + FLUTED SHAFT (THE ONE IN THE MOCKUP)
@@ -213,19 +220,19 @@ const PLATFORM = {
   },
   style: 'fluted',
 };
-/* THE TEST LEVEL'S PLATFORMS. x = LEFT EDGE (WORLD PX), w = WIDTH IN CELLS, h = HEIGHT IN CELLS (SLAB TOP ABOVE THE GROUND).
-   OPTIONAL: style = A COLUMN STYLE ABOVE; cols = WHICH CELLS GET A COLUMN (0 = LEFT CELL, 0.5 = BETWEEN CELLS 0 AND 1...).
+/* THE TEST LEVEL'S PLATFORMS, ALL IN TILES: x = LEFT EDGE (TILES FROM THE LEFT OF THE LEVEL), w = WIDTH, h = SLAB TOP ABOVE THE GROUND.
+   OPTIONAL: style = A COLUMN STYLE ABOVE; cols = WHICH TILES GET A COLUMN (0 = LEFT TILE, 0.5 = BETWEEN TILES 0 AND 1...).
    NO cols = AUTOMATIC: 1 COLUMN UNDER THE MIDDLE (w 1-3), 2 IN FROM THE ENDS (w 4-6), 3 (w 7+). */
 const PLATS = [
-  { x: 420, w: 3, h: 4 }, { x: 660, w: 5, h: 6 }, { x: 1040, w: 2, h: 8, style: 'slim' },
-  { x: 3000, w: 3, h: 4, style: 'ringed' },
-  { x: 3720, w: 3, h: 4 },
-  { x: 5000, w: 4, h: 5, style: 'broken' },
-  { x: 6000, w: 6, h: 4 },
-  { x: 7000, w: 2, h: 4, style: 'slim' },
-  { x: 8000, w: 3, h: 5 }, { x: 8250, w: 4, h: 7, style: 'ringed' },
-  { x: 9000, w: 5, h: 4 },
-  { x: 10700, w: 2, h: 4 }, { x: 11000, w: 7, h: 6 },
+  { x: 10, w: 5, h: 5 }, { x: 17, w: 7, h: 8 }, { x: 27, w: 3, h: 11, style: 'slim' },
+  { x: 75, w: 5, h: 5, style: 'ringed' },
+  { x: 93, w: 4, h: 6 },
+  { x: 125, w: 6, h: 7, style: 'broken' },
+  { x: 150, w: 10, h: 5 },
+  { x: 175, w: 3, h: 6, style: 'slim' },
+  { x: 200, w: 5, h: 6 }, { x: 207, w: 6, h: 9, style: 'ringed' },
+  { x: 225, w: 8, h: 5 },
+  { x: 268, w: 3, h: 5 }, { x: 275, w: 11, h: 8 },
 ];
 const BG = '#030013';
 
@@ -271,10 +278,10 @@ function buildPlatforms() {   // SLABS (ONE-WAY) + THEIR COLUMNS (ART). LOWEST F
   for (const { pd, y } of list) {
     const w = Math.max(1, pd.w | 0), slab = [];
     for (let i = 0; i < w; i++) slab.push(w === 1 ? S.single : i === 0 ? S.left : i === w - 1 ? S.right : S.mid[Math.floor(rand() * S.mid.length)]);
-    const o = { x: pd.x, y, w: w * C, h: C, tiles: [], slab, cols: [] };
+    const ox = pd.x * C, o = { x: ox, y, w: w * C, h: C, slab, cols: [] };
     const at = Array.isArray(pd.cols) ? pd.cols : w <= 3 ? [(w - 1) / 2] : w <= 6 ? [1, w - 2] : [1, (w - 1) / 2, w - 2];
     for (const ci of at) {
-      const cx = pd.x + ci * C, top = y + C, floor = surfaceBelow(cx + C / 2, top);
+      const cx = ox + ci * C, top = y + C, floor = surfaceBelow(cx + C / 2, top);
       if (!isFinite(floor)) continue;
       const hc = Math.round((floor - top) / C); if (hc < 1) continue;
       o.cols.push({ x: cx, y: floor - hc * C, hc, style: PLATFORM.columns[pd.style] ? pd.style : PLATFORM.style });
@@ -291,18 +298,18 @@ function buildLevel() {
   buildPlatforms();
   const r2 = makeRng(COLUMN_SEED);
   WALLS.forEach(w => {
-    const wall = { x: w.x, y: GROUND_Y - w.h, w: WALL_W, h: w.h, pieces: [] };
-    const midH = Math.max(0, w.h - COLUMN_FRAME * 2), n = Math.max(1, Math.ceil(midH / COLUMN_FRAME)), pieceH = midH / n;
+    const wh = w.h * TILE, wall = { x: w.x * TILE, y: GROUND_Y - wh, w: WALL_W, h: wh, pieces: [] };
+    const midH = Math.max(0, wh - COLUMN_FRAME * 2), n = Math.max(1, Math.ceil(midH / COLUMN_FRAME)), pieceH = midH / n;
     if (midH > 0) for (let i = 0; i < n; i++) wall.pieces.push({ frame: r2() < COLUMN_RUNE_CHANCE ? COLUMN_RUNES[Math.floor(r2() * COLUMN_RUNES.length)] : COLUMN_PLAIN, y: COLUMN_FRAME + i * pieceH, h: pieceH });
-    wall.pieces.push({ frame: COLUMN_TOP, y: 0, h: COLUMN_FRAME }, { frame: COLUMN_BASE, y: w.h - COLUMN_FRAME, h: COLUMN_FRAME });
+    wall.pieces.push({ frame: COLUMN_TOP, y: 0, h: COLUMN_FRAME }, { frame: COLUMN_BASE, y: wh - COLUMN_FRAME, h: COLUMN_FRAME });
     solids.push(wall); walls.push(wall);
   });
 }
 
 /* ---------- MAP LEVELS (A TILE LAB MAP FROM THE LIBRARY BECOMES THE LEVEL) ----------
-   '#' -> SOLID (EVERY SOLID CAN BE CLUNG TO), '=' -> ONE-WAY LEDGE, '.' -> AIR. ONE CELL = MAP.cell WORLD PX (A 65 PX HITBOX FITS A 2-CELL GAP).
+   '#' -> SOLID (EVERY SOLID CAN BE CLUNG TO), '=' -> ONE-WAY LEDGE, '.' -> AIR. ONE CELL = MAP.cell WORLD PX = 1 TILE (THE 148 PX HITBOX NEEDS A 4-CELL-TALL GAP; 1 CELL WIDE IS ENOUGH SIDEWAYS).
    map.spawn = [col,row] (THE PLAYER'S FEET SIT ON THE BOTTOM OF THAT CELL); NO SPAWN = THE FIRST FLOOR FOUND, LEFT TO RIGHT. */
-const MAP = { on: false, cell: 64, grid: null, set: null, img: null, tile: 128, name: '' };
+const MAP = { on: false, cell: TILE, grid: null, set: null, img: null, tile: 128, name: '' };
 function defaultSpawn(g) {
   for (let x = 0; x < g.cols; x++) for (let y = 1; y < g.rows - 1; y++) if (g.kind(x, y) === '.' && g.kind(x, y - 1) === '.' && g.kind(x, y + 1) === '#') return [x, y];
   return [1, 1];
@@ -392,8 +399,9 @@ async function loadAssets() {
     const tw = sheetTweak(key); if (tw.snapFeet || (tw.snapFrames && tw.snapFrames.length)) measureFootGaps(key, im, sh.frames);
   }
   IMG.spell = await loadImg(SPELL.src); try { IMG.catSpell = await loadImg(CAT_SPELL.src); } catch (e) { console.warn('[play] no cat spell sheet (' + e.message + ')'); } IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
-  IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png');
-  IMG.bricks = await loadImg(PLATFORM.src);   // SLABS + COLUMNS (SAME SHEET AS TILE LAB) IMG.column = await loadImg('assets/images/map/column.png');
+  IMG.bricks = await loadImg(PLATFORM.src);   // SLABS, COLUMNS + GROUND BRICKS (SAME SHEET AS TILE LAB)
+  IMG.column = await loadImg('assets/images/map/column.png');   // CLIMBABLE WALLS
+  if (GROUND_ART.style === 'image') IMG.ground = await loadImg(GROUND_ART.image);
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
   try { IMG.swordSpin = await loadImg(DOUBLE_SLASH.spinSrc); } catch (e) { console.warn('[play] no sword spin (' + e.message + ')'); }   // OPTIONAL: THE COMBO PLAYS WITHOUT THE SAW BLADE
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
@@ -2151,10 +2159,23 @@ function drawBgBottom(rise) {   // THE FLOOR STRIP, TILED SIDEWAYS. IF IT RISES 
 }
 function drawLevel(vl, vr) {
   if (MAP.on) { drawMapLevel(vl, vr); return; }
-  const g = IMG.ground;
-  for (let i = Math.max(0, Math.floor(vl / GROUND_TILE_W)); i * GROUND_TILE_W < Math.min(vr, GROUND_W); i++) ctx.drawImage(g, i * GROUND_TILE_W, GROUND_Y, GROUND_TILE_W, GROUND_H);
+  drawGround(vl, vr);
   drawPlatforms(vl, vr);
-  for (const w of walls) { if (w.x > vr || w.x + w.w + COLUMN_FRAME < vl) continue; for (const p of w.pieces) ctx.drawImage(IMG.column, p.frame * COLUMN_FRAME, 0, COLUMN_FRAME, COLUMN_FRAME, w.x - COLUMN_SHAFT_INSET, w.y + p.y, COLUMN_FRAME, p.h); }
+  for (const w of walls) { if (w.x > vr || w.x + w.w + COLUMN_FRAME < vl) continue; for (const p of w.pieces) ctx.drawImage(IMG.column, p.frame * COLUMN_SRC, 0, COLUMN_SRC, COLUMN_SRC, w.x - COLUMN_SHAFT_INSET * COLUMN_K, w.y + p.y, COLUMN_FRAME, p.h); }
+}
+function drawGround(vl, vr) {   // BIG BRICKS (GROUND_H SQUARE, PICKED BY POSITION SO THEY NEVER CHANGE) OR A REPEATING IMAGE
+  const B = GROUND_H, end = Math.min(vr, GROUND_W);
+  if (GROUND_ART.style === 'image' && IMG.ground) {
+    const g = IMG.ground, gw = g.naturalWidth * B / g.naturalHeight;
+    for (let i = Math.max(0, Math.floor(vl / gw)); i * gw < end; i++) ctx.drawImage(g, i * gw, GROUND_Y, gw, B);
+    return;
+  }
+  const im = IMG.bricks; if (!im) return;
+  const SC = PLATFORM.sheetCols, T = im.naturalWidth / SC, pool = GROUND_ART.bricks;
+  for (let i = Math.max(0, Math.floor(vl / B)); i * B < end; i++) {
+    const t = pool[OSWTiles.hash(i, 7) % pool.length];
+    ctx.drawImage(im, (t % SC) * T, Math.floor(t / SC) * T, T, T, i * B, GROUND_Y, B, B);
+  }
 }
 function drawPlatforms(vl, vr) {   // EVERY COLUMN FIRST, THEN THE SLABS, SO A SLAB ALWAYS SITS IN FRONT OF THE CAPITALS UNDER IT
   const im = IMG.bricks; if (!im) return;
