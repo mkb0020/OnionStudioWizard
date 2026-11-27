@@ -111,7 +111,7 @@ header .tb.hb svg{width:16px;height:16px}
 #world{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform}
 #world>*{position:absolute;left:0;top:0;width:1000px;height:1000px}
 #paper{background:#fff;box-shadow:0 0 0 1px var(--acc2),0 0 40px #830cde44,0 0 90px #00ffff22}
-#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev,#jtPrev{pointer-events:none}
+#view,#overlay,#onion,#ruler,#guide,#bendPrev,#posePrev,#sqPrev,#jtPrev,#swPrev{pointer-events:none}
 #ruler[hidden]{display:none}
 /* tile mode grid: plain DOM over the canvases (no pixels, never exported) */
 #tileGrid{pointer-events:none;overflow:hidden;--cs:250px;
@@ -400,6 +400,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <button class="tb" data-tool="pose" title="Pose guide (F): a stick figure whose bones turn but never stretch, for one-shot moves"><svg viewBox="0 0 24 24"><circle cx="8" cy="4" r="2"/><path d="M8 6.5l1 6"/><path d="M8.5 8.5l-3.5 3M8.5 8.5l4 1.5"/><path d="M9 12.5l-2.5 4.5L7 21"/><path d="M9 12.5l6 1 6-3"/></svg></button>
       <button class="tb" data-tool="squash" title="Squash &amp; stretch (S): squash or stretch a layer, keeping its volume; ANIMATE sets it per frame"><svg viewBox="0 0 24 24"><ellipse cx="7" cy="17" rx="5" ry="3"/><ellipse cx="17" cy="10" rx="3" ry="7"/><path d="M7 4v6M5 8l2 2 2-2" opacity=".7"/></svg></button>
       <button class="tb" data-tool="joint" title="Joint (Z): link 2-3 layers of this frame at joints (thigh + calf at the knee), then turn, bend or move them together right on the canvas"><svg viewBox="0 0 24 24"><path d="M4 4l6 9"/><path d="M10 13l9 4"/><circle cx="10" cy="13" r="2.4"/><circle cx="4" cy="4" r="1.6"/><circle cx="19" cy="17" r="1.6"/></svg></button>
+      <button class="tb" data-tool="sway" title="Sway: organic fur / shag motion on every frame. Roots from the body layer (or a drawn line), looping waves across each strand, follow-through from the body's motion"><svg viewBox="0 0 24 24"><path d="M4 4h16"/><path d="M7 4c0 5-3 7-1 12"/><path d="M12 4c0 6 3 8 1 15"/><path d="M17 4c0 4-3 6-1 10"/></svg></button>
       <button class="tb" id="rulerBtn"><svg viewBox="0 0 24 24"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg></button>
       <button class="tb" id="tileBtn" title="Tile mode: split the canvas into a grid; every stroke, fill, move and transform stays inside one cell"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M7.5 3v18M12 3v18M16.5 3v18M3 7.5h18M3 12h18M3 16.5h18" opacity=".7"/><rect x="12" y="7.5" width="4.5" height="4.5" fill="currentColor" stroke="none"/></svg></button>
       <button class="tb" id="popBtn"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/><path d="M10 13l4-4M11 9h3v3"/></svg></button>
@@ -760,6 +761,75 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <p class="note" id="jtNote"></p>
     </div>
 
+    <div class="sec" id="swaySec" hidden>
+      <h2>Sway <span class="sub">fur / shag, all frames</span></h2>
+      <div class="onion-row">
+        <span class="lbl">FUR</span>
+        <span class="note" id="swSrc" style="flex:1">-</span>
+        <button class="tgl" id="swPick" style="width:auto" title="The selected layer is the fur (keep it apart from the body). Matched by name on every frame">USE THIS LAYER</button>
+      </div>
+      <div class="onion-row">
+        <span class="lbl">ROOTS</span>
+        <div class="seg" id="swRoot" style="flex:1"><button data-v="body" class="on" title="Rooted wherever the fur meets the body layer, found again on every frame">BODY</button><button data-v="line" title="Drag on the canvas to draw where the fur grows from; it moves with the fur on other frames">LINE</button></div>
+      </div>
+      <div class="onion-row" data-sw="body">
+        <span class="lbl">BODY</span>
+        <select id="swBody" style="flex:1;min-width:0"></select>
+      </div>
+      <div class="onion-row" data-sw="body" title="How far in from the body's edge the fur starts to give (fur lying over the body moves a little too)">
+        <span class="lbl">DEPTH</span>
+        <input type="range" id="swDepth" min="0" max="200" value="30"><output id="swDepthOut">30 px</output>
+      </div>
+      <div class="onion-row" data-sw="line" hidden>
+        <button class="tgl" id="swClear" style="width:auto;flex:1">CLEAR ROOT LINE</button>
+      </div>
+      <div class="onion-row" title="How far from the roots the fur is fully free">
+        <span class="lbl">REACH</span>
+        <input type="range" id="swReach" min="20" max="900" value="260"><output id="swReachOut">260 px</output>
+      </div>
+      <div class="onion-row" title="Higher = stays still longer near the roots, and the tips do most of the moving">
+        <span class="lbl">STIFF</span>
+        <input type="range" id="swStiff" min="30" max="400" value="150"><output id="swStiffOut">1.5</output>
+      </div>
+      <div class="onion-row" title="How far the tips swing">
+        <span class="lbl">SWAY</span>
+        <input type="range" id="swAmount" min="0" max="120" value="16"><output id="swAmountOut">16 px</output>
+      </div>
+      <div class="onion-row" title="Size of the ripples: small = clumps move on their own, big = the whole coat moves together">
+        <span class="lbl">RIPPLE</span>
+        <input type="range" id="swRipple" min="40" max="900" value="280"><output id="swRippleOut">280 px</output>
+      </div>
+      <div class="onion-row" title="Waves per loop (always whole, so the loop is seamless)">
+        <span class="lbl">SPEED</span>
+        <input type="range" id="swSpeed" min="1" max="4" value="1"><output id="swSpeedOut">1x</output>
+      </div>
+      <div class="onion-row" title="A little give along the strands too (0 = they only swing sideways)">
+        <span class="lbl">STRETCH</span>
+        <input type="range" id="swStretch" min="0" max="100" value="20"><output id="swStretchOut">20%</output>
+      </div>
+      <div class="onion-row" title="The motion repeats every this many frames (ALL = the whole animation)">
+        <span class="lbl">LOOP</span>
+        <input type="range" id="swLoop" min="0" max="24" value="0"><output id="swLoopOut">ALL</output>
+      </div>
+      <div class="onion-row" title="Follow-through: the fur drags behind when the body moves, swings past and settles">
+        <span class="lbl">FOLLOW</span>
+        <input type="range" id="swFollow" min="0" max="100" value="0"><output id="swFollowOut">0%</output>
+      </div>
+      <div class="onion-row" title="How long the follow-through keeps swinging before it settles">
+        <span class="lbl">BOUNCE</span>
+        <input type="range" id="swBounce" min="0" max="100" value="50"><output id="swBounceOut">50%</output>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="swSeed" style="width:auto;flex:1" title="A different random set of waves">NEW RANDOM</button>
+        <button class="tgl on" id="swPreview" style="width:auto;flex:1" title="Show the sway on the canvas while this tool is open">PREVIEW</button>
+        <button class="tgl" id="swFlex" style="width:auto;flex:1" title="Pink = how free each part is to move">SHOW FLEX</button>
+      </div>
+      <div class="onion-row">
+        <button class="tgl" id="swApply" style="width:auto;flex:1" title="Write the sway into a &quot;sway&quot; layer above the fur on every frame (one undo); the fur layer is hidden, not changed">APPLY ALL FRAMES</button>
+      </div>
+      <p class="note" id="swNote"></p>
+    </div>
+
     <div class="sec" id="textureSec" hidden>
       <h2>Texture</h2>
       <div class="onion-row">
@@ -818,6 +888,7 @@ html.osw-embedded #app{grid-template-rows:30px 1fr var(--sh);grid-template-areas
       <canvas id="posePrev" width="1000" height="1000"></canvas>
       <canvas id="sqPrev" width="1000" height="1000"></canvas>
       <canvas id="jtPrev" width="1000" height="1000"></canvas>
+      <canvas id="swPrev" width="1000" height="1000"></canvas>
       <canvas id="overlay" width="1000" height="1000"></canvas>
       <div id="tileGrid" hidden><div id="tileSel" hidden></div></div>
     </div>
@@ -3676,6 +3747,7 @@ const Pose = (() => {
     if (poseReady) requestPose();
     if (sqReady) requestSq();
     if (jtReady) requestJt();
+    if (swReady) requestSw();
     if (guideRaf) return;
     guideRaf = requestAnimationFrame(() => { guideRaf = 0; drawGuides(); });
   }
@@ -4552,7 +4624,7 @@ const Pose = (() => {
     const x = cv.getContext('2d'); x.clearRect(0, 0, cv.width, cv.height); sqDraw(x, l.canvas, a, A);
     sqPrevCache.set(l, { key, cv }); return cv;
   }
-  Engine.setLayerView((l, f) => (jtReady && jtView(l, f)) || sqView(l, f));   // the JOINT drag preview (below) wins, else squash
+  Engine.setLayerView((l, f) => (jtReady && jtView(l, f)) || (swReady && swView(l, f)) || sqView(l, f));   // JOINT drag preview, then SWAY, then squash
 
   const sqD0 = () => 150 / state.zoom;                          // arrow length at 0% (canvas px, steady on screen)
   function sqGeo() {
@@ -5102,6 +5174,322 @@ const Pose = (() => {
   syncJtUI();
   window.__jt = { state: jt, links: () => jtLinks(project.frame), linkAt: p => jtLinkAt(p), solve2, manifest: () => jtManifest(), load: m => loadJt(m, project.frames), drag: () => jtdrag };
 
+  /* ---------- sway (SWAY tool) ----------
+     Organic secondary motion for fur / shag / loose cloth drawn on its OWN layer, on every frame at once, with no strips to place.
+     USE THIS LAYER picks the fur layer (matched by NAME on every frame). ROOTS says where the fur is attached:
+       BODY = wherever it meets the body layer (picked by name), found again on every frame, so the roots follow the body.
+              DEPTH lets fur lying over the body's edge move too (how far in from the edge it starts to give).
+       LINE = drag on the canvas to draw a root line; on other frames it moves with the fur layer.
+     Every pixel gets a FLEX from its distance to the roots: 0 at the root, 1 at REACH px out (STIFF ROOTS shapes the curve).
+     It moves sideways ACROSS its own strand (the direction it hangs away from the roots: hanging shag swings left / right,
+     trailing tendrils wave up / down) by a few slow travelling waves that repeat exactly every LOOP frames, plus a little
+     STRETCH along the strand. FOLLOW adds follow-through: a spring driven by how the body moves frame to frame, so the shag
+     drags behind, swings past and settles. The source layer is never changed: the preview shows on screen, and
+     APPLY ALL FRAMES writes the result into "<name> sway" on every frame (made or replaced, one undo) and hides the source.
+     Saved in the project (`sway`). */
+  var swReady = false;                          // var: requestGuide / the layer view above check it before this runs
+  const swEl = $('#swPrev'), swctx = swEl.getContext('2d');
+  const SW_DEF = { src: '', root: 'body', body: '', line: [], lineFrame: 0, reach: 260, stiff: 150, depth: 30, amount: 16, ripple: 280,
+    speed: 1, stretch: 20, loop: 0, follow: 0, bounce: 50, seed: 1, preview: true, flex: false };
+  const sw = { ...SW_DEF, line: [] };
+  const SW_G = 4;                               // the motion field is worked out every 4 px and smoothed between
+  let swRaf = 0, swdrag = null, swBefore = null, swVer = 1;
+  const swCache = new Map();                    // frame -> { key, cv, flex, gw, gh }
+  let swFollow = null;                          // { key, off: [{x, y}] per frame }
+  const swOn = () => state.tool === 'sway';
+
+  function requestSw() { if (swRaf) return; swRaf = requestAnimationFrame(() => { swRaf = 0; drawSw(); }); }
+  function swRefresh() { swVer++; requestRender(); requestOnion(); requestSw(); syncSwUI(); }
+  const swLayer = (f, name) => name ? f.layers.find(l => l.name === name) || null : null;
+  const swOutName = () => sw.src + ' sway';
+  const swSnap = () => JSON.parse(JSON.stringify(sw));
+  function swRestore(s) { Object.assign(sw, JSON.parse(JSON.stringify(s))); swRefresh(); }
+  function swCommit(before, label) {
+    const after = swSnap(); if (JSON.stringify(after) === JSON.stringify(before)) return;
+    project.dirty = true; history.push({ label, bytes: 0, undo: () => swRestore(before), redo: () => swRestore(after) });
+  }
+  function swEdit(label, fn) { const before = swSnap(); if (fn() === false) return; swCommit(before, label); swRefresh(); }
+  function swLive(fn) { if (!swBefore) swBefore = swSnap(); fn(); swRefresh(); }
+  function swSettle(label) { if (swBefore) { const b = swBefore; swBefore = null; swCommit(b, label); } }
+
+  /* helpers */
+  function swRng(seed) { let a = seed | 0; return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+  function swCentroid(l) {   // alpha-weighted centre + bounding box of a layer (sampled every 2 px)
+    const W = l.canvas.width, H = l.canvas.height, d = l.ctx.getImageData(0, 0, W, H).data;
+    let sx = 0, sy = 0, sa = 0, x0 = W, y0 = H, x1 = -1, y1 = -1;
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) { const a = d[(y * W + x) * 4 + 3]; if (a > 8) { sx += x * a; sy += y * a; sa += a; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    return sa ? { x: sx / sa, y: sy / sa, x0: Math.max(0, x0 - 2), y0: Math.max(0, y0 - 2), x1: Math.min(W - 1, x1 + 2), y1: Math.min(H - 1, y1 + 2) } : null;
+  }
+  function swChamfer(seed, gw, gh) {   // distance (grid cells) to the nearest seed cell
+    const INF = 1e9, d = new Float32Array(gw * gh), R = Math.SQRT2;
+    for (let i = 0; i < d.length; i++) d[i] = seed[i] ? 0 : INF;
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { const i = y * gw + x; let v = d[i]; if (!v) continue;
+      if (x > 0) v = Math.min(v, d[i - 1] + 1); if (y > 0) { v = Math.min(v, d[i - gw] + 1); if (x > 0) v = Math.min(v, d[i - gw - 1] + R); if (x < gw - 1) v = Math.min(v, d[i - gw + 1] + R); } d[i] = v; }
+    for (let y = gh - 1; y >= 0; y--) for (let x = gw - 1; x >= 0; x--) { const i = y * gw + x; let v = d[i]; if (!v) continue;
+      if (x < gw - 1) v = Math.min(v, d[i + 1] + 1); if (y < gh - 1) { v = Math.min(v, d[i + gw] + 1); if (x < gw - 1) v = Math.min(v, d[i + gw + 1] + R); if (x > 0) v = Math.min(v, d[i + gw - 1] + R); } d[i] = v; }
+    return d;
+  }
+  function swBlur(a, gw, gh, r, passes) {   // box blur, in place
+    const t = new Float32Array(a.length);
+    for (let p = 0; p < passes; p++) {
+      for (let y = 0; y < gh; y++) { let s = 0, n = 0; const o = y * gw;
+        for (let x = -r; x < gw + r; x++) { if (x + r < gw) { s += a[o + x + r]; n++; } if (x - r - 1 >= 0) { s -= a[o + x - r - 1]; n--; } if (x >= 0 && x < gw) t[o + x] = s / n; } }
+      for (let x = 0; x < gw; x++) { let s = 0, n = 0;
+        for (let y = -r; y < gh + r; y++) { if (y + r < gh) { s += t[(y + r) * gw + x]; n++; } if (y - r - 1 >= 0) { s -= t[(y - r - 1) * gw + x]; n--; } if (y >= 0 && y < gh) a[y * gw + x] = s / n; } }
+    }
+  }
+  function swSeedMask(fi, gw, gh) {   // grid cells that are roots on frame fi -> Uint8Array, or null
+    const f = project.frames[fi], c = makeCv(gw, gh), x = c.getContext('2d');
+    if (sw.root === 'body') {
+      const b = swLayer(f, sw.body); if (!b) return null;
+      x.imageSmoothingEnabled = true; x.drawImage(b.canvas, 0, 0, gw, gh);
+      const d = x.getImageData(0, 0, gw, gh).data, m = new Uint8Array(gw * gh); let any = 0;
+      for (let i = 0; i < m.length; i++) if (d[i * 4 + 3] > 96) { m[i] = 1; any = 1; }
+      return any ? m : null;
+    }
+    if (sw.line.length < 2) return null;
+    const o = swLineShift(fi);
+    x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.lineCap = x.lineJoin = 'round'; x.beginPath();
+    sw.line.forEach((q, k) => { const px = (q.x + o.x) / SW_G, py = (q.y + o.y) / SW_G; k ? x.lineTo(px, py) : x.moveTo(px, py); }); x.stroke();
+    const d = x.getImageData(0, 0, gw, gh).data, m = new Uint8Array(gw * gh); let any = 0;
+    for (let i = 0; i < m.length; i++) if (d[i * 4 + 3] > 40) { m[i] = 1; any = 1; }
+    return any ? m : null;
+  }
+  const swCent = new Map();   // layer -> { ver, c }
+  function swC(l) { const k = swCent.get(l); if (k && k.ver === l.ver) return k.c; const c = swCentroid(l); swCent.set(l, { ver: l.ver, c }); return c; }
+  function swLineShift(fi) {   // the root line was drawn on lineFrame: on other frames it moves with the fur
+    const a = swLayer(project.frames[sw.lineFrame] || project.frame, sw.src), b = swLayer(project.frames[fi], sw.src);
+    const ca = a && swC(a), cb = b && swC(b);
+    return ca && cb ? { x: cb.x - ca.x, y: cb.y - ca.y } : { x: 0, y: 0 };
+  }
+  function swFollowOffsets() {   // follow-through: a damped spring pushed by how the reference moves frame to frame
+    const n = project.frames.length, refName = sw.root === 'body' ? sw.body : sw.src;
+    const refs = project.frames.map(f => swLayer(f, refName));
+    const key = [swVer, n, ...refs.map(l => l ? l.ver : -1)].join(',');
+    if (swFollow && swFollow.key === key) return swFollow.off;
+    const cs = refs.map(l => l && swC(l)), off = project.frames.map(() => ({ x: 0, y: 0 }));
+    if (sw.follow > 0) {
+      const N = clamp(sw.loop || n, 1, n), drag = sw.follow / 100 * 1.6, k = 0.22, damp = 0.45 + sw.bounce / 100 * 0.47;
+      let ox = 0, oy = 0, vx = 0, vy = 0;
+      const passes = N > 1 ? 4 : 1;   // a looping cycle: run it round a few times so the spring settles into the loop
+      for (let p = 0; p < passes; p++) for (let i = 0; i < N; i++) {
+        const a = cs[i], b = cs[(i - 1 + N) % N];
+        const dx = a && b && (i > 0 || N > 1) ? a.x - b.x : 0, dy = a && b && (i > 0 || N > 1) ? a.y - b.y : 0;
+        vx -= dx * drag; vy -= dy * drag; vx -= ox * k; vy -= oy * k; vx *= damp; vy *= damp; ox += vx; oy += vy;
+        const lim = 160; ox = clamp(ox, -lim, lim); oy = clamp(oy, -lim, lim);
+        if (p === passes - 1) for (let j = i; j < n; j += N) off[j] = { x: ox, y: oy };
+      }
+    }
+    swFollow = { key, off }; return off;
+  }
+  function swWaves() {   // 3 travelling waves per axis; whole-number cycles per loop, so the motion repeats exactly
+    const r = swRng(sw.seed * 7919 + 13), mk = () => {
+      const ws = []; let tot = 0;
+      for (let i = 0; i < 3; i++) {
+        const th = r() * Math.PI * 2, lam = sw.ripple * (0.55 + r() * 1.0), amp = 0.5 + r() * 0.5; tot += amp;
+        ws.push({ kx: Math.cos(th) * 2 * Math.PI / lam, ky: Math.sin(th) * 2 * Math.PI / lam, m: sw.speed * (i === 1 ? 2 : 1) * (r() < 0.5 ? -1 : 1), ph: r() * Math.PI * 2, amp });
+      }
+      ws.forEach(w => { w.amp /= tot * 0.62; }); return ws;
+    };
+    return { X: mk(), Y: mk() };
+  }
+
+  /* the warp for one frame -> { cv, flex, gw, gh } (cached), or null */
+  function swFrame(fi) {
+    const f = project.frames[fi]; if (!f || !sw.src) return null;
+    const L = swLayer(f, sw.src); if (!L) return null;
+    const B = sw.root === 'body' ? swLayer(f, sw.body) : null;
+    const offs = swFollowOffsets();
+    const key = [swVer, L.ver, B ? B.ver : -1, project.frames.length, offs[fi] ? offs[fi].x.toFixed(2) + ':' + offs[fi].y.toFixed(2) : 0].join('|');
+    const hit = swCache.get(fi); if (hit && hit.key === key) return hit;
+    const W = L.canvas.width, H = L.canvas.height, gw = Math.ceil(W / SW_G) + 1, gh = Math.ceil(H / SW_G) + 1;
+    const seed = swSeedMask(fi, gw, gh);
+    if (!seed) { const r = { key, cv: null, flex: null, gw, gh }; swCache.set(fi, r); return r; }
+    // signed distance (px) from the roots: + outside them, - inside the body (DEPTH pulls the start of the give inward)
+    const dOut = swChamfer(seed, gw, gh), e = new Float32Array(gw * gh);
+    if (sw.root === 'body') { const inv = new Uint8Array(seed.length); for (let i = 0; i < inv.length; i++) inv[i] = seed[i] ? 0 : 1; const dIn = swChamfer(inv, gw, gh); for (let i = 0; i < e.length; i++) e[i] = (dOut[i] - (seed[i] ? dIn[i] : 0)) * SW_G; }
+    else for (let i = 0; i < e.length; i++) e[i] = dOut[i] * SW_G;
+    const eb = e.slice(); swBlur(eb, gw, gh, 3, 2);   // smooth version for the strand direction
+    const depth = sw.root === 'body' ? sw.depth : 0, reach = Math.max(8, sw.reach), pw = sw.stiff / 100;
+    const N = clamp(sw.loop || project.frames.length, 1, 999), ph = 2 * Math.PI * ((fi % N) / N);
+    const wv = swWaves(), A = sw.amount, Lf = sw.stretch / 100, o = offs[fi] || { x: 0, y: 0 };
+    const flex = new Float32Array(gw * gh), Dx = new Float32Array(gw * gh), Dy = new Float32Array(gw * gh);
+    const wsum = (ws, x, y) => { let s = 0; for (const w of ws) s += w.amp * Math.sin(w.kx * x + w.ky * y + w.m * ph + w.ph); return s; };
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      const i = gy * gw + gx, x = gx * SW_G, y = gy * SW_G;
+      const fl = Math.pow(clamp((e[i] + depth) / reach, 0, 1), pw); flex[i] = fl; if (!fl) continue;
+      let ax = (eb[gy * gw + Math.min(gw - 1, gx + 1)] - eb[gy * gw + Math.max(0, gx - 1)]), ay = (eb[Math.min(gh - 1, gy + 1) * gw + gx] - eb[Math.max(0, gy - 1) * gw + gx]);
+      const g = Math.hypot(ax, ay); if (g < 1e-3) { ax = 0; ay = 1; } else { ax /= g; ay /= g; }   // ALONG the strand (away from the roots)
+      const px = -ay, py = ax;                                                                     // ACROSS it
+      const tx = A * wsum(wv.X, x, y) + o.x, ty = A * wsum(wv.Y, x, y) + o.y;
+      const across = px * tx + py * ty, along = (ax * tx + ay * ty) * Lf;   // sign-free: the same whichever way the strand points
+      Dx[i] = fl * (across * px + along * ax); Dy[i] = fl * (across * py + along * ay);
+    }
+    swBlur(Dx, gw, gh, 2, 2); swBlur(Dy, gw, gh, 2, 2);
+    // warp: out(q) = src(q - D(q)), premultiplied bilinear, inside the fur's box grown by the largest move
+    let M = 0; for (let i = 0; i < Dx.length; i++) M = Math.max(M, Math.abs(Dx[i]), Math.abs(Dy[i]));
+    const bb = swC(L), cv = makeCv(W, H);
+    if (bb) {
+      const X0 = Math.max(0, Math.floor(bb.x0 - M - 2)), Y0 = Math.max(0, Math.floor(bb.y0 - M - 2)), X1 = Math.min(W - 1, Math.ceil(bb.x1 + M + 2)), Y1 = Math.min(H - 1, Math.ceil(bb.y1 + M + 2));
+      const s = L.ctx.getImageData(0, 0, W, H).data, ow = X1 - X0 + 1, oh = Y1 - Y0 + 1, out = new ImageData(ow, oh), od = out.data;
+      for (let y = Y0; y <= Y1; y++) {
+        const gyf = y / SW_G, gy0 = Math.min(gh - 2, gyf | 0), ty = gyf - gy0;
+        for (let x = X0; x <= X1; x++) {
+          const gxf = x / SW_G, gx0 = Math.min(gw - 2, gxf | 0), tx = gxf - gx0, i0 = gy0 * gw + gx0;
+          const dx = (Dx[i0] * (1 - tx) + Dx[i0 + 1] * tx) * (1 - ty) + (Dx[i0 + gw] * (1 - tx) + Dx[i0 + gw + 1] * tx) * ty;
+          const dy = (Dy[i0] * (1 - tx) + Dy[i0 + 1] * tx) * (1 - ty) + (Dy[i0 + gw] * (1 - tx) + Dy[i0 + gw + 1] * tx) * ty;
+          const sx = x - dx, sy = y - dy; if (sx < 0 || sy < 0 || sx > W - 1 || sy > H - 1) continue;
+          const x0 = sx | 0, y0 = sy | 0, x1 = Math.min(W - 1, x0 + 1), y1 = Math.min(H - 1, y0 + 1), fx = sx - x0, fy = sy - y0;
+          const w00 = (1 - fx) * (1 - fy), w10 = fx * (1 - fy), w01 = (1 - fx) * fy, w11 = fx * fy;
+          const p00 = (y0 * W + x0) * 4, p10 = (y0 * W + x1) * 4, p01 = (y1 * W + x0) * 4, p11 = (y1 * W + x1) * 4;
+          const a00 = s[p00 + 3] * w00, a10 = s[p10 + 3] * w10, a01 = s[p01 + 3] * w01, a11 = s[p11 + 3] * w11, a = a00 + a10 + a01 + a11;
+          if (a < 0.5) continue;
+          const q = ((y - Y0) * ow + (x - X0)) * 4;
+          od[q] = (s[p00] * a00 + s[p10] * a10 + s[p01] * a01 + s[p11] * a11) / a;
+          od[q + 1] = (s[p00 + 1] * a00 + s[p10 + 1] * a10 + s[p01 + 1] * a01 + s[p11 + 1] * a11) / a;
+          od[q + 2] = (s[p00 + 2] * a00 + s[p10 + 2] * a10 + s[p01 + 2] * a01 + s[p11 + 2] * a11) / a;
+          od[q + 3] = a;
+        }
+      }
+      cv.getContext('2d').putImageData(out, X0, Y0);
+    }
+    const r = { key, cv, flex, gw, gh }; swCache.set(fi, r);
+    if (swCache.size > 64) swCache.delete(swCache.keys().next().value);
+    return r;
+  }
+
+  /* on-screen preview: the warped fur replaces the fur (or its "sway" layer once applied) while the SWAY tool is open */
+  function swView(l, frame) {
+    if (!swReady || !swOn() || !sw.preview || !sw.src) return null;
+    const out = swLayer(frame, swOutName()), target = out || swLayer(frame, sw.src);
+    if (l !== target) return null;
+    const r = swFrame(project.frames.indexOf(frame)); return r && r.cv;
+  }
+
+  /* overlay: the root line + the FLEX map */
+  function drawSw() {
+    swctx.clearRect(0, 0, swEl.width, swEl.height);
+    if (!swOn() || playing) return;
+    const fi = project.currentFrame, z = state.zoom;
+    if (sw.flex) {
+      const r = swFrame(fi);
+      if (r && r.flex) {
+        const c = makeCv(r.gw, r.gh), x = c.getContext('2d'), im = x.createImageData(r.gw, r.gh);
+        for (let i = 0; i < r.flex.length; i++) { const v = r.flex[i]; im.data[i * 4] = 255; im.data[i * 4 + 1] = 105 + v * 150 | 0; im.data[i * 4 + 2] = 180 + v * 75 | 0; im.data[i * 4 + 3] = v ? 40 + v * 110 : 0; }
+        x.putImageData(im, 0, 0); swctx.save(); swctx.imageSmoothingEnabled = true; swctx.drawImage(c, 0, 0, r.gw * SW_G, r.gh * SW_G); swctx.restore();
+      }
+    }
+    const pts = swdrag ? swdrag.pts : sw.line;
+    if (sw.root === 'line' && pts.length >= 2) {
+      const o = swdrag ? { x: 0, y: 0 } : swLineShift(fi);
+      swctx.save(); swctx.lineCap = swctx.lineJoin = 'round';
+      swctx.beginPath(); pts.forEach((q, k) => k ? swctx.lineTo(q.x + o.x, q.y + o.y) : swctx.moveTo(q.x + o.x, q.y + o.y));
+      swctx.strokeStyle = '#170032'; swctx.lineWidth = 6 / z; swctx.stroke(); swctx.strokeStyle = '#67FEBD'; swctx.lineWidth = 2.5 / z; swctx.stroke();
+      swctx.restore();
+    }
+  }
+
+  /* pointer: LINE mode draws the root line */
+  function swDown(e, p) {
+    if (!sw.src) { flash('Select the fur layer and press USE THIS LAYER first'); return; }
+    if (sw.root !== 'line') { flash(sw.body ? 'ROOTS: BODY finds the roots by itself. Switch to LINE to draw them instead' : 'Pick the BODY layer, or switch ROOTS to LINE and draw where the fur grows from'); return; }
+    swdrag = { id: e.pointerId, pts: [{ x: p.x, y: p.y }] }; requestSw();
+  }
+  function swMove(p) { const d = swdrag, q = d.pts[d.pts.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) * state.zoom >= 6) { d.pts.push({ x: Math.round(p.x * 10) / 10, y: Math.round(p.y * 10) / 10 }); requestSw(); } }
+  function swUp(ok) {
+    const d = swdrag; swdrag = null;
+    if (!ok || d.pts.length < 2) { if (ok) flash('Drag along where the fur grows out of the body'); requestSw(); return; }
+    swEdit('Sway root line', () => { sw.line = d.pts.slice(0, 400); sw.lineFrame = project.currentFrame; });
+  }
+  function cancelSwDrag() { if (swdrag) { swdrag = null; requestSw(); } }
+
+  /* apply */
+  function swApplyAll() {
+    if (!sw.src) { flash('Pick the fur layer first (USE THIS LAYER)'); return; }
+    if (!frameGuard()) return;
+    const jobs = [], name = swOutName(), w = project.width, h = project.height; let missing = 0;
+    project.frames.forEach((f, fi) => {
+      const src = swLayer(f, sw.src); if (!src) return;
+      const r = swFrame(fi); if (!r || !r.cv) { missing++; return; }
+      let out = swLayer(f, name), made = false, before = null;
+      if (out) before = out.ctx.getImageData(0, 0, w, h);
+      else { out = new Engine.Layer(w, h, name); made = true; }
+      jobs.push({ f, src, out, made, before, after: r.cv, srcVis: src.visible, at: f.layers.indexOf(src) + 1, prevActive: f.activeLayer });
+    });
+    if (!jobs.length) { flash(missing ? 'No roots found: pick the BODY layer or draw a root LINE' : 'No frame has a layer named "' + sw.src + '"'); return; }
+    const paint = j => { const x = j.out.ctx; x.clearRect(0, 0, w, h); x.drawImage(j.after, 0, 0); j.out.ver++; };
+    jobs.forEach(j => { paint(j); j.afterData = j.out.ctx.getImageData(0, 0, w, h); });
+    const put = () => jobs.forEach(j => { if (j.made && !j.f.layers.includes(j.out)) j.f.layers.splice(j.at, 0, j.out); else if (!j.made) j.out.ctx.putImageData(j.afterData, 0, 0); j.out.ver++; j.src.visible = false; });
+    const take = () => jobs.forEach(j => { if (j.made) { const k = j.f.layers.indexOf(j.out); if (k >= 0) j.f.layers.splice(k, 1); j.f.activeLayer = Math.min(j.prevActive, j.f.layers.length - 1); } else { j.out.ctx.putImageData(j.before, 0, 0); j.out.ver++; } j.src.visible = j.srcVis; });
+    put(); project.dirty = true;
+    history.push({ label: 'Apply sway (all frames)', bytes: jobs.length * w * h * 8, thumbsAll: true, undo: () => { take(); swRefresh(); refreshLayers(); }, redo: () => { put(); swRefresh(); refreshLayers(); } });
+    project.frames.forEach((_, i) => drawThumb(i)); refreshLayers(); swRefresh();
+    flash('Sway written to "' + name + '" on ' + jobs.length + ' frame' + (jobs.length > 1 ? 's' : '') + ' ("' + sw.src + '" hidden)' + (missing ? '. ' + missing + ' frame' + (missing > 1 ? 's' : '') + ' had no roots' : ''));
+  }
+
+  /* panel */
+  const SW_SLIDERS = [   // id, key, label, show
+    ['#swReach', 'reach', 'Sway reach', v => v + ' px'], ['#swStiff', 'stiff', 'Sway stiff roots', v => (v / 100).toFixed(1)], ['#swDepth', 'depth', 'Sway depth', v => v + ' px'],
+    ['#swAmount', 'amount', 'Sway amount', v => v + ' px'], ['#swRipple', 'ripple', 'Sway ripple', v => v + ' px'], ['#swSpeed', 'speed', 'Sway speed', v => v + 'x'],
+    ['#swStretch', 'stretch', 'Sway stretch', v => v + '%'], ['#swLoop', 'loop', 'Sway loop', v => v ? v + ' fr' : 'ALL'], ['#swFollow', 'follow', 'Sway follow', v => v + '%'],
+    ['#swBounce', 'bounce', 'Sway bounce', v => v + '%'],
+  ];
+  function syncSwUI() {
+    if (!swReady) return;
+    SW_SLIDERS.forEach(([id, k, , show]) => { const el = $(id); if (+el.value !== sw[k]) el.value = sw[k]; $(id + 'Out').textContent = show(sw[k]); });
+    $('#swLoop').max = Math.max(2, project.frames.length);
+    $('#swSrc').textContent = sw.src || '-';
+    $$('#swRoot button').forEach(b => b.classList.toggle('on', b.dataset.v === sw.root));
+    $$('[data-sw]').forEach(r => { r.hidden = r.dataset.sw !== sw.root; });
+    const sel = $('#swBody'), names = [...new Set(project.frame.layers.map(l => l.name))].filter(n => n !== sw.src && n !== swOutName());
+    const want = ['<option value="">(pick the body layer)</option>', ...names.map(n => '<option>' + n.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</option>')].join('');
+    if (sel.dataset.html !== want) { sel.innerHTML = want; sel.dataset.html = want; }
+    sel.value = names.includes(sw.body) ? sw.body : '';
+    $('#swPreview').classList.toggle('on', sw.preview); $('#swFlex').classList.toggle('on', sw.flex);
+    $('#swApply').disabled = !sw.src;
+    const L = sw.src && swLayer(project.frame, sw.src);
+    $('#swNote').textContent = !sw.src ? 'Select the fur layer (on its own layer, apart from the body) and press USE THIS LAYER.'
+      : !L ? 'This frame has no layer named "' + sw.src + '".'
+      : sw.root === 'body' && !sw.body ? 'Pick the BODY layer: the fur is rooted where it meets it.'
+      : sw.root === 'line' && sw.line.length < 2 ? 'Drag on the canvas along where the fur grows out of the body.'
+      : 'Play to watch it. SHOW FLEX: pink = how free each part is. Happy? APPLY ALL FRAMES.';
+  }
+  SW_SLIDERS.forEach(([id, k, label]) => {
+    $(id).addEventListener('input', e => swLive(() => { sw[k] = +e.target.value; }));
+    $(id).addEventListener('change', () => swSettle(label));
+  });
+  $('#swPick').addEventListener('click', () => {
+    const l = project.layer; if (!l) return;
+    swEdit('Sway layer', () => { sw.src = l.name.endsWith(' sway') ? l.name.slice(0, -5) : l.name; if (sw.body === sw.src) sw.body = ''; });
+    flash('Fur layer: "' + sw.src + '" (matched by name on every frame)');
+  });
+  $$('#swRoot button').forEach(b => b.addEventListener('click', () => swEdit('Sway roots', () => { sw.root = b.dataset.v; })));
+  $('#swBody').addEventListener('change', e => { swEdit('Sway body layer', () => { sw.body = e.target.value; }); e.target.blur(); });
+  $('#swClear').addEventListener('click', () => swEdit('Clear sway root line', () => { if (!sw.line.length) return false; sw.line = []; }));
+  $('#swSeed').addEventListener('click', () => swEdit('Sway: new random', () => { sw.seed = (sw.seed % 9999) + 1; }));
+  $('#swPreview').addEventListener('click', () => { sw.preview = !sw.preview; swRefresh(); });
+  $('#swFlex').addEventListener('click', () => { sw.flex = !sw.flex; swRefresh(); });
+  $('#swApply').addEventListener('click', swApplyAll);
+
+  /* saving / loading */
+  function swManifest() { const m = swSnap(); delete m.preview; delete m.flex; m.line = sw.line.map(q => [Math.round(q.x * 10) / 10, Math.round(q.y * 10) / 10]); return m; }
+  function loadSw(m) {
+    swdrag = null; swBefore = null; swCache.clear(); swFollow = null;
+    Object.assign(sw, { ...SW_DEF, line: [] });
+    if (m && typeof m === 'object') {
+      const num = (v, a, b, d) => isFinite(+v) ? Math.round(clamp(+v, a, b)) : d;
+      const lim = { reach: [20, 900], stiff: [30, 400], depth: [0, 200], amount: [0, 120], ripple: [40, 900], speed: [1, 4], stretch: [0, 100], loop: [0, 999], follow: [0, 100], bounce: [0, 100], seed: [1, 9999] };
+      for (const k in lim) sw[k] = num(m[k], lim[k][0], lim[k][1], SW_DEF[k]);
+      sw.src = typeof m.src === 'string' ? m.src.slice(0, 80) : ''; sw.body = typeof m.body === 'string' ? m.body.slice(0, 80) : '';
+      sw.root = m.root === 'line' ? 'line' : 'body'; sw.lineFrame = num(m.lineFrame, 0, 9999, 0);
+      if (Array.isArray(m.line)) sw.line = m.line.slice(0, 400).filter(q => Array.isArray(q) && isFinite(+q[0]) && isFinite(+q[1])).map(q => ({ x: +q[0], y: +q[1] }));
+    }
+    swRefresh();
+  }
+  swReady = true;
+  syncSwUI();
+  window.__sw = { state: sw, frame: i => swFrame(i), apply: () => swApplyAll(), load: m => loadSw(m), manifest: () => swManifest() };
+
   /* ---------- full-canvas modal: a floating neon panel that mirrors the whole canvas live (drag the title bar, resize from the corner) ---------- */
   const popEl = $('#popModal'), popCv = $('#popCanvas'), popCtx = popCv.getContext('2d'), popTitle = $('#popTitle');
   let popBg = '', popPix = '', popLbl = '', popPlaced = false;
@@ -5286,6 +5674,9 @@ const Pose = (() => {
     $('#jointSec').hidden = t !== 'joint';
     if (t !== 'joint') cancelJtDrag();
     if (jtReady) { syncJtUI(); requestJt(); }
+    $('#swaySec').hidden = t !== 'sway';
+    if (t !== 'sway') cancelSwDrag();
+    if (swReady) { swRefresh(); }
     if (t !== 'wave') cancelWaveDrag();
     if (t !== 'bend') cancelBendDrag();
     if (t === 'bend') syncBendUI();
@@ -5333,7 +5724,7 @@ const Pose = (() => {
     if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); }
     linePending = null; fillPending = null;
     if (drag) { drag.shift.cancel(); drag = null; requestRender(); }
-    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag();
+    cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag(); cancelSwDrag();
   }
 
   /* ---------- brightness (live preview, APPLY commits) ---------- */
@@ -5616,6 +6007,9 @@ const Pose = (() => {
     } else if (state.tool === 'joint') {
       if (chain) finishChain();
       jtDown(e, p);
+    } else if (state.tool === 'sway') {
+      if (chain) finishChain();
+      swDown(e, p);
     }
   });
 
@@ -5637,6 +6031,7 @@ const Pose = (() => {
     if (pdrag && pdrag.id === e.pointerId) { poseMove(p); return; }
     if (sqdrag && sqdrag.id === e.pointerId) { sqMove(p); return; }
     if (jtdrag && jtdrag.id === e.pointerId) { jtMove(p); return; }
+    if (swdrag && swdrag.id === e.pointerId) { swMove(p); return; }
     if (drag && drag.id === e.pointerId) {
       const dx = Math.round(p.x - drag.start.x), dy = Math.round(p.y - drag.start.y);
       if (drag.shift.set(dx, dy)) { flash('Move ' + drag.shift.dx + ', ' + drag.shift.dy); requestRender(); }
@@ -5661,6 +6056,7 @@ const Pose = (() => {
     if (sqdrag && sqdrag.id === e.pointerId) { sqUp(e.type === 'pointerup'); return; }
     if (jtdrag && jtdrag.id === e.pointerId) { jtUp(e.type === 'pointerup'); return; }
     if (jtTap && jtTap.id === e.pointerId) { jtTapUp(e, e.type === 'pointerup'); return; }
+    if (swdrag && swdrag.id === e.pointerId) { swUp(e.type === 'pointerup'); return; }
     if (stroke && stroke.id === e.pointerId) {
       if (touchAssist && stroke.touch && e.pointerType === 'touch') holdStroke(e); else endStroke();
       return;
@@ -5749,7 +6145,7 @@ const Pose = (() => {
   }
 
   function frameGuard() {
-    if (stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag) return false;
+    if (stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag || swdrag) return false;
     flushNudge();
     stopPlayback(); finishChain();
     return true;
@@ -5810,6 +6206,7 @@ const Pose = (() => {
   }
   function refreshLayers() {
     if (jtReady) { syncJtUI(); requestJt(); }   // the selected layer decides which joint link is active
+    if (swReady && swOn()) syncSwUI();
     const ls = project.frame.layers;
     layerList.innerHTML = '';
     for (let i = ls.length - 1; i >= 0; i--) {            // top of the stack first
@@ -6719,6 +7116,7 @@ const Pose = (() => {
                              and pose (pose guide: size, body, keys by frame index with hip x/y + bone angles)
                              and squash (squash & stretch settings + amount keys by frame index; pixels only change on APPLY)
                              and joints (JOINT tool links: frame index, layer indices in that frame, joint / end points, pinned end)
+                             and sway (SWAY tool: fur + body layer names, root line, settings; pixels only change on APPLY ALL FRAMES)
        frames/f001/l01.png   one full-size transparent PNG per layer (l01 = bottom layer)
      A layer that is fully transparent has "file": null and no PNG, which keeps files small.
      Rename it to .zip and you can open it with any archive tool.
@@ -6735,7 +7133,7 @@ const Pose = (() => {
   const unsaved = () => history.rev !== savedRev;
   const baseName = n => String(n || '').replace(/\.(dtproj|zip)$/i, '');
   const cleanName = n => String(n || '').trim().replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '_').slice(0, 60);
-  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag || chain || adjust || nudge);
+  const editingActive = () => !!(stroke || shape || drag || gdrag || bdrag || pdrag || sqdrag || jtdrag || swdrag || chain || adjust || nudge);
 
   function setBusy(on, msg) {
     busy = on; $('#busy').hidden = !on;
@@ -6794,6 +7192,7 @@ const Pose = (() => {
       pose: poseManifest(),
       squash: sqManifest(),
       joints: jtManifest(),
+      sway: swManifest(),
       tile: tileManifest(),
       export: { name: $('#exName').value, size: exSize(), mode: $('#exMode').value, layout: $('#exLayout').value, cols: +$('#exCols').value || 4, timingJson: exJson },
       frames: snap.map(s => ({
@@ -6894,6 +7293,7 @@ const Pose = (() => {
     loadPose(m.pose, frames);
     loadSq(m.squash, frames);
     loadJt(m.joints, frames);
+    loadSw(m.sway);
     loadTile(m.tile);
     savedRev = history.rev;
     rebuildStrip(); refreshLayers(); requestRender(); requestOnion(); updateStatus();
@@ -7183,7 +7583,7 @@ const Pose = (() => {
       case '-': case '_': zoomCenter(1 / 1.3); break;
       case '0': fit(); break;
       case 'enter': if (chain) { e.preventDefault(); finishChain(); } break;
-      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
+      case 'escape': cpClose(); closeMenus(); cancelChain(); cancelWaveDrag(); cancelBendDrag(); cancelPoseDrag(); cancelSqDrag(); cancelJtDrag(); cancelSwDrag(); if (drag) { drag.shift.cancel(); drag = null; requestRender(); } if (shape) { shape = null; octx.clearRect(0, 0, FRAME, FRAME); } break;
     }
   });
   window.addEventListener('keyup', e => {
