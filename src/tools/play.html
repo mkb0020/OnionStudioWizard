@@ -193,17 +193,39 @@ const COLUMN_FRAME = 50, COLUMN_TOP = 0, COLUMN_PLAIN = 1, COLUMN_RUNES = [2, 3,
 const COLUMN_SHAFT_INSET = 4, COLUMN_RUNE_CHANCE = 0.6, COLUMN_SEED = 4242;
 const WALL_W = COLUMN_FRAME - COLUMN_SHAFT_INSET * 2;
 const WALLS = [{ x: 4000, h: 400 }, { x: 12000 + 160, h: 440 }, { x: 12550, h: 400 }];
-/* PLATFORM ART (map/platforms.png, 400 x 200 ROUGH DRAFT, NOT TILEABLE YET): EACH TEST-LEVEL PLATFORM IS ONE WHOLE PIECE, DRAWN AT scale.
-   pieces = SOURCE RECTS IN THE PNG. cap = HEIGHT (SOURCE PX) OF THE TOP BRICK ROW YOU STAND ON = THE COLLISION STRIP. THE LAYERS + VINES BELOW IT ARE ART ONLY.
-   A PLATFORM'S WIDTH COMES FROM ITS PIECE (piece.w x scale). on: false = THE OLD 50 PX tiles.png PLATFORMS (USING THE OLD w) TO COMPARE. */
-const PLATFORM_ART = {
-  on: true, src: 'assets/images/map/platforms.png', scale: 1, cap: 24,
-  pieces: { long: { sx: 0, sy: 0, w: 400, h: 100 }, shortA: { sx: 0, sy: 100, w: 199, h: 89 }, shortB: { sx: 200, sy: 100, w: 200, h: 89 } },
+/* PLATFORMS: STONE SLABS HELD UP BY COLUMNS, BUILT FROM THE TILE LAB BRICK SHEET (map/tileTest.png, 8 x 8 CELLS, SHEET INDEX = row * 8 + col).
+   THE SLAB IS ONE ROW OF LIGHT BRICKS = THE ONE-WAY PLATFORM (LAND ON IT FROM ABOVE, JUMP UP THROUGH IT).
+   THE COLUMNS ARE ART ONLY (NO COLLISION): EACH ONE IS BUILT DOWN TO THE FIRST SURFACE UNDER IT (THE GROUND OR A LOWER SLAB) FROM
+   ITS CAPITAL (top), AS MANY STACKED MIDDLES AS IT NEEDS (mid, LAID FROM THE BOTTOM UP) AND ITS BASE (bot). A COLUMN UNDER 3 CELLS
+   DROPS ITS MIDDLES (2 = CAPITAL + BASE, 1 = BASE ONLY).
+   cell   = WORLD PX PER TILE (64 = THE SAME SIZE AS TILE LAB MAPS). A SINGLE JUMP PEAKS ~268 px, SO h: 4 (256 px) IS THE TALLEST
+            SLAB YOU CAN REACH FROM THE GROUND WITHOUT THE DOUBLE JUMP.
+   slab   = SHEET TILES: left / right ENDS, mid = PICKED AT RANDOM (SEEDED, SO THE LEVEL LOOKS THE SAME EVERY TIME), single = A 1-WIDE SLAB.
+   columns = STYLES (c = SHEET COLUMN, top / mid / bot = SHEET ROWS). style = THE DEFAULT. */
+const PLATFORM = {
+  src: 'assets/images/map/tileTest.png', sheetCols: 8, cell: 64,
+  slab: { left: 0, mid: [1, 2], right: 3, single: 1 },
+  columns: {
+    fluted: { c: 6, top: [4], mid: [5, 6], bot: [7] },   // FAN CAPITAL + FLUTED SHAFT (THE ONE IN THE MOCKUP)
+    ringed: { c: 5, top: [4], mid: [5, 6], bot: [7] },   // STEPPED CAPITAL + RING GLYPHS
+    slim:   { c: 7, top: [4], mid: [5, 6], bot: [7] },   // THIN SHAFT WITH THE CYAN DIAMONDS
+    broken: { c: 4, top: [4], mid: [5, 6], bot: [7] },   // CRUMBLED TOP
+  },
+  style: 'fluted',
 };
-const PLATS = [   // art = WHICH PIECE (long / shortA / shortB). w = OLD TILE WIDTH, ONLY USED WHEN PLATFORM_ART.on IS false
-  { x: 700, y: 300, w: 200, art: 'shortA' }, { x: 500, y: 110, w: 160, art: 'shortB' }, { x: 550, y: 0, w: 200, art: 'shortA' }, { x: 3000, y: 300, w: 160, art: 'shortB' },
-  { x: 4000, y: 330, w: 240, art: 'long' }, { x: 5000, y: 260, w: 160, art: 'shortA' }, { x: 6000, y: 300, w: 240, art: 'long' }, { x: 7000, y: 380, w: 160, art: 'shortB' },
-  { x: 8000, y: 240, w: 200, art: 'shortA' }, { x: 9000, y: 300, w: 240, art: 'long' }, { x: 11000, y: 300, w: 280, art: 'long' },
+/* THE TEST LEVEL'S PLATFORMS. x = LEFT EDGE (WORLD PX), w = WIDTH IN CELLS, h = HEIGHT IN CELLS (SLAB TOP ABOVE THE GROUND).
+   OPTIONAL: style = A COLUMN STYLE ABOVE; cols = WHICH CELLS GET A COLUMN (0 = LEFT CELL, 0.5 = BETWEEN CELLS 0 AND 1...).
+   NO cols = AUTOMATIC: 1 COLUMN UNDER THE MIDDLE (w 1-3), 2 IN FROM THE ENDS (w 4-6), 3 (w 7+). */
+const PLATS = [
+  { x: 420, w: 3, h: 4 }, { x: 660, w: 5, h: 6 }, { x: 1040, w: 2, h: 8, style: 'slim' },
+  { x: 3000, w: 3, h: 4, style: 'ringed' },
+  { x: 3720, w: 3, h: 4 },
+  { x: 5000, w: 4, h: 5, style: 'broken' },
+  { x: 6000, w: 6, h: 4 },
+  { x: 7000, w: 2, h: 4, style: 'slim' },
+  { x: 8000, w: 3, h: 5 }, { x: 8250, w: 4, h: 7, style: 'ringed' },
+  { x: 9000, w: 5, h: 4 },
+  { x: 10700, w: 2, h: 4 }, { x: 11000, w: 7, h: 6 },
 ];
 const BG = '#030013';
 
@@ -242,16 +264,31 @@ function floorBelow(x, y) { let f = Infinity; for (const s of solids) if (x >= s
 const solids = [];    // { x, y, w, h }  BLOCK FROM EVERY SIDE (GROUND + WALLS)
 const walls = [];     // SUBSET OF solids YOU CAN CLING TO, WITH ITS ART PIECES
 const oneWays = [];   // { x, y, w, h, tiles[] }  SOLID ONLY WHEN LANDING FROM ABOVE
+function buildPlatforms() {   // SLABS (ONE-WAY) + THEIR COLUMNS (ART). LOWEST FIRST, SO A HIGHER SLAB'S COLUMNS CAN STAND ON A LOWER ONE
+  const C = PLATFORM.cell, S = PLATFORM.slab, rand = makeRng(TILE_SEED);
+  const surfaceBelow = (x, top) => { let f = Infinity; for (const o of [...solids, ...oneWays]) if (x >= o.x && x <= o.x + o.w && o.y >= top && o.y < f) f = o.y; return f; };
+  const list = PLATS.map(pd => ({ pd, y: GROUND_Y - Math.max(1, pd.h | 0) * C })).sort((a, b) => b.y - a.y);
+  for (const { pd, y } of list) {
+    const w = Math.max(1, pd.w | 0), slab = [];
+    for (let i = 0; i < w; i++) slab.push(w === 1 ? S.single : i === 0 ? S.left : i === w - 1 ? S.right : S.mid[Math.floor(rand() * S.mid.length)]);
+    const o = { x: pd.x, y, w: w * C, h: C, tiles: [], slab, cols: [] };
+    const at = Array.isArray(pd.cols) ? pd.cols : w <= 3 ? [(w - 1) / 2] : w <= 6 ? [1, w - 2] : [1, (w - 1) / 2, w - 2];
+    for (const ci of at) {
+      const cx = pd.x + ci * C, top = y + C, floor = surfaceBelow(cx + C / 2, top);
+      if (!isFinite(floor)) continue;
+      const hc = Math.round((floor - top) / C); if (hc < 1) continue;
+      o.cols.push({ x: cx, y: floor - hc * C, hc, style: PLATFORM.columns[pd.style] ? pd.style : PLATFORM.style });
+    }
+    oneWays.push(o);
+  }
+}
+function columnRows(st, hc) {   // SHEET ROWS, TOP TO BOTTOM, FOR A COLUMN hc CELLS TALL
+  if (hc >= st.top.length + st.bot.length + 1) return OSWTiles.propRows(st, hc);
+  return hc >= 2 ? [st.top[0], st.bot[st.bot.length - 1]] : [st.bot[st.bot.length - 1]];
+}
 function buildLevel() {
   solids.push({ x: 0, y: GROUND_Y, w: GROUND_W, h: GROUND_H });
-  const rand = makeRng(TILE_SEED); let prev = -1;
-  const pickMid = () => { let f; do { f = Math.floor(rand() * TILE_FRAME_COUNT); } while (f === prev && TILE_FRAME_COUNT > 1); prev = f; return f; };
-  const A = PLATFORM_ART;
-  PLATS.forEach(pd => {
-    const pc = A.on && A.pieces[pd.art];
-    if (pc) { oneWays.push({ x: pd.x, y: pd.y, w: pc.w * A.scale, h: A.cap * A.scale, tiles: [], art: pc }); return; }   // ONE WHOLE PIECE OF platforms.png
-    const cols = Math.ceil(pd.w / TILE_SIZE), tiles = []; for (let i = 0; i < cols; i++) tiles.push(pickMid()); oneWays.push({ x: pd.x, y: pd.y, w: pd.w, h: PLATFORM_H, tiles });
-  });
+  buildPlatforms();
   const r2 = makeRng(COLUMN_SEED);
   WALLS.forEach(w => {
     const wall = { x: w.x, y: GROUND_Y - w.h, w: WALL_W, h: w.h, pieces: [] };
@@ -356,7 +393,7 @@ async function loadAssets() {
   }
   IMG.spell = await loadImg(SPELL.src); try { IMG.catSpell = await loadImg(CAT_SPELL.src); } catch (e) { console.warn('[play] no cat spell sheet (' + e.message + ')'); } IMG.swoosh = await loadImg(SWOOSH.src); IMG.puff = await loadImg(PUFF.src); IMG.spawn = await loadImg(SPAWN_FX.src); IMG.torch = await loadImg(TORCH.src); IMG.flame = await loadImg(TORCH.flameSrc); IMG.cloakBack = await loadImg(CLOAK.backSrc); IMG.cloakFront = await loadImg(CLOAK.frontSrc);
   IMG.ground = await loadImg('assets/images/map/ground.png'); IMG.tiles = await loadImg('assets/images/map/tiles.png');
-  try { IMG.platforms = await loadImg(PLATFORM_ART.src); } catch (e) { console.warn('[play] no platform art, using tiles (' + e.message + ')'); } IMG.column = await loadImg('assets/images/map/column.png');
+  IMG.bricks = await loadImg(PLATFORM.src);   // SLABS + COLUMNS (SAME SHEET AS TILE LAB) IMG.column = await loadImg('assets/images/map/column.png');
   IMG.backdrop = await loadImg(BACKDROP.bgSrc); IMG.parallaxCol = await loadImg(BACKDROP.colSrc);
   try { IMG.swordSpin = await loadImg(DOUBLE_SLASH.spinSrc); } catch (e) { console.warn('[play] no sword spin (' + e.message + ')'); }   // OPTIONAL: THE COMBO PLAYS WITHOUT THE SAW BLADE
   try { IMG.arcade = await loadImg(ARCADE.src); buildArcade(); } catch (e) { console.warn('[play] no arcade backdrop (' + e.message + ')'); }      // OPTIONAL: PLAY RUNS WITHOUT THEM
@@ -2116,8 +2153,17 @@ function drawLevel(vl, vr) {
   if (MAP.on) { drawMapLevel(vl, vr); return; }
   const g = IMG.ground;
   for (let i = Math.max(0, Math.floor(vl / GROUND_TILE_W)); i * GROUND_TILE_W < Math.min(vr, GROUND_W); i++) ctx.drawImage(g, i * GROUND_TILE_W, GROUND_Y, GROUND_TILE_W, GROUND_H);
-  for (const o of oneWays) { if (o.x > vr || o.x + o.w + TILE_SIZE < vl) continue; if (o.art) { if (!IMG.platforms) continue; const p = o.art, k = PLATFORM_ART.scale; ctx.drawImage(IMG.platforms, p.sx, p.sy, p.w, p.h, o.x, o.y, p.w * k, p.h * k); continue; } o.tiles.forEach((f, i) => ctx.drawImage(IMG.tiles, f * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE, o.x + i * TILE_SIZE, o.y, TILE_SIZE, TILE_SIZE)); }
+  drawPlatforms(vl, vr);
   for (const w of walls) { if (w.x > vr || w.x + w.w + COLUMN_FRAME < vl) continue; for (const p of w.pieces) ctx.drawImage(IMG.column, p.frame * COLUMN_FRAME, 0, COLUMN_FRAME, COLUMN_FRAME, w.x - COLUMN_SHAFT_INSET, w.y + p.y, COLUMN_FRAME, p.h); }
+}
+function drawPlatforms(vl, vr) {   // EVERY COLUMN FIRST, THEN THE SLABS, SO A SLAB ALWAYS SITS IN FRONT OF THE CAPITALS UNDER IT
+  const im = IMG.bricks; if (!im) return;
+  const SC = PLATFORM.sheetCols, T = im.naturalWidth / SC, C = PLATFORM.cell, vis = o => o.slab && o.x <= vr && o.x + o.w >= vl;
+  for (const o of oneWays) if (vis(o)) for (const c of o.cols) {
+    const st = PLATFORM.columns[c.style];
+    columnRows(st, c.hc).forEach((r, k) => ctx.drawImage(im, st.c * T, r * T, T, T, c.x, c.y + k * C, C, C));
+  }
+  for (const o of oneWays) if (vis(o)) o.slab.forEach((t, i) => ctx.drawImage(im, (t % SC) * T, Math.floor(t / SC) * T, T, T, o.x + i * C, o.y, C, C));
 }
 function drawPlayer(x, y) {
   const pl = sheetPlace(P.sheet, P.frame, P.flip), im = IMG[P.sheet]; if (!im) return;
@@ -2324,7 +2370,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { PLATFORM_ART, PLATS, DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { PLATFORM, PLATS, DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
