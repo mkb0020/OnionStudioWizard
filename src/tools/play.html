@@ -82,7 +82,8 @@ const SHEET_DIR = 'assets/images/nova/sprites/';
 const PLAYER_SHEETS = {
   run:        { src: 'run.png',        frames: 8 },
   idle:       { src: 'idle.png',       frames: 6 },
-  jump:       { src: 'jump.png',       frames: 7 },   // 0 START, 1 RISE, 2 FLIP IN (TUCK), 3 FLIP (DOUBLE JUMP BALL), 4 FLIP OUT (UNTUCK), 5 FALL, 6 LAND
+  summon:     { src: 'summon.png',     frames: 5 },   // CAT SPELL CAST (E): 0 SMEAR, 1-2 ARMS UP (CAT APPEARS OVER HER HEAD), 3 ARMS COMING DOWN, 4 HELD. NO CAPE IN THE ART (VERLET CAPE)
+  jump:      { src: 'jump.png',       frames: 7 },   // 0 START, 1 RISE, 2 FLIP IN (TUCK), 3 FLIP (DOUBLE JUMP BALL), 4 FLIP OUT (UNTUCK), 5 FALL, 6 LAND
   wall_slide: { src: 'wall_slide.png', frames: 1 },
   attack:     { src: 'attack.png',     frames: 1 },
   kick:       { src: 'kick.png',       frames: 6 },
@@ -94,6 +95,7 @@ const JUMP_FRAME = { start: 0, rise: 1, flipIn: 2, flip: 3, flipOut: 4, fall: 5,
 const JUMP_START_TIME = 0.05, JUMP_LAND_TIME = 0.07, JUMP_LAND_TIME_MOVING = 0.05, JUMP_LAND_MIN_IMPACT = 250;
 const PLAYER_SHEET_TWEAKS = {   // VISUAL ONLY. snapFeet DROPS EACH FRAME BY ITS FOOT GAP; snapFrames DOES IT FOR THE LISTED FRAMES ONLY
   idle: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: true },
+  summon: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: true },
   jump: { scale: 1, offsetX: 0, offsetY: 0, snapFeet: false, snapFrames: [JUMP_FRAME.land] },
 };
 const FOOT_ALPHA_MIN = 24;
@@ -181,6 +183,7 @@ const PLAYER_ANIMS = {
   land:       { sheet: 'jump',       from: JUMP_FRAME.land,  to: JUMP_FRAME.land },
   wallSlide:  { sheet: 'wall_slide', from: 0, to: 0 },
   attack:     { sheet: 'attack',     from: 0, to: 0, duration: ATTACK_HOLD_TIME },
+  summon:     { sheet: 'summon',     from: 0, to: PLAYER_SHEETS.summon.frames - 1, times: null },   // times = SECONDS PER FRAME, FILLED FROM CAT_SPELL.pose.times; THE LAST FRAME HOLDS UNTIL THE CAST ENDS
   attackKick: { sheet: 'kick',       from: 0, to: PLAYER_SHEETS.kick.frames - 1, duration: ATTACK_KICK_HOLD_TIME, holds: KICK_FRAME_HOLDS },
   airKick:    { sheet: 'airKick',    from: 0, to: PLAYER_SHEETS.airKick.frames - 1, duration: AIR_KICK.holdTime, holds: AIR_KICK.holds },
   doubleSlash:{ sheet: 'doubleSlash', from: 0, to: PLAYER_SHEETS.doubleSlash.frames - 1, manual: true },   // FRAMES ARE STEPPED BY updateDoubleSlash (PER-FRAME fps IN DOUBLE_SLASH.frames)
@@ -459,7 +462,7 @@ function spawnPlayer(x = SPAWN.x, y = SPAWN.y) {
   Object.assign(P, { x, y, px: x, py: y, vx: 0, vy: 0, gs: 1, mx: 0, grounded: false, spin: 0 }); cancelPet();
   currentAnim = ''; isAttacking = false; attackT = 0; visualLift = 0; touching = null; wallJumpLock = 0; wallSlideHOffset = 0;
   dashTimer = 0; dashCooldown = 0; airDashReady = airJumpReady = airKickReady = true; jumpStartTimer = landTimer = 0; wasAirborne = false; airPeakFall = 0; coyoteT = 0; jumpBufT = 0; jumpCutReady = false; P.vx = 0;
-  airKick.t = 0; resetSlash(); doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; catSpells.length = 0; catFx.length = 0; catCool = 0; resetFx(); resetCape(); doubleJump.angVel = 0;
+  airKick.t = 0; resetSlash(); doubleJump.t = doubleJump.pre = doubleJump.post = 0; spells.length = 0; swooshes.length = 0; catSpells.length = 0; catFx.length = 0; catCool = 0; catPending = -1; resetFx(); resetCape(); doubleJump.angVel = 0;
   playAnim('idle');
   wasWallSliding = false; sfx('respawn');
   startSpawnDissolve(); if (FX.on) puffs.push({ img: 'spawn', frames: SPAWN_FX.frames, fps: SPAWN_FX.fps, front: true, x, y, t: 0, s: SPAWN_FX.scale });
@@ -482,6 +485,7 @@ function playAnim(name) {
 function stepAnim(dt) {   // KAPLAY'S sprite update(): EITHER A FPS LOOP, OR A DURATION SPLIT BY holds WEIGHTS
   const a = P.anim; if (!a || a.manual || a.to === a.from) return;
   const n = a.to - a.from + 1; P.animT += dt;
+  if (a.times) { let w = P.animT, i = 0; while (i < n - 1 && i < a.times.length && w >= a.times[i]) { w -= a.times[i]; i++; } P.frame = a.from + i; return; }   // FIXED SECONDS PER FRAME, THEN HOLD THE LAST ONE
   if (a.holds) { let w = (P.animT / a.duration) * a.holds.reduce((s, h) => s + h, 0), i = 0; while (i < n - 1 && w >= a.holds[i]) { w -= a.holds[i]; i++; } P.frame = a.from + i; return; }
   const fps = a.fps != null ? a.fps : n / a.duration; let i = Math.floor(P.animT * fps); i = a.loop ? i % n : Math.min(i, n - 1); P.frame = a.from + i;
 }
@@ -1298,7 +1302,9 @@ function sfx(name, opts) { if (audioOk()) OSWAudio.sfx.play(name, opts); }
 /* ---------- CAT SPELL (E): SPECTRAL CAT HEAD + VECTOR TRAIL ----------
    SHEET: vfx/cat_spell.png, 10 FRAMES OF 300 x 300 (0-2 SPIRAL IN SMALL, 3-4 FULL SIZE, 5-8 CHOMP, 9 FADE). THE HEAD FACES RIGHT.
    THE HEAD MOVES ACROSS ITS OWN CELL FROM FRAME TO FRAME, SO headX / headY (MEASURED CENTRE OF THE INK, CELL PX) TELL THE TRAIL WHERE IT REALLY IS.
-   NOVA HAS NO CAST SHEET FOR THIS YET: ON THE GROUND SHE HOLDS STILL IN IDLE FOR castHold; IN THE AIR SHE JUST FIRES IT.
+   CAST POSE: ON THE GROUND SHE PLAYS nova/sprites/summon.png (CAT_SPELL.pose) AND STANDS STILL FOR castHold SECONDS; IN THE AIR SHE JUST FIRES IT.
+     pose.times = SECONDS EACH OF THE FIRST 4 FRAMES SHOWS (0 SMEAR = A BLINK, 1-2 ARMS UP, 3 ARMS DOWN); FRAME 5 HOLDS FOR THE REST OF castHold.
+     pose.spawnFrame = THE SUMMON FRAME (0-4) WHERE THE CAT APPEARS ABOVE HER HEAD (IN THE AIR IT APPEARS STRAIGHT AWAY).
    THE TRAIL IS ALL VECTORS, IN WORLD SPACE (IT STAYS WHERE IT WAS LAID AND THE HEAD PULLS AWAY FROM IT):
      RIBBON = THE HEAD'S PATH AS A TAPERED SHAPE: A JAGGED DARK INK LAYER, THEN 3 GLOW LAYERS ADDED ON TOP ('lighter'), WIDE + DIM TO THIN + WHITE-HOT.
      SHARDS = LOOSE NEEDLES SHED BEHIND THE HEAD (DARK INK, BLUE-VIOLET GLOW, A FEW WHITE 'SLASH' BEAMS), PLUS SPARKS. ALL FADE ON THEIR OWN.
@@ -1308,7 +1314,8 @@ const CAT_SPELL = {
   src: 'assets/images/vfx/cat_spell.png', frames: 10, scale: 1.0, frameTime: 1 / 16,
   holds: [1, 1, 1.1, 1.1, 1, 1, 1.4, 1.1, 1, 1.4],          // RELATIVE LENGTH OF EACH FRAME (x frameTime)
   speed: 760, rampTime: 0.12, chompFrom: 5, chompSlow: 0.3, chompFrame: 6, emitUntil: 8,
-  forward: 70, castHold: 0.3, cooldown: 0.35,
+  forward: 70, castHold: 0.6, cooldown: 0.35,
+  pose: { times: [0.025, 0.07, 0.09, 0.06], spawnFrame: 1 },
   arc: { startHeight: 1.05, endHeight: 0.7, dist: 290, rise: 12, tilt: 0.5 },   // HEIGHTS x NOVA'S FULL HEIGHT ABOVE HER FEET. IT SPAWNS ABOVE HER HEAD AND CURVES DOWN OVER dist PX OF TRAVEL (rise = SMALL LIFT AT THE START, tilt = HOW MUCH THE HEAD NOSES DOWN ALONG THE CURVE)
   headX: [66, 74, 70, 187, 200, 220, 224, 231, 240, 261], headY: [159, 149, 144, 131, 131, 132, 133, 132, 134, 143],
   headSize: [0.3, 0.45, 0.65, 1, 1, 1, 0.95, 0.9, 0.85, 0.6], backOff: 45,
@@ -1341,14 +1348,24 @@ function catArcY(c, s) {   // HEIGHT ALONG THE ARC BY DISTANCE TRAVELLED: DROP *
   if (s <= D) return c.y0 + f(s / D);
   return c.y0 + f(1) + (2 * c.drop + 4 * A.rise) / D * (s - D);
 }
+PLAYER_ANIMS.summon.times = CAT_SPELL.pose.times;
+let catPending = -1;   // SECONDS UNTIL A CAST WAITING ON THE SUMMON POSE RELEASES ITS CAT (-1 = NONE)
 function castCat() {
-  if (catCool > 0 || (isAttacking && currentAnim !== 'idle')) return;
-  const C = CAT_SPELL, dir = P.flip ? -1 : 1, fullH = PLAYER_FRAME * SCALE;
-  if (P.grounded && !isAttacking) {   // NO CAST POSE YET: STAND STILL IN IDLE WHILE IT LEAVES THE HAND
+  if (catCool > 0 || catPending >= 0 || (isAttacking && currentAnim !== 'idle' && currentAnim !== 'summon')) return;
+  const C = CAT_SPELL;
+  catCool = C.cooldown;
+  if (P.grounded && (!isAttacking || currentAnim === 'summon')) {   // CAST POSE: summon.png, STANDING STILL; THE CAT COMES OUT ON pose.spawnFrame
     isAttacking = true; attackT = C.castHold; dashTimer = 0; visualLift = 0;
-    if (currentAnim !== 'idle') { currentAnim = 'idle'; playSheetAnim('idle'); }
+    currentAnim = 'summon'; playSheetAnim('summon');
+    catPending = C.pose.times.slice(0, C.pose.spawnFrame).reduce((s, t) => s + t, 0);
+    if (catPending <= 0) { catPending = -1; releaseCat(); }
+    return;
   }
-  catCool = C.cooldown; shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape(); sfx('catSpell');
+  releaseCat();
+}
+function releaseCat() {
+  const C = CAT_SPELL, dir = P.flip ? -1 : 1, fullH = PLAYER_FRAME * SCALE;
+  shakeCamera(SPELL_SHAKE.t, SPELL_SHAKE.s); gustCape(); sfx('catSpell');
   const x = P.x + dir * C.forward, y = P.y - fullH * C.arc.startHeight, drop = fullH * (C.arc.startHeight - C.arc.endHeight);
   catSpells.push({ x, y, y0: y, drop, dist: 0, slope: 0, dir, t: 0, f: 0, ox: 0, oy: 0, rot: 0, hx: null, hy: 0, pts: [], n: 0, chomped: false, done: false, spd: 0 });
   catFx.push({ k: 'ring', x: x - dir * 60 * C.scale, y, t: 0, life: 0.18, r0: 4, r1: 34, color: '#8fa0ff', w: 3 });
@@ -1374,6 +1391,7 @@ function catChomp(c) {
 function stepCatSpells(dt) {
   const C = CAT_SPELL, R = C.ribbon, sp = C.spiral;
   if (catCool > 0) catCool -= dt;
+  if (catPending >= 0) { catPending -= dt; if (catPending < 0) { catPending = -1; if (currentAnim === 'summon') releaseCat(); } }   // POSE INTERRUPTED (RESPAWN ETC.) = NO CAT
   for (let i = catSpells.length - 1; i >= 0; i--) {
     const c = catSpells[i];
     for (const p of c.pts) p.a += dt;
@@ -1666,11 +1684,11 @@ function stepDissolve(dt) {
    0 sprites  - THE HAND-DRAWN 4-FRAME CLOAK (cloakBottom BEHIND THE BODY, cloakTop IN FRONT), RUN ONLY
    1 spring   - SAME ART: A DAMPED SPRING SWINGS IT, STRIPS RIPPLE WITH A TRAVELLING WAVE
    2 verlet   - NO ART: THE SHARED CLOTH SIM (js/capeSim.js, THE SAME CODE CAPE LAB RUNS) DRAWN AS A NEON STRIP BETWEEN ITS TWO EDGE CHAINS, BEHIND THE BODY (DEFAULT)
-   IDLE, THE SPELL CAST AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
+   IDLE, THE SPELL CAST, THE CAT CAST (summon) AND THE JUMP SHEET'S POSES ALWAYS GET THE VERLET CAPE (THEIR ART HAS NO CAPE). THE KICKS, WALL SLIDE AND THE FLIP HAVE IT DRAWN IN.
    EVERYTHING IS VISUAL: THE CHAIN IS STEPPED INSIDE tick() (SO HIT-STOP FREEZES IT) BUT NEVER FEEDS BACK INTO THE PLAYER. */
 const CLOAK = { backSrc: 'assets/images/nova/sprites/cloakBottom.png', frontSrc: 'assets/images/nova/sprites/cloakTop.png', frames: 4, fps: 5, anchor: { x: 0.6, y: 0.7 }, scale: 0.95 };
 const CLOAK_POSE = { run: { x: 135, y: 20, rot: 0 } };
-const CAPE_BAKED_ANIMS = new Set(['idle', 'attack', 'attackKick', 'airKick', 'doubleSlash', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
+const CAPE_BAKED_ANIMS = new Set(['idle', 'summon', 'attack', 'attackKick', 'airKick', 'doubleSlash', 'wallSlide', 'jumpStart', 'jump', 'doubleJump', 'fall', 'land']);
 const CAPE_VERLET_SKIP_ANIMS = new Set(['attackKick', 'airKick', 'doubleSlash', 'wallSlide', 'doubleJump']);
 const CAPE_MODES = ['sprites (original)', 'spring + warp', 'verlet cloth'];
 const CAPE_SPRING = { stiffness: 150, damping: 80, runAngle: 0, fallAngle: 12, kick: 260, strips: 50, ampMin: 6, ampMax: 24, freqMin: 1, freqMax: 3, phase: 5.0 };
@@ -1693,6 +1711,7 @@ const capePinCache = {};   // poseName -> { span, ang } WITH EVERY MISSING KEY F
 const pinNow = { span: 32, ang: 0 };   // SCRATCH FOR THE BLEND IN capePins (NO PER-FRAME ALLOCATION)
 const CAPE_DISSOLVE = { enabled: true, start: 0.6, amount: 0.3, cell: 15, edge: 0, flow: 5, speed: 0.1, fade: 0.9, glow: 0.2, edgeFade: 0.9 };
 const IDLE_CAPE = { enabled: true, root: { x: 20, y: -185 }, rootBob: [0, -2, -3, -4, -3, -2], blendRate: 5, backBias: 550, gust: 1050, gustHz: 0.35, flutter: 150, layered: false, topWidth: 0, liningShift: 0.12, liningColors: ['#0000FF', '#0000FF', '#0000FF'], liningEdge: '#1061C6', liningGlow: '#0A0568' };
+const SUMMON_CAPE = { root: { x: 22, y: -185 }, rootBob: [0, 0, 0, 0, 0] };   // CAT CAST (summon.png): USES THE IDLE CAPE (SAME BLEND / FLUTTER / GUSTS / PIN POSE), BUT ITS COLLAR SITS HERE (SPRITE ART PX, LIKE IDLE_CAPE.root). rootBob = ART PX DOWN PER SUMMON FRAME
 const ATTACK_CAPE = { enabled: true, root: { x: 0, y: -185 }, blendRate: 20, backBias: 600, flutter: 250, gust: 7000, gustLift: 0.7, gustTime: 0.6 };
 const JUMP_CAPE = { roots: { jumpStart: { x: 14, y: -205 }, jump: { x: 8, y: -215 }, fall: { x: 20, y: -244 }, land: { x: 26, y: -238 } }, blendRate: 16, rootEase: 30 };
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -1888,7 +1907,7 @@ function updateCape(dt) {
   const dx = C.prevX === null ? 0 : P.x - C.prevX; C.prevX = P.x;   // SIDEWAYS SPEED FROM DISTANCE TRAVELLED (P.mx IS ZERO IN THE AIR AFTER A WALL KICK ETC.)
   const hv = Math.max(-3000, Math.min(3000, dx / dt));
   C.hVel += (hv - C.hVel) * Math.min(1, dt * 14); C.speed = Math.abs(C.hVel) / PHYS.move; C.dirSmooth += (dir - C.dirSmooth) * Math.min(1, dt * 18);
-  C.idleBlend += ((IDLE_CAPE.enabled && currentAnim === 'idle' ? 1 : 0) - C.idleBlend) * Math.min(1, dt * IDLE_CAPE.blendRate);
+  C.idleBlend += ((IDLE_CAPE.enabled && (currentAnim === 'idle' || currentAnim === 'summon') ? 1 : 0) - C.idleBlend) * Math.min(1, dt * IDLE_CAPE.blendRate);
   C.attackBlend += ((ATTACK_CAPE.enabled && currentAnim === 'attack' ? 1 : 0) - C.attackBlend) * Math.min(1, dt * ATTACK_CAPE.blendRate);
   const jr = JUMP_CAPE.roots[currentAnim]; C.jumpBlend += ((jr ? 1 : 0) - C.jumpBlend) * Math.min(1, dt * JUMP_CAPE.blendRate);
   if (jr) {
@@ -1903,11 +1922,14 @@ function updateCape(dt) {
   C.wave += dt * (CAPE_SPRING.freqMin + (CAPE_SPRING.freqMax - CAPE_SPRING.freqMin) * Math.min(1, C.speed)) * Math.PI * 2;
   C.cloakT += dt; while (C.cloakT >= 1 / CLOAK.fps) { C.cloakT -= 1 / CLOAK.fps; C.cloakFrame = (C.cloakFrame + 1) % CLOAK.frames; }
 }
-function clothActive() { return cape.mode === 2 || (IDLE_CAPE.enabled && currentAnim === 'idle') || (ATTACK_CAPE.enabled && currentAnim === 'attack') || !!JUMP_CAPE.roots[currentAnim]; }
+function clothActive() { return cape.mode === 2 || (IDLE_CAPE.enabled && (currentAnim === 'idle' || currentAnim === 'summon')) || (ATTACK_CAPE.enabled && currentAnim === 'attack') || !!JUMP_CAPE.roots[currentAnim]; }
 function clothRoot(px, py) {   // WORLD POSITION OF THE COLLAR PIN (px, py = WHERE TO MEASURE FROM: THE SIM POSITION OR THE INTERPOLATED ONE)
   const pose = CLOAK_POSE[currentAnim] || CLOAK_POSE.run, sx = SCALE * squash.x, sy = SCALE * squash.y, C = cape;
   let lx = pose.x + CAPE_ROOT_OFFSET.x, ly = pose.y + CAPE_ROOT_OFFSET.y - visualLift;
-  if (C.idleBlend > 0.001) { const fr = currentAnim === 'idle' ? P.frame : 0, pl = sheetPlace('idle', fr, false), bob = IDLE_CAPE.rootBob[fr] || 0; lx += (IDLE_CAPE.root.x * pl.s + sheetTweak('idle').offsetX - lx) * C.idleBlend; ly += ((IDLE_CAPE.root.y + bob) * pl.s + pl.oy - ly) * C.idleBlend; }
+  if (C.idleBlend > 0.001) {   // IDLE AND THE SUMMON CAST SHARE THIS BLEND; EACH READS ITS OWN SHEET'S PLACEMENT AND ROOT
+    const sum = currentAnim === 'summon', key = sum ? 'summon' : 'idle', R = sum ? SUMMON_CAPE : IDLE_CAPE, fr = (sum || currentAnim === 'idle') ? P.frame : 0, pl = sheetPlace(key, fr, false), bob = R.rootBob[fr] || 0;
+    lx += (R.root.x * pl.s + sheetTweak(key).offsetX - lx) * C.idleBlend; ly += ((R.root.y + bob) * pl.s + pl.oy - ly) * C.idleBlend;
+  }
   if (C.attackBlend > 0.001) { const pl = sheetPlace('attack', 0, false); lx += (ATTACK_CAPE.root.x * pl.s + sheetTweak('attack').offsetX - lx) * C.attackBlend; ly += (ATTACK_CAPE.root.y * pl.s + pl.oy - ly) * C.attackBlend; }
   if (C.jumpBlend > 0.001) { lx += (C.jumpRoot.x - lx) * C.jumpBlend; ly += (C.jumpRoot.y - ly) * C.jumpBlend; }
   if (capeProf.on && capeProf.data) { lx += capeProf.data.shift.x; ly += capeProf.data.shift.y; }   // THE SHEET'S PINS MOVE EVERY POSE'S ROOT TOGETHER
@@ -2391,7 +2413,7 @@ function showError(e) { const d = document.createElement('div'); d.id = 'err'; d
   spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET;
   initCharacters(); initMaps(); initAudio();
   cv.focus(); addEventListener('pointerdown', () => cv.focus());
-  window.__play = { PLATFORM, PLATS, DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
+  window.__play = { PLATFORM, PLATS, DOUBLE_SLASH, slash, slashSparks, pressSlash, CAT_SPELL, catSpells, catFx, castCat, audio: () => window.OSWAudio, SFX, MUSIC, sfx, toggleMusic, toggleBlips, worm, WORM, WORM_FX, wormParts, wormGo, resetWorm, ARCADE, BG_BOTTOM, BACKDROP, buildArcade, cam, PET, PET_ARM, petArm, pressPet, cancelPet, solveArm, critters, CRITTER_KINDS, spawnCritters, capeProf, loadCapeProfile, CAPE_CLOTH, capePins, capePinCache, CAPE_PIN_POSES, capeCfgApply, capeCfgBuild, CAPE_CFG_BUILTIN, CAPE_SIM_DEFAULT, IDLE_CAPE, ATTACK_CAPE, JUMP_CAPE, CAPE_SPRING, capeCfgSrc: () => capeCfgSrc, SUMMON_CAPE, releaseCat, capeLook: () => CAPE_LOOK, liningRgb: () => LINING_RGB, useCharacter, MAP, loadMap: async (m, n) => { await loadMapLevel(m, n); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, loadDefault: () => { loadDefaultLevel(); spawnPlayer(); cam.x = P.x; cam.y = cam.fy = P.y - CAM_Y_OFFSET; }, get SPAWN() { return SPAWN; }, lighting, lamps, render: () => render(0.5), collectLights, dissolve: () => ({ amount: dissolveAmount, out: dissolvingOut }), doubleJump, cape, cloth, CAPE_DISSOLVE, FX, squash, particles, ghosts, puffs, shake, hitStop: () => hitStopT, P, PHYS, keys, tick, solids, walls, oneWays, spawnPlayer, applyPhysics, state: () => ({ currentAnim, isAttacking, touching, dashTimer, airJumpReady, airKickReady, wallSlideHOffset, landTimer, physSource, doubleJump: { t: doubleJump.t, angle: doubleJump.angle } }), pause: v => { paused = v; } };
   last = performance.now(); requestAnimationFrame(frame);
 })();
 </script>
